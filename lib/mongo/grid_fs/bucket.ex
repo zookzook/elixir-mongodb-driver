@@ -49,13 +49,13 @@ defmodule Mongo.GridFs.Bucket do
   Returns the collection name for the files collection, default is fs.files.
   """
   @spec files_collection_name(Bucket.t) :: String.t
-  def files_collection_name(%Bucket{name: fs}), do: "#{fs}.files"
+  def files_collection_name(%Bucket{name: fs}), do: fs <> ".files"
 
   @doc """
   Returns the collection name for the chunks collection, default is fs.chunks.
   """
   @spec chunks_collection_name(Bucket.t) :: String.t
-  def chunks_collection_name(%Bucket{name: fs}), do: "#{fs}.chunks"
+  def chunks_collection_name(%Bucket{name: fs}), do: fs <> ".chunks"
 
   @doc """
   Renames the stored file with the specified file_id.
@@ -213,7 +213,7 @@ defmodule Mongo.GridFs.Bucket do
   defimpl Inspect, for: Bucket do
 
     def inspect(%Bucket{name: fs, chunk_size: size, topology_pid: topology_pid}, _opts) do
-      "#Bucket(#{fs}, #{size}, topology_pid: #{inspect topology_pid})"
+      "#Bucket(" <> fs <> ", " <> size <> ", topology_pid: " <> inspect topology_pid <> ")"
     end
 
   end
@@ -221,7 +221,7 @@ defmodule Mongo.GridFs.Bucket do
   defimpl String.Chars, for: Bucket do
 
     def to_string(%Bucket{name: fs, chunk_size: size, topology_pid: topology_pid}) do
-      "#Bucket(#{fs}, #{size}, topology_pid: #{inspect topology_pid})"
+      "#Bucket(" <> fs <> ", " <> size <> ", topology_pid: " <> inspect topology_pid <> ")"
     end
 
   end
