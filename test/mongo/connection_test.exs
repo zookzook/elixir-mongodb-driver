@@ -108,6 +108,16 @@ defmodule Mongo.ConnectionTest do
            Mongo.insert_one(pid, coll, %{foo: 42}, [continue_on_error: true])
   end
 
+  def find(pid, coll, query, select, opts) do
+    Mongo.find(pid, coll, query, opts) |> Enum.to_list() |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
+  end
+
+  def get_cursor(pid, coll, query, select, opts) do
+    %Mongo.AggregationCursor{ conn: conn, coll: coll, query: query, select: select, opts: opts} = Mongo.find(pid, coll, query, opts)
+    {:ok, %{docs: [%{"cursor" => %{"id" => cursor_id}}]}}  = Mongo.raw_find(conn, coll, query, select, opts)
+    {:ok, cursor_id}
+  end
+
   test "find" do
     pid = connect_auth()
     coll = unique_name()
@@ -116,10 +126,9 @@ defmodule Mongo.ConnectionTest do
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 42}, [])
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 43}, [])
 
-    assert {:ok, %{cursor_id: 0, from: 0, num: 2, docs: [%{"foo" => 42}, %{"foo" => 43}]}} =
-           Mongo.raw_find(conn, coll, %{}, nil, [])
-    assert {:ok, %{cursor_id: 0, from: 0, num: 1, docs: [%{"foo" => 43}]}} =
-           Mongo.raw_find(conn, coll, %{}, nil, skip: 1)
+    assert [%{ "foo" => 42}, %{"foo" => 43}] = find(pid, coll, %{}, nil, [])
+    assert [%{"foo" => 43}]                  = find(pid, coll, %{}, nil, skip: 1)
+
   end
 
   test "find and get_more" do
@@ -134,8 +143,8 @@ defmodule Mongo.ConnectionTest do
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 46}, [])
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 47}, [])
 
-    assert {:ok, %{cursor_id: cursor_id, from: 0, docs: [%{"foo" => 42}, %{"foo" => 43}]}} =
-           Mongo.raw_find(conn, coll, %{}, nil, batch_size: 2)
+    {:ok, cursor_id} = get_cursor(pid, coll, %{}, nil, batch_size: 2)
+
     assert {:ok, %{cursor_id: ^cursor_id, from: 2, docs: [%{"foo" => 44}, %{"foo" => 45}]}} =
            Mongo.get_more(conn, coll, cursor_id, batch_size: 2)
     assert {:ok, %{cursor_id: ^cursor_id, from: 4, docs: [%{"foo" => 46}, %{"foo" => 47}]}} =
@@ -153,8 +162,8 @@ defmodule Mongo.ConnectionTest do
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 43}, [])
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 44}, [])
 
-    assert {:ok, %{cursor_id: cursor_id, num: 2}} =
-           Mongo.raw_find(conn, coll, %{}, nil, batch_size: 2)
+    {:ok, cursor_id} = get_cursor(pid, coll, %{}, nil, batch_size: 2)
+
     assert :ok = Mongo.kill_cursors(conn, [cursor_id], [])
 
     assert {:error, %Mongo.Error{code: nil, message: "cursor not found"}} =
@@ -172,7 +181,7 @@ defmodule Mongo.ConnectionTest do
       Mongo.insert_one(pid, coll, %{data: binary}, [w: 0])
     end)
 
-    assert {:ok, %{num: 10}} = Mongo.raw_find(conn, coll, %{}, nil, batch_size: 100)
+    assert 10 = find(pid, coll, %{}, nil, batch_size: 100) |> Enum.count()
   end
 
   test "auth connection leak" do

@@ -44,6 +44,7 @@ defmodule Mongo.Cursor do
 
       fn ->
         result = Mongo.raw_find(conn, coll, query, projector, opts)
+        IO.puts inspect result
 
         case result do
           {:ok, %{cursor_id: cursor, docs: docs, num: num}} ->

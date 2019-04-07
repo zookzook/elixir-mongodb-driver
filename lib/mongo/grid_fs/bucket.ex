@@ -213,7 +213,7 @@ defmodule Mongo.GridFs.Bucket do
   defimpl Inspect, for: Bucket do
 
     def inspect(%Bucket{name: fs, chunk_size: size, topology_pid: topology_pid}, _opts) do
-      "#Bucket(" <> fs <> ", " <> size <> ", topology_pid: " <> inspect topology_pid <> ")"
+      "#Bucket(" <> fs <> ", " <> to_string(size) <> ", topology_pid: " <> (inspect topology_pid) <> ")"
     end
 
   end
@@ -221,7 +221,7 @@ defmodule Mongo.GridFs.Bucket do
   defimpl String.Chars, for: Bucket do
 
     def to_string(%Bucket{name: fs, chunk_size: size, topology_pid: topology_pid}) do
-      "#Bucket(" <> fs <> ", " <> size <> ", topology_pid: " <> inspect topology_pid <> ")"
+      "#Bucket(" <> fs <> ", " <> Kernel.to_string(size) <> ", topology_pid: " <> (inspect topology_pid) <> ")"
     end
 
   end

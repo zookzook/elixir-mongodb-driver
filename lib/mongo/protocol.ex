@@ -208,16 +208,6 @@ defmodule Mongo.Protocol do
     {:ok, s.wire_version, s}
   end
 
-  defp handle_execute(:find, coll, [query, select], opts, s) do
-    flags      = Keyword.take(opts, @find_flags)
-    num_skip   = Keyword.get(opts, :skip, 0)
-    num_return = Keyword.get(opts, :batch_size, 0)
-
-    op_query(coll: Utils.namespace(coll, s, opts[:database]), query: query, select: select,
-             num_skip: num_skip, num_return: num_return, flags: flags(flags))
-    |> message_reply(s)
-  end
-
   defp handle_execute(:get_more, {coll, cursor_id}, [], opts, s) do
     num_return = Keyword.get(opts, :batch_size, 0)
 
@@ -230,18 +220,6 @@ defmodule Mongo.Protocol do
     op = op_kill_cursors(cursor_ids: cursor_ids)
     with :ok <- Utils.send(-10, op, s),
          do: {:ok, :ok, s}
-  end
-
-  defp handle_execute(:insert_one, coll, [doc], opts, s) do
-    flags  = flags(Keyword.take(opts, @insert_flags))
-    op     = op_insert(coll: Utils.namespace(coll, s, opts[:database]), docs: [doc], flags: flags)
-    message_gle(-11, op, opts, s)
-  end
-
-  defp handle_execute(:insert_many, coll, docs, opts, s) do
-    flags  = flags(Keyword.take(opts, @insert_flags))
-    op     = op_insert(coll: Utils.namespace(coll, s, opts[:database]), docs: docs, flags: flags)
-    message_gle(-12, op, opts, s)
   end
 
   defp handle_execute(:delete_one, coll, [query], opts, s) do

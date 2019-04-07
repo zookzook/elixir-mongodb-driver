@@ -420,30 +420,59 @@ defmodule Mongo do
   """
   @spec find(GenServer.server, collection, BSON.document, Keyword.t) :: cursor
   def find(topology_pid, coll, filter, opts \\ []) do
+
+    #   "find": <string>,
+    #   "filter": <document>,
+    #   "sort": <document>,
+    #   "projection": <document>,
+    #   "hint": <document or string>,
+    #   "skip": <int>,
+    #   "limit": <int>,
+    #   "batchSize": <int>,
+    #   "singleBatch": <bool>,
+    #   "comment": <string>,
+    #   "maxScan": <int>,   // Deprecated in MongoDB 4.0
+    #   "maxTimeMS": <int>,
+    #   "readConcern": <document>,
+    #   "max": <document>,
+    #   "min": <document>,
+    #   "returnKey": <bool>,
+    #   "showRecordId": <bool>,
+    #   "tailable": <bool>,
+    #   "oplogReplay": <bool>,
+    #   "noCursorTimeout": <bool>,
+    #   "awaitData": <bool>,
+    #   "allowPartialResults": <bool>,
+    #   "collation": <document>
+
+    filter = case normalize_doc(filter) do
+      []    -> nil
+      other -> other
+    end
+
     query = [
-      {"$comment", opts[:comment]},
-      {"$maxTimeMS", opts[:max_time]},
-      {"$orderby", opts[:sort]}
+      {"find", coll},
+      {"filter", filter},
+      {"limit", opts[:limit]},
+      {"batchSize", opts[:batch_size]},
+      {"projection", opts[:projection]},
+      {"comment", opts[:comment]},
+      {"maxTimeMS", opts[:max_time]},
+      {"skip", opts[:skip]},
+      {"sort", opts[:sort]}
     ] ++ Enum.into(opts[:modifiers] || [], [])
 
     query = filter_nils(query)
 
-    query =
-      if query == [] do
-        filter
-      else
-        filter = normalize_doc(filter)
-        filter = if List.keymember?(filter, "$query", 0), do: filter, else: [{"$query", filter}]
-        filter ++ query
-      end
+    IO.puts "Query is:#{inspect query}"
 
     select = opts[:projection]
     opts = if Keyword.get(opts, :cursor_timeout, true), do: opts, else: [{:no_cursor_timeout, true}|opts]
-    drop = ~w(comment max_time modifiers sort cursor_type projection cursor_timeout)a
+    drop = ~w(projection comment max_time skip sort modifiers batch_size limit cursor_timeout)a
     opts = cursor_type(opts[:cursor_type]) ++ Keyword.drop(opts, drop)
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
-         do: cursor(conn, coll, query, select, opts)
+         do: aggregation_cursor(conn, coll, query, select, opts)
   end
 
   @doc """
@@ -482,9 +511,13 @@ defmodule Mongo do
   end
 
   @doc false
-  def raw_find(conn, coll, query, select, opts) do
-    params = [query, select]
-    query = %Query{action: :find, extra: coll}
+  def raw_find(conn, coll, query, _select, opts) do
+
+    params = [query]
+    query  = %Query{action: :command}
+
+    direct_command(conn, query, opts)
+
     with {:ok, reply} <- DBConnection.execute(conn, query, params, defaults(opts)),
          :ok <- maybe_failure(reply),
          op_reply(docs: docs, cursor_id: cursor_id, from: from, num: num) = reply,
@@ -945,15 +978,6 @@ defmodule Mongo do
   defp key_to_string(key) when is_binary(key),
     do: key
 
-  defp cursor(conn, coll, query, select, opts) do
-    %Mongo.Cursor{
-      conn: conn,
-      coll: coll,
-      query: query,
-      select: select,
-      opts: opts}
-  end
-
   defp singly_cursor(conn, coll, query, select, opts) do
     %Mongo.SinglyCursor{
       conn: conn,
@@ -983,17 +1007,10 @@ defmodule Mongo do
 
   defp normalize_doc(doc) do
     Enum.reduce(doc, {:unknown, []}, fn
-      {key, _value}, {:binary, _acc} when is_atom(key) ->
-        invalid_doc(doc)
-
-      {key, _value}, {:atom, _acc} when is_binary(key) ->
-        invalid_doc(doc)
-
-      {key, value}, {_, acc} when is_atom(key) ->
-        {:atom, [{key, value}|acc]}
-
-      {key, value}, {_, acc} when is_binary(key) ->
-        {:binary, [{key, value}|acc]}
+      {key, _value}, {:binary, _acc} when is_atom(key) -> invalid_doc(doc)
+      {key, _value}, {:atom, _acc} when is_binary(key) -> invalid_doc(doc)
+      {key, value}, {_, acc} when is_atom(key) -> {:atom, [{key, value}|acc]}
+      {key, value}, {_, acc} when is_binary(key) ->  {:binary, [{key, value}|acc]}
     end)
     |> elem(1)
     |> Enum.reverse

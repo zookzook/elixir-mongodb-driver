@@ -172,29 +172,28 @@ defmodule Mongo.Test do
     assert [%{"foo" => 42}, %{"foo" => 43}, %{"foo" => 44}] =
            Mongo.find(c.pid, coll, %{}) |> Enum.to_list
 
-    # Mongo is weird with batch_size=1
-    assert [%{"foo" => 42}] = Mongo.find(c.pid, coll, %{}, batch_size: 1) |> Enum.to_list
+    assert [%{"foo" => 42}] = Mongo.find(c.pid, coll, %{}, limit: 1) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
 
     assert [%{"foo" => 42}, %{"foo" => 43}, %{"foo" => 44}] =
-           Mongo.find(c.pid, coll, %{}, batch_size: 2) |> Enum.to_list
+           Mongo.find(c.pid, coll, %{}, batch_size: 2) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
 
     assert [%{"foo" => 42}, %{"foo" => 43}] =
-           Mongo.find(c.pid, coll, %{}, limit: 2) |> Enum.to_list
+           Mongo.find(c.pid, coll, %{}, limit: 2) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
 
     assert [%{"foo" => 42}, %{"foo" => 43}] =
-           Mongo.find(c.pid, coll, %{}, batch_size: 2, limit: 2) |> Enum.to_list
+           Mongo.find(c.pid, coll, %{}, batch_size: 2, limit: 2) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
 
     assert [%{"foo" => 42}] =
-           Mongo.find(c.pid, coll, %{bar: 1}) |> Enum.to_list
+           Mongo.find(c.pid, coll, %{bar: 1}) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
 
     assert [%{"bar" => 1}, %{"bar" => 2}, %{"bar" => 3}] =
-           Mongo.find(c.pid, coll, %{}, projection: %{bar: 1}) |> Enum.to_list
+           Mongo.find(c.pid, coll, %{}, projection: %{bar: 1}) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
 
     assert [%{"bar" => 1}] =
-           Mongo.find(c.pid, coll, %{"$query": %{foo: 42}}, projection: %{bar: 1}) |> Enum.to_list
+           Mongo.find(c.pid, coll, %{foo: 42}, projection: %{bar: 1}) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
 
     assert [%{"foo" => 44}, %{"foo" => 43}] =
-      Mongo.find(c.pid, coll, %{}, sort: [foo: -1], batch_size: 2, limit: 2) |> Enum.to_list
+      Mongo.find(c.pid, coll, %{}, sort: [foo: -1], batch_size: 2, limit: 2) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
   end
 
   test "find_one", c do
@@ -563,8 +562,7 @@ defmodule Mongo.Test do
 
   # issue #19
   test "correctly pass options to cursor", c do
-    assert %Mongo.Cursor{opts: [slave_ok: true, no_cursor_timeout: true,
-                                skip: 10], coll: "coll"} =
+    assert %Mongo.AggregationCursor{opts: [slave_ok: true, no_cursor_timeout: true], coll: "coll"} =
              Mongo.find(c.pid, "coll", %{}, skip: 10, cursor_timeout: false)
   end
 
