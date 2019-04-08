@@ -1,8 +1,20 @@
 # Mongodb
 
-[![Build Status](https://travis-ci.org/ankhers/mongodb.svg?branch=master)](https://travis-ci.org/ankhers/mongodb)
+This is an alternative development from the [original](https://github.com/ankhers/mongodb), which was the starting point
+and already contained very nice code.
 
-[Documentation for Mongodb is available online](http://hexdocs.pm/mongodb/).
+I have made a number of changes to understand how the driver works. For example, I reduced cursor modules to just one cursor and
+replaced some op code calls with command calls.
+
+This is currently under development and there is no version management yet. The main goal is to simplify the API and
+to implement the current requirements for the driver.
+
+## Motivation
+
+  * Refactoring old code into new
+  * Understand the magic in the code
+  * Simplify code: remove raw_find (raw_find called from cursors, raw_find called with "$cmd"), so raw_find is more calling a command than a find query.
+  * Better support for new MongoDB version, for example the ability to use views
 
 ## Features
 
@@ -15,17 +27,6 @@
   * Aggregation pipeline
   * Replica sets
 
-## Immediate Roadmap
-
-  * Make sure requests don't go over the 16mb limit
-  * New 2.6 write queries and bulk writes
-
-## Tentative Roadmap
-
-  * Use meta-driver test suite
-  * Server selection / Read preference
-    - https://www.mongodb.com/blog/post/server-selection-next-generation-mongodb-drivers
-    - http://docs.mongodb.org/manual/reference/read-preference
 
 ## Data representation
 
