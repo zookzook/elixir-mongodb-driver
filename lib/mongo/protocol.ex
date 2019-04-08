@@ -5,12 +5,12 @@ defmodule Mongo.Protocol do
   use Mongo.Messages
   alias Mongo.Protocol.Utils
 
-  @timeout 5000
-  @find_flags ~w(tailable_cursor slave_ok no_cursor_timeout await_data exhaust allow_partial_results oplog_replay)a
+  @timeout        5000
+  @find_flags     ~w(tailable_cursor slave_ok no_cursor_timeout await_data exhaust allow_partial_results oplog_replay)a
   @find_one_flags ~w(slave_ok exhaust partial)a
-  @insert_flags ~w(continue_on_error)a
-  @update_flags ~w(upsert)a
-  @write_concern ~w(w j wtimeout)a
+  @insert_flags   ~w(continue_on_error)a
+  @update_flags   ~w(upsert)a
+  @write_concern  ~w(w j wtimeout)a
 
   def disconnect(_error, %{socket: {mod, sock}} = s) do
     notify_disconnect(s)
@@ -25,7 +25,7 @@ defmodule Mongo.Protocol do
     {write_concern, opts} = Keyword.split(opts, @write_concern)
     write_concern = Keyword.put_new(write_concern, :w, 1)
 
-    s = %{
+    state = %{
       socket: nil,
       request_id: 0,
       timeout: opts[:timeout] || @timeout,
@@ -39,7 +39,7 @@ defmodule Mongo.Protocol do
       ssl: opts[:ssl] || false
     }
 
-    connect(opts, s)
+    connect(opts, state)
   end
 
   defp connect(opts, s) do
@@ -123,19 +123,16 @@ defmodule Mongo.Protocol do
     end
   end
 
-  defp wire_version(s) do
+  defp wire_version(state) do
     # wire version
     # https://github.com/mongodb/mongo/blob/master/src/mongo/db/wire_version.h
-    case Utils.command(-1, [ismaster: 1], s) do
-      {:ok, %{"ok" => ok, "maxWireVersion" => version}} when ok == 1 ->
-        {:ok, %{s | wire_version: version}}
-      {:ok, %{"ok" => ok}} when ok == 1 ->
-        {:ok, %{s | wire_version: 0}}
+    case Utils.command(-1, [ismaster: 1], state) do
+      {:ok, %{"ok" => ok, "maxWireVersion" => version}} when ok == 1 ->  {:ok, %{state | wire_version: version}}
+      {:ok, %{"ok" => ok}} when ok == 1 ->  {:ok, %{state | wire_version: 0}}
       {:ok, %{"ok" => ok, "errmsg" => msg, "code" => code}} when ok == 0 ->
         err = Mongo.Error.exception(message: msg, code: code)
-        {:disconnect, err, s}
-      {:disconnect, _, _} = error ->
-        error
+        {:disconnect, err, state}
+      {:disconnect, _, _} = error ->   error
     end
   end
 
@@ -204,22 +201,8 @@ defmodule Mongo.Protocol do
     end
   end
 
-  defp handle_execute(:wire_version, _, _, _, s) do
-    {:ok, s.wire_version, s}
-  end
-
-  defp handle_execute(:get_more, {coll, cursor_id}, [], opts, s) do
-    num_return = Keyword.get(opts, :batch_size, 0)
-
-    op_get_more(coll: Utils.namespace(coll, s, opts[:database]), cursor_id: cursor_id,
-                num_return: num_return)
-    |> message_reply(s)
-  end
-
-  defp handle_execute(:kill_cursors, cursor_ids, [], _opts, s) do
-    op = op_kill_cursors(cursor_ids: cursor_ids)
-    with :ok <- Utils.send(-10, op, s),
-         do: {:ok, :ok, s}
+  defp handle_execute(:wire_version, _, _, _, state) do
+    {:ok, state.wire_version, state}
   end
 
   defp handle_execute(:delete_one, coll, [query], opts, s) do
@@ -257,15 +240,18 @@ defmodule Mongo.Protocol do
 
   defp handle_execute(:command, nil, [query], opts, s) do
     flags = Keyword.take(opts, @find_one_flags)
-    op_query(coll: Utils.namespace("$cmd", s, opts[:database]), query: query, select: "",
-             num_skip: 0, num_return: 1, flags: flags(flags))
-    |> message_reply(s)
+
+    # todo: Post(coll: Utils.namespace("$cmd", s, opts[:database]), query: query, select: "",
+    #             num_skip: 0, num_return: 1, flags: flags(flags))
+    # |> get_response(state)
+    op_query(coll: Utils.namespace("$cmd", s, opts[:database]), query: query, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
+    |> get_response(s)
   end
 
-  defp message_reply(op, s) do
-    with {:ok, reply} <- Utils.message(s.request_id, op, s),
-         s = %{s | request_id: s.request_id + 1},
-         do: {:ok, reply, s}
+  defp get_response(op, state) do
+    with {:ok, response} <- Utils.post_request(state.request_id, op, state),
+         state = %{state | request_id: state.request_id + 1},
+         do: {:ok, response, state}
   end
 
   defp flags(flags) do
@@ -287,7 +273,7 @@ defmodule Mongo.Protocol do
                         select: "", num_skip: 0, num_return: -1, flags: [])
 
       ops = [{id, op}, {s.request_id, gle_op}]
-      message_reply(ops, s)
+      get_response(ops, s)
     end
   end
 

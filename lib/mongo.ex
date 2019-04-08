@@ -60,7 +60,7 @@ defmodule Mongo do
 
   @type conn :: DbConnection.Conn
   @type collection :: String.t
-  @opaque cursor :: Mongo.Cursor.t | Mongo.AggregationCursor.t | Mongo.SinglyCursor.t
+  @opaque cursor :: Mongo.Cursor.t
   @type result(t) :: :ok | {:ok, t} | {:error, Mongo.Error.t}
   @type result!(t) :: nil | t | no_return
 
@@ -170,10 +170,12 @@ defmodule Mongo do
 
       if cursor? do
         query = query ++ [cursor: filter_nils(%{batchSize: opts[:batch_size]})]
-        aggregation_cursor(conn, "$cmd", query, nil, opts)
+        ## todo: cmd?
+        aggregation_cursor(conn, "$cmd", query, opts)
       else
         query = query ++ [cursor: %{}]
-        aggregation_cursor(conn, "$cmd", query, nil, opts)
+        ## todo: cmd?
+        aggregation_cursor(conn, "$cmd", query, opts)
       end
     end
   end
@@ -464,15 +466,12 @@ defmodule Mongo do
 
     query = filter_nils(query)
 
-    IO.puts "Query is:#{inspect query}"
-
-    select = opts[:projection]
     opts = if Keyword.get(opts, :cursor_timeout, true), do: opts, else: [{:no_cursor_timeout, true}|opts]
-    drop = ~w(projection comment max_time skip sort modifiers batch_size limit cursor_timeout)a
+    drop = ~w(projection comment max_time skip sort modifiers limit cursor_timeout)a
     opts = cursor_type(opts[:cursor_type]) ++ Keyword.drop(opts, drop)
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
-         do: aggregation_cursor(conn, coll, query, select, opts)
+         do: aggregation_cursor(conn, coll, query, opts)
   end
 
   @doc """
@@ -498,12 +497,11 @@ defmodule Mongo do
   @spec find_one(GenServer.server, collection, BSON.document, Keyword.t) ::
     BSON.document | nil
   def find_one(conn, coll, filter, opts \\ []) do
-    opts =
-      opts
-      |> Keyword.delete(:order_by)
-      |> Keyword.delete(:sort)
-      |> Keyword.put(:limit, 1)
-      |> Keyword.put(:batch_size, 1)
+    opts = opts
+           |> Keyword.delete(:order_by)
+           |> Keyword.delete(:sort)
+           |> Keyword.put(:limit, 1)
+           |> Keyword.put(:batch_size, 1)
 
     conn
     |> find(coll, filter, opts)
@@ -512,33 +510,9 @@ defmodule Mongo do
 
   @doc false
   def raw_find(conn, coll, query, _select, opts) do
-
-    params = [query]
-    query  = %Query{action: :command}
-
     direct_command(conn, query, opts)
-
-    with {:ok, reply} <- DBConnection.execute(conn, query, params, defaults(opts)),
-         :ok <- maybe_failure(reply),
-         op_reply(docs: docs, cursor_id: cursor_id, from: from, num: num) = reply,
-         do: {:ok, %{from: from, num: num, cursor_id: cursor_id, docs: docs}}
   end
 
-  @doc false
-  def get_more(conn, coll, cursor, opts) do
-    query = %Query{action: :get_more, extra: {coll, cursor}}
-    with {:ok, reply} <- DBConnection.execute(conn, query, [], defaults(opts)),
-         :ok <- maybe_failure(reply),
-         op_reply(docs: docs, cursor_id: cursor_id, from: from, num: num) = reply,
-         do: {:ok, %{from: from, num: num, cursor_id: cursor_id, docs: docs}}
-  end
-
-  @doc false
-  def kill_cursors(conn, cursor_ids, opts) do
-    query = %Query{action: :kill_cursors, extra: cursor_ids}
-    with {:ok, :ok} <- DBConnection.execute(conn, query, [], defaults(opts)),
-         do: :ok
-  end
 
   @doc """
   Issue a database command. If the command has parameters use a keyword
@@ -560,21 +534,14 @@ defmodule Mongo do
     params = [query]
     query = %Query{action: :command}
 
-    with {:ok, reply} <- DBConnection.execute(conn, query, params,
-                                              defaults(opts)) do
-      case reply do
-        op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}])
-            when (@reply_query_failure &&& flags) != 0  ->
-          {:error, Mongo.Error.exception(message: reason, code: code)}
-        op_reply(flags: flags) when (@reply_cursor_not_found &&& flags) != 0 ->
-          {:error, Mongo.Error.exception(message: "cursor not found")}
-        op_reply(docs: [%{"ok" => 0.0, "errmsg" => reason} = error]) ->
-          {:error, %Mongo.Error{message: "command failed: #{reason}", code: error["code"]}}
-        op_reply(docs: [%{"ok" => ok} = doc]) when ok == 1 ->
-          {:ok, doc}
+    with {:ok, response} <- DBConnection.execute(conn, query, params, defaults(opts)) do
+      case response do
+        op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}]) when (@reply_query_failure &&& flags) != 0  -> {:error, Mongo.Error.exception(message: reason, code: code)}
+        op_reply(flags: flags) when (@reply_cursor_not_found &&& flags) != 0 ->  {:error, Mongo.Error.exception(message: "cursor not found")}
+        op_reply(docs: [%{"ok" => 0.0, "errmsg" => reason} = error]) ->  {:error, %Mongo.Error{message: "command failed: #{reason}", code: error["code"]}}
+        op_reply(docs: [%{"ok" => ok} = doc]) when ok == 1 ->   {:ok, doc}
         # TODO: Check if needed
-        op_reply(docs: []) ->
-          {:ok, nil}
+        op_reply(docs: []) ->  {:ok, nil}
       end
     end
   end
@@ -619,14 +586,11 @@ defmodule Mongo do
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
          {:ok, doc} <- direct_command(conn, query, opts) do
       case doc do
-        %{"writeErrors" => _} ->
-          {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+        %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
           case Map.get(write_concern, :w) do
-            0 ->
-              {:ok, %Mongo.InsertOneResult{acknowledged: false}}
-            _ ->
-              {:ok, %Mongo.InsertOneResult{inserted_id: id}}
+            0 -> {:ok, %Mongo.InsertOneResult{acknowledged: false}}
+            _ -> {:ok, %Mongo.InsertOneResult{inserted_id: id}}
           end
       end
     end
@@ -871,7 +835,8 @@ defmodule Mongo do
   @spec list_indexes(GenServer.server, String.t, Keyword.t) :: cursor
   def list_indexes(topology_pid, coll, opts \\ []) do
     with {:ok, conn, _, _} <- Mongo.select_server(topology_pid, :read, opts) do
-      aggregation_cursor(conn, "$cmd", [listIndexes: coll], nil, opts)
+      # todo: command
+      aggregation_cursor(conn, "$cmd", [listIndexes: coll], opts)
     end
   end
 
@@ -898,7 +863,9 @@ defmodule Mongo do
     # In versions 2.8.0-rc3 and later, the listCollections command returns a cursor!
     #
     with {:ok, conn, _, _} <- Mongo.select_server(topology_pid, :read, opts) do
-      aggregation_cursor(conn, "$cmd", [listCollections: 1], nil, opts)
+
+      # todo: use command!
+      aggregation_cursor(conn, "$cmd", [listCollections: 1], opts)
       |> Stream.filter(fn coll -> coll["type"] == "collection" end)
       |> Stream.map(fn coll -> coll["name"] end)
     end
@@ -906,8 +873,7 @@ defmodule Mongo do
 
   @doc false
   def select_server(topology_pid, type, opts \\ []) do
-    with {:ok, servers, slave_ok, mongos?} <-
-           select_servers(topology_pid, type, opts) do
+    with {:ok, servers, slave_ok, mongos?} <- select_servers(topology_pid, type, opts) do
       if Enum.empty? servers do
         {:ok, [], slave_ok, mongos?}
       else
@@ -955,44 +921,24 @@ defmodule Mongo do
     end
   end
 
-  defp modifier_docs([{key, _}|_], type),
-    do: key |> key_to_string |> modifier_key(type)
-  defp modifier_docs(map, _type) when is_map(map) and map_size(map) == 0,
-    do: :ok
-  defp modifier_docs(map, type) when is_map(map),
-    do: Enum.at(map, 0) |> elem(0) |> key_to_string |> modifier_key(type)
-  defp modifier_docs(list, type) when is_list(list),
-    do: Enum.map(list, &modifier_docs(&1, type))
+  defp modifier_docs([{key, _}|_], type), do: key |> key_to_string |> modifier_key(type)
+  defp modifier_docs(map, _type) when is_map(map) and map_size(map) == 0,  do: :ok
+  defp modifier_docs(map, type) when is_map(map), do: Enum.at(map, 0) |> elem(0) |> key_to_string |> modifier_key(type)
+  defp modifier_docs(list, type) when is_list(list),  do: Enum.map(list, &modifier_docs(&1, type))
 
-  defp modifier_key(<<?$, _::binary>> = other, :replace),
-    do: raise(ArgumentError, "replace does not allow atomic modifiers, got: #{other}")
-  defp modifier_key(<<?$, _::binary>>, :update),
-    do: :ok
-  defp modifier_key(<<_, _::binary>> = other, :update),
-    do: raise(ArgumentError, "update only allows atomic modifiers, got: #{other}")
-  defp modifier_key(_, _),
-    do: :ok
+  defp modifier_key(<<?$, _::binary>> = other, :replace),  do: raise(ArgumentError, "replace does not allow atomic modifiers, got: #{other}")
+  defp modifier_key(<<?$, _::binary>>, :update),  do: :ok
+  defp modifier_key(<<_, _::binary>> = other, :update),  do: raise(ArgumentError, "update only allows atomic modifiers, got: #{other}")
+  defp modifier_key(_, _),  do: :ok
 
-  defp key_to_string(key) when is_atom(key),
-    do: Atom.to_string(key)
-  defp key_to_string(key) when is_binary(key),
-    do: key
+  defp key_to_string(key) when is_atom(key), do: Atom.to_string(key)
+  defp key_to_string(key) when is_binary(key), do: key
 
-  defp singly_cursor(conn, coll, query, select, opts) do
-    %Mongo.SinglyCursor{
+  defp aggregation_cursor(conn, coll, query, opts) do
+    %Mongo.Cursor{
       conn: conn,
       coll: coll,
       query: query,
-      select: select,
-      opts: opts}
-  end
-
-  defp aggregation_cursor(conn, coll, query, select, opts) do
-    %Mongo.AggregationCursor{
-      conn: conn,
-      coll: coll,
-      query: query,
-      select: select,
       opts: opts}
   end
 
@@ -1021,12 +967,9 @@ defmodule Mongo do
     raise ArgumentError, message
   end
 
-  defp cursor_type(nil),
-    do: []
-  defp cursor_type(:tailable),
-    do: [tailable_cursor: true]
-  defp cursor_type(:tailable_await),
-    do: [tailable_cursor: true, await_data: true]
+  defp cursor_type(nil), do: []
+  defp cursor_type(:tailable),  do: [tailable_cursor: true]
+  defp cursor_type(:tailable_await), do: [tailable_cursor: true, await_data: true]
 
   defp assert_single_doc!(doc) when is_map(doc), do: :ok
   defp assert_single_doc!([]), do: :ok
@@ -1067,16 +1010,12 @@ defmodule Mongo do
     |> Enum.unzip
   end
 
-  defp assign_id(%{_id: id} = map) when id != nil,
-    do: {id, map}
-  defp assign_id(%{"_id" => id} = map) when id != nil,
-    do: {id, map}
+  defp assign_id(%{_id: id} = map) when id != nil,  do: {id, map}
+  defp assign_id(%{"_id" => id} = map) when id != nil, do: {id, map}
   defp assign_id([{_, _} | _] = keyword) do
     case Keyword.take(keyword, [:_id, "_id"]) do
-      [{_key, id} | _] when id != nil ->
-        {id, keyword}
-      [] ->
-        add_id(keyword)
+      [{_key, id} | _] when id != nil -> {id, keyword}
+      [] -> add_id(keyword)
     end
   end
 
@@ -1099,17 +1038,10 @@ defmodule Mongo do
     [{"_id", id}]
   end
 
-  defp index_map([], _ix, map),
-    do: map
-  defp index_map([elem|list], ix, map),
-    do: index_map(list, ix+1, Map.put(map, ix, elem))
+  defp index_map([], _ix, map), do: map
+  defp index_map([elem|list], ix, map), do: index_map(list, ix+1, Map.put(map, ix, elem))
 
-  defp maybe_failure(op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}]))
-    when (@reply_query_failure &&& flags) != 0,
-    do: {:error, Mongo.Error.exception(message: reason, code: code)}
-  defp maybe_failure(op_reply(flags: flags))
-    when (@reply_cursor_not_found &&& flags) != 0,
-    do: {:error, Mongo.Error.exception(message: "cursor not found")}
-  defp maybe_failure(_reply),
-    do: :ok
+  defp maybe_failure(op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}])) when (@reply_query_failure &&& flags) != 0, do: {:error, Mongo.Error.exception(message: reason, code: code)}
+  defp maybe_failure(op_reply(flags: flags))  when (@reply_cursor_not_found &&& flags) != 0, do: {:error, Mongo.Error.exception(message: "cursor not found")}
+  defp maybe_failure(_op_reply),  do: :ok
 end

@@ -64,18 +64,16 @@ defmodule Mongo.Messages do
     [encode_header(header)|iodata]
   end
 
-  def decode_message(msg_header(length: length) = header, iolist)
-  when is_list(iolist) do
+  def decode_response(msg_header(length: length) = header, iolist) when is_list(iolist) do
     if IO.iodata_length(iolist) >= length,
-      do: decode_message(header, IO.iodata_to_binary(iolist)),
+      do: decode_response(header, IO.iodata_to_binary(iolist)),
     else: :error
   end
-  def decode_message(msg_header(length: length, response_to: response_to), binary)
-  when byte_size(binary) >= length do
-    <<reply::binary(length), rest::binary>> = binary
-    {:ok, response_to, decode_reply(reply), rest}
+  def decode_response(msg_header(length: length, response_to: response_to), binary)  when byte_size(binary) >= length do
+    <<response::binary(length), rest::binary>> = binary
+    {:ok, response_to, decode_reply(response), rest}
   end
-  def decode_message(_header, _binary) do
+  def decode_response(_header, _binary) do
     :error
   end
 
@@ -86,8 +84,7 @@ defmodule Mongo.Messages do
   end
   def decode_header(<<length::int32, request_id::int32, response_to::int32,
                        op_code::int32, rest::binary>>) do
-    header = msg_header(length: length-@header_size, request_id: request_id,
-                        response_to: response_to, op_code: op_code)
+    header = msg_header(length: length-@header_size, request_id: request_id, response_to: response_to, op_code: op_code)
     {:ok, header, rest}
   end
   def decode_header(_binary) do

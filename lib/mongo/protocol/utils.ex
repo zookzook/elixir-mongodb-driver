@@ -3,15 +3,18 @@ defmodule Mongo.Protocol.Utils do
   import Kernel, except: [send: 2]
   import Mongo.Messages
 
-  def message(id, ops, s) when is_list(ops) do
-    with :ok <- send(ops, s),
-         {:ok, ^id, reply} <- recv(s),
-         do: {:ok, reply}
+  @doc"""
+    Sends a request id and waits for the response with the same id
+  """
+  def post_request(id, ops, state) when is_list(ops) do
+    with :ok <- send(ops, state),
+         {:ok, ^id, response} <- recv(state),
+         do: {:ok, response}
   end
-  def message(id, op, s) do
-    with :ok <- send(id, op, s),
-         {:ok, ^id, reply} <- recv(s),
-         do: {:ok, reply}
+  def post_request(id, op, state) do
+    with :ok <- send(id, op, state),
+         {:ok, ^id, response} <- recv(state),
+         do: {:ok, response}
   end
 
   def command(id, command, s) do
@@ -21,9 +24,10 @@ defmodule Mongo.Protocol.Utils do
       else
         namespace("$cmd", s, nil)
     end
-    op = op_query(coll: ns, query: BSON.Encoder.document(command),
-                  select: "", num_skip: 0, num_return: 1, flags: [])
-    case message(id, op, s) do
+
+    op = op_query(coll: ns, query: BSON.Encoder.document(command), select: "", num_skip: 0, num_return: 1, flags: [])
+
+    case post_request(id, op, s) do
       {:ok, op_reply(docs: docs)} ->
         case BSON.Decoder.documents(docs) do
           []    -> {:ok, nil}
@@ -78,7 +82,7 @@ defmodule Mongo.Protocol.Utils do
     recv(nil, "", s)
   end
 
-  # TODO: Optimize to reduce :gen_tcp.recv and decode_message calls
+  # TODO: Optimize to reduce :gen_tcp.recv and decode_response calls
   #       based on message size in header.
   #       :gen.tcp.recv(socket, min(size, max_packet))
   #       where max_packet = 64mb
@@ -94,7 +98,7 @@ defmodule Mongo.Protocol.Utils do
     end
   end
   defp recv(header, data, %{socket: {mod, sock}} = s) do
-    case decode_message(header, data) do
+    case decode_response(header, data) do
       {:ok, id, reply, ""} ->
         {:ok, id, reply}
       :error ->
@@ -115,10 +119,8 @@ defmodule Mongo.Protocol.Utils do
     {:disconnect, error, s}
   end
 
-  def namespace(coll, s, nil),
-    do: [s.database, ?. | coll]
-  def namespace(coll, _, database),
-    do: [database, ?. | coll]
+  def namespace(coll, s, nil), do: [s.database, ?. | coll]
+  def namespace(coll, _, database), do: [database, ?. | coll]
 
   def digest(nonce, username, password) do
     :crypto.hash(:md5, [nonce, username, digest_password(username, password)])
