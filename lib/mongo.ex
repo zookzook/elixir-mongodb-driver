@@ -167,7 +167,7 @@ defmodule Mongo do
 
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
           opts = Keyword.put(opts, :slave_ok, slave_ok),
-         {:ok, version} <- DBConnection.execute(conn, wv_query, [], defaults(opts)) do
+         {:ok, _query, version} <- DBConnection.execute(conn, wv_query, [], defaults(opts)) do
       cursor? = version >= 1 and Keyword.get(opts, :use_cursor, true)
       opts = Keyword.drop(opts, ~w(allow_disk_use max_time use_cursor)a)
 
@@ -530,7 +530,7 @@ defmodule Mongo do
     params = [query]
     query = %Query{action: :command}
 
-    with {:ok, response} <- DBConnection.execute(conn, query, params, defaults(opts)) do
+    with {:ok, _query, response} <- DBConnection.execute(conn, query, params, defaults(opts)) do
       case response do
         op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}]) when (@reply_query_failure &&& flags) != 0  -> {:error, Mongo.Error.exception(message: reason, code: code)}
         op_reply(flags: flags) when (@reply_cursor_not_found &&& flags) != 0 ->  {:error, Mongo.Error.exception(message: "cursor not found")}

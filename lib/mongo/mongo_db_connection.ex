@@ -11,6 +11,7 @@ defmodule Mongo.MongoDBConnection do
   @find_one_flags ~w(slave_ok exhaust partial)a
   @write_concern  ~w(w j wtimeout)a
 
+  @impl true
   def connect(opts) do
     {write_concern, opts} = Keyword.split(opts, @write_concern)
     write_concern = Keyword.put_new(write_concern, :w, 1)
@@ -32,6 +33,7 @@ defmodule Mongo.MongoDBConnection do
     connect(opts, state)
   end
 
+  @impl true
   def disconnect(_error, %{socket: {mod, sock}} = state) do
     notify_disconnect(state)
     mod.close(sock)
@@ -42,6 +44,7 @@ defmodule Mongo.MongoDBConnection do
   end
 
   defp connect(opts, state) do
+
     result =
       with {:ok, state} <- tcp_connect(opts, state),
            {:ok, state} <- maybe_ssl(opts, state),
@@ -65,7 +68,7 @@ defmodule Mongo.MongoDBConnection do
         mod.close(sock)
         {:error, reason}
 
-      {:error, reason} ->  {:error, reason}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -125,17 +128,45 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
+  @impl true
   def checkout(state), do: {:ok, state}
+  @impl true
   def checkin(state), do: {:ok, state}
+
+  @impl true
+  def handle_begin(opts, state), do: {:ok, nil, state}
+  @impl true
+  def handle_close(query, opts, state), do: {:ok, nil, state}
+  @impl true
+  def handle_commit(opts, state), do: {:ok, nil, state}
+  @impl true
+  def handle_deallocate(query, cursor, opts, state), do:  {:ok, nil, state}
+  @impl true
+  def handle_declare(query, params, opts, state), do: {:ok, query, nil, state}
+  @impl true
+  def handle_fetch(query, cursor, opts, state), do: {:halt, nil, state}
+  @impl true
+  def handle_prepare(query, opts, state), do: {:ok, query, state}
+  @impl true
+  def handle_rollback(opts, state), do: {:ok, nil, state}
+  @impl true
+  def handle_status(opts, state), do: {:idle, state}
+
+  @impl true
+  def ping(%{wire_version: wire_version} = state) do
+    with {:ok, %{wire_version: ^wire_version}} <- wire_version(state), do: {:ok, state}
+  end
+
 
   def handle_execute_close(query, params, opts, s) do
     handle_execute(query, params, opts, s)
   end
 
-  def handle_execute(%Mongo.Query{action: action, extra: extra}, params, opts, original_state) do
+  @impl true
+  def handle_execute(%Mongo.Query{action: action, extra: extra} = query, params, opts, original_state) do
     tmp_state = %{original_state | database: Keyword.get(opts, :database, original_state.database)}
     with {:ok, reply, tmp_state} <- handle_execute(action, extra, params, opts, tmp_state) do
-      {:ok, reply, Map.put(tmp_state, :database, original_state.database)}
+      {:ok, query, reply, Map.put(tmp_state, :database, original_state.database)}
     end
   end
 
@@ -162,8 +193,5 @@ defmodule Mongo.MongoDBConnection do
     end)
   end
 
-  def ping(%{wire_version: wire_version} = state) do
-    with {:ok, %{wire_version: ^wire_version}} <- wire_version(state), do: {:ok, state}
-  end
 
 end
