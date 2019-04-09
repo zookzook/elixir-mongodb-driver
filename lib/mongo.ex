@@ -695,7 +695,7 @@ defmodule Mongo do
   # This is the implementation of the delete command for
   # delete_one and delete_many
   #
-  defp delete_documents(topology_pid, coll, filter, limit, opts \\ [])  do
+  defp delete_documents(topology_pid, coll, filter, limit, opts)  do
 
     # see https://docs.mongodb.com/manual/reference/command/delete/#dbcmd.delete
     write_concern = %{
@@ -749,20 +749,7 @@ defmodule Mongo do
   @spec replace_one(GenServer.server, collection, BSON.document, BSON.document, Keyword.t) :: result(Mongo.UpdateResult.t)
   def replace_one(topology_pid, coll, filter, replacement, opts \\ []) do
     _ = modifier_docs(replacement, :replace)
-
-    params = [filter, replacement]
-    query = %Query{action: :replace_one, extra: coll}
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, reply} <- DBConnection.execute(conn, query, params, defaults(opts)),
-         :ok <- maybe_failure(reply),
-         {:ok, doc} <- get_last_error(reply) do
-      case doc do
-        %{"n" => 1, "upserted" => upserted_id} ->
-          {:ok, %Mongo.UpdateResult{matched_count: 0, modified_count: 1, upserted_id: upserted_id}}
-        %{"n" => n} ->
-          {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n}}
-      end
-    end
+    update_documents(topology_pid, coll, filter, replacement, false, opts)
   end
 
   @doc """
@@ -795,20 +782,7 @@ defmodule Mongo do
   @spec update_one(GenServer.server, collection, BSON.document, BSON.document, Keyword.t) :: result(Mongo.UpdateResult.t)
   def update_one(topology_pid, coll, filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
-
-    params = [filter, update]
-    query = %Query{action: :update_one, extra: coll}
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, reply} <- DBConnection.execute(conn, query, params, defaults(opts)),
-         :ok <- maybe_failure(reply),
-         {:ok, doc} <- get_last_error(reply) do
-      case doc do
-        %{"n" => 1, "upserted" => upserted_id} ->
-          {:ok, %Mongo.UpdateResult{matched_count: 0, modified_count: 1, upserted_id: upserted_id}}
-        %{"n" => n} ->
-          {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n}}
-      end
-    end
+    update_documents(topology_pid, coll, filter, update, false, opts)
   end
 
   @doc """
@@ -834,18 +808,46 @@ defmodule Mongo do
   @spec update_many(GenServer.server, collection, BSON.document, BSON.document, Keyword.t) :: result(Mongo.UpdateResult.t)
   def update_many(topology_pid, coll, filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
+    update_documents(topology_pid, coll, filter, update, true, opts)
+  end
 
-    params = [filter, update]
-    query = %Query{action: :update_many, extra: coll}
+  defp update_documents(topology_pid, coll, filter, update, multi, opts) do
+
+    # see https://docs.mongodb.com/manual/reference/command/update/#update-command-output
+    # validation of the update document
+    write_concern = %{
+                      w: Keyword.get(opts, :w),
+                      j: Keyword.get(opts, :j),
+                      wtimeout: Keyword.get(opts, :wtimeout)
+                    } |> filter_nils()
+
+    update = %{
+               q: filter,
+               u: update,
+               upsert: Keyword.get(opts, :upsert),
+               multi: multi,
+               collation: Keyword.get(opts, :ordered),
+               arrayFilters: Keyword.get(opts, :filters)
+             } |> filter_nils()
+
+    query = [
+              update: coll,
+              updates: [update],
+              ordered: Keyword.get(opts, :ordered),
+              writeConcern: write_concern,
+              bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
+            ] |> filter_nils()
+
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, reply} <- DBConnection.execute(conn, query, params, defaults(opts)),
-         :ok <- maybe_failure(reply),
-         {:ok, doc} <- get_last_error(reply) do
+         {:ok, doc} <- direct_command(conn, query, opts) do
       case doc do
-        %{"n" => 1, "upserted" => upserted_id} ->
-          {:ok, %Mongo.UpdateResult{matched_count: 0, modified_count: 1, upserted_id: upserted_id}}
-        %{"n" => n} ->
-          {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n}}
+        # todo: better handling off the result
+        %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+        %{"n" => n, "nModified" => n_modified} ->
+          case Map.get(write_concern, :w) do
+            0 -> {:ok, %Mongo.UpdateResult{acknowledged: false}}
+            _ -> {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n_modified}}
+          end
       end
     end
   end

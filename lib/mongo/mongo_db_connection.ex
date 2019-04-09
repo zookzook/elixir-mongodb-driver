@@ -9,7 +9,6 @@ defmodule Mongo.MongoDBConnection do
 
   @timeout        5000
   @find_one_flags ~w(slave_ok exhaust partial)a
-  @update_flags   ~w(upsert)a
   @write_concern  ~w(w j wtimeout)a
 
   def connect(opts) do
@@ -144,27 +143,6 @@ defmodule Mongo.MongoDBConnection do
     {:ok, state.wire_version, state}
   end
 
-  defp handle_execute(:replace_one, coll, [query, replacement], opts, s) do
-    flags  = flags(Keyword.take(opts, @update_flags))
-    op     = op_update(coll: Utils.namespace(coll, s, opts[:database]), query: query, update: replacement,
-                       flags: flags)
-    message_gle(-15, op, opts, s)
-  end
-
-  defp handle_execute(:update_one, coll, [query, update], opts, s) do
-    flags  = flags(Keyword.take(opts, @update_flags))
-    op     = op_update(coll: Utils.namespace(coll, s, opts[:database]), query: query, update: update,
-                       flags: flags)
-    message_gle(-16, op, opts, s)
-  end
-
-  defp handle_execute(:update_many, coll, [query, update], opts, s) do
-    flags  = [:multi | flags(Keyword.take(opts, @update_flags))]
-    op     = op_update(coll: Utils.namespace(coll, s, opts[:database]), query: query, update: update,
-                       flags: flags)
-    message_gle(-17, op, opts, s)
-  end
-
   defp handle_execute(:command, nil, [query], opts, s) do
     flags = Keyword.take(opts, @find_one_flags)
     op_query(coll: Utils.namespace("$cmd", s, opts[:database]), query: query, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
@@ -182,22 +160,6 @@ defmodule Mongo.MongoDBConnection do
       {flag, true},   acc -> [flag|acc]
       {_flag, false}, acc -> acc
     end)
-  end
-
-  defp message_gle(id, op, opts, s) do
-    write_concern = Keyword.take(opts, @write_concern) |> Map.new
-    write_concern = Map.merge(s.write_concern, write_concern)
-
-    if write_concern.w == 0 do
-      with :ok <- Utils.send(id, op, s), do: {:ok, :ok, s}
-    else
-      command = BSON.Encoder.document([{:getLastError, 1}|Map.to_list(write_concern)])
-      gle_op = op_query(coll: Utils.namespace("$cmd", s, opts[:database]), query: command,
-                        select: "", num_skip: 0, num_return: -1, flags: [])
-
-      ops = [{id, op}, {s.request_id, gle_op}]
-      get_response(ops, s)
-    end
   end
 
   def ping(%{wire_version: wire_version} = state) do
