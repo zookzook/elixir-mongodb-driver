@@ -4,7 +4,7 @@ defmodule Mongo.TopologyDescription do
   # of the existing connection API's. It implements the Server Discovery and
   # Monitoring specification, along with the `Mongo.ServerMonitor` module.
 
-  @wire_protocol_range 0..5
+  @wire_protocol_range 0..8
 
   alias Mongo.ServerDescription
   alias Mongo.ReadPreference
@@ -57,22 +57,17 @@ defmodule Mongo.TopologyDescription do
       {:error, :invalid_wire_version}
     else
       {servers, slave_ok, mongos?} = case topology.type do
-        :unknown ->
-          {[], false, false}
+        :unknown -> {[], false, false}
         :single ->
-          server =
-            topology.servers |> Map.values |> Enum.at(0, %{type: :unknown})
-          {topology.servers, type != :write and server.type != :mongos, server.type == :mongos}
+          server   = topology.servers |> Map.values |> Enum.at(0, %{type: :unknown})
+          slave_ok = type != :write and server.type != :mongos
+          {topology.servers, slave_ok, server.type == :mongos}
         :sharded ->
-          mongos_servers =
-            topology.servers
-            |> Enum.filter(fn {_, server} -> server.type == :mongos end)
+          mongos_servers = topology.servers |> Enum.filter(fn {_, server} -> server.type == :mongos end)
           {mongos_servers, false, true}
         _ ->
           case type do
-            :read ->
-              {select_replica_set_server(topology, read_preference.mode, read_preference), true, false}
-
+            :read -> {select_replica_set_server(topology, read_preference.mode, read_preference), true, false}
             :write ->
               if topology.type == :replica_set_with_primary do
                 {select_replica_set_server(topology, :primary, ReadPreference.defaults), false, false}
@@ -86,6 +81,7 @@ defmodule Mongo.TopologyDescription do
         for {server, _} <- servers do
           server
         end
+        # todo: Enum.map(elem(0)) ?
       {:ok, servers, slave_ok, mongos?}
     end
   end

@@ -64,6 +64,8 @@ defmodule Mongo do
   @type result(t) :: :ok | {:ok, t} | {:error, Mongo.Error.t}
   @type result!(t) :: nil | t | no_return
 
+  @cmd_collection "$cmd"
+
   defmacrop bangify(result) do
     quote do
       case unquote(result) do
@@ -163,19 +165,18 @@ defmodule Mongo do
     ] |> filter_nils
     wv_query = %Query{action: :wire_version}
 
-    with {:ok, conn, _, _} <- select_server(topology_pid, :read, opts),
+    with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
+          opts = Keyword.put(opts, :slave_ok, slave_ok),
          {:ok, version} <- DBConnection.execute(conn, wv_query, [], defaults(opts)) do
       cursor? = version >= 1 and Keyword.get(opts, :use_cursor, true)
       opts = Keyword.drop(opts, ~w(allow_disk_use max_time use_cursor)a)
 
       if cursor? do
         query = query ++ [cursor: filter_nils(%{batchSize: opts[:batch_size]})]
-        ## todo: cmd?
-        aggregation_cursor(conn, "$cmd", query, opts)
+        cursor(conn, @cmd_collection, query, opts)
       else
         query = query ++ [cursor: %{}]
-        ## todo: cmd?
-        aggregation_cursor(conn, "$cmd", query, opts)
+        cursor(conn, @cmd_collection, query, opts)
       end
     end
   end
@@ -339,7 +340,7 @@ defmodule Mongo do
     case documents do
       [%{"n" => count}] -> {:ok, count}
       [] -> {:error, :nothing_returned}
-      _ -> {:error, :too_many_documents_returned}
+      _  -> {:error, :too_many_documents_returned}
     end
   end
 
@@ -389,7 +390,8 @@ defmodule Mongo do
 
     opts = Keyword.drop(opts, ~w(max_time)a)
 
-    with {:ok, conn, _, _} <- select_server(topology_pid, :read, opts),
+    with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
+         opts = Keyword.put(opts, :slave_ok, slave_ok),
          {:ok, doc} <- direct_command(conn, query, opts),
          do: {:ok, doc["values"]}
   end
@@ -471,7 +473,7 @@ defmodule Mongo do
     opts = cursor_type(opts[:cursor_type]) ++ Keyword.drop(opts, drop)
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
-         do: aggregation_cursor(conn, coll, query, opts)
+         do: cursor(conn, coll, query, opts)
   end
 
   @doc """
@@ -834,9 +836,10 @@ defmodule Mongo do
   """
   @spec list_indexes(GenServer.server, String.t, Keyword.t) :: cursor
   def list_indexes(topology_pid, coll, opts \\ []) do
-    with {:ok, conn, _, _} <- Mongo.select_server(topology_pid, :read, opts) do
-      # todo: command
-      aggregation_cursor(conn, "$cmd", [listIndexes: coll], opts)
+    with {:ok, conn, slave_ok, _} <- Mongo.select_server(topology_pid, :read, opts) do
+      opts = Keyword.put(opts, :slave_ok, slave_ok)
+      query = [listIndexes: coll]
+      cursor(conn, @cmd_collection, query, opts)
     end
   end
 
@@ -862,20 +865,24 @@ defmodule Mongo do
     #
     # In versions 2.8.0-rc3 and later, the listCollections command returns a cursor!
     #
-    with {:ok, conn, _, _} <- Mongo.select_server(topology_pid, :read, opts) do
-
-      # todo: use command!
-      aggregation_cursor(conn, "$cmd", [listCollections: 1], opts)
+    with {:ok, conn, slave_ok, _} <- Mongo.select_server(topology_pid, :read, opts) do
+      params = [listCollections: 1]
+      opts = Keyword.put(opts, :slave_ok, slave_ok)
+      cursor(conn, @cmd_collection, params, opts)
       |> Stream.filter(fn coll -> coll["type"] == "collection" end)
       |> Stream.map(fn coll -> coll["name"] end)
     end
   end
 
-  @doc false
-  def select_server(topology_pid, type, opts \\ []) do
+  @doc"""
+    Determines the appropriate connection depending on the type (:read, :write). The result is
+    a tuple with the connection, slave_ok flag and mongos flag. Possibly you have to set slave_ok == true in
+    the options for the following request because you are requesting a secondary server.
+  """
+    def select_server(topology_pid, type, opts \\ []) do
     with {:ok, servers, slave_ok, mongos?} <- select_servers(topology_pid, type, opts) do
       if Enum.empty? servers do
-        {:ok, [], slave_ok, mongos?}
+        {:ok, nil, slave_ok, mongos?}  # todo: warum wird [] zurückgeliefert?, nil wäre besser?
       else
         with {:ok, connection} <- servers |> Enum.take_random(1) |> Enum.at(0)
                                           |> get_connection(topology_pid) do
@@ -885,11 +892,7 @@ defmodule Mongo do
     end
   end
 
-  defp select_servers(topology_pid, type, opts) do
-    start_time = System.monotonic_time
-    select_servers(topology_pid, type, opts, start_time)
-  end
-
+  defp select_servers(topology_pid, type, opts), do: select_servers(topology_pid, type, opts, System.monotonic_time)
   @sel_timeout 30000
   # NOTE: Should think about the handling completely in the Topology GenServer
   #       in order to make the entire operation atomic instead of querying
@@ -898,26 +901,21 @@ defmodule Mongo do
   defp select_servers(topology_pid, type, opts, start_time) do
     topology = Topology.topology(topology_pid)
     with {:ok, servers, slave_ok, mongos?} <- TopologyDescription.select_servers(topology, type, opts) do
-      if Enum.empty? servers do
-        case Topology.wait_for_connection(topology_pid, @sel_timeout, start_time) do
-          {:ok, _servers} ->
-            select_servers(topology_pid, type, opts, start_time)
-          {:error, :selection_timeout} = error ->
-            error
-        end
-      else
-        {:ok, servers, slave_ok, mongos?}
+      case Enum.empty? servers do
+        true ->
+          case Topology.wait_for_connection(topology_pid, @sel_timeout, start_time) do
+            {:ok, _servers} -> select_servers(topology_pid, type, opts, start_time)
+            {:error, :selection_timeout} = error -> error
+          end
+        false -> {:ok, servers, slave_ok, mongos?}
       end
     end
   end
 
+  defp get_connection(nil, _pid), do: {:ok, nil}
   defp get_connection(server, pid) do
-    if server != nil do
-      with {:ok, connection} <- Topology.connection_for_address(pid, server) do
-        {:ok, connection}
-      end
-    else
-      {:ok, nil}
+    with {:ok, connection} <- Topology.connection_for_address(pid, server) do
+      {:ok, connection}
     end
   end
 
@@ -934,7 +932,7 @@ defmodule Mongo do
   defp key_to_string(key) when is_atom(key), do: Atom.to_string(key)
   defp key_to_string(key) when is_binary(key), do: key
 
-  defp aggregation_cursor(conn, coll, query, opts) do
+  defp cursor(conn, coll, query, opts) do
     %Mongo.Cursor{
       conn: conn,
       coll: coll,
@@ -951,21 +949,22 @@ defmodule Mongo do
     |> Enum.into(%{})
   end
 
+  ##
+  # Checks the validity of the document structure. that means either you use binaries or atoms as a key, but not in combination of both.
+  #
+  #
   defp normalize_doc(doc) do
     Enum.reduce(doc, {:unknown, []}, fn
-      {key, _value}, {:binary, _acc} when is_atom(key) -> invalid_doc(doc)
-      {key, _value}, {:atom, _acc} when is_binary(key) -> invalid_doc(doc)
-      {key, value}, {_, acc} when is_atom(key) -> {:atom, [{key, value}|acc]}
-      {key, value}, {_, acc} when is_binary(key) ->  {:binary, [{key, value}|acc]}
+      {key, _value}, {:binary, _acc} when is_atom(key)   -> invalid_doc(doc)
+      {key, _value}, {:atom, _acc}   when is_binary(key) -> invalid_doc(doc)
+      {key, value}, {_, acc}         when is_atom(key)   -> {:atom, [{key, value}|acc]}
+      {key, value}, {_, acc}         when is_binary(key) -> {:binary, [{key, value}|acc]}
     end)
     |> elem(1)
     |> Enum.reverse
   end
 
-  defp invalid_doc(doc) do
-    message = "invalid document containing atom and string keys: #{inspect doc}"
-    raise ArgumentError, message
-  end
+  defp invalid_doc(doc), do: raise ArgumentError, "invalid document containing atom and string keys: #{inspect doc}"
 
   defp cursor_type(nil), do: []
   defp cursor_type(:tailable),  do: [tailable_cursor: true]
@@ -974,14 +973,10 @@ defmodule Mongo do
   defp assert_single_doc!(doc) when is_map(doc), do: :ok
   defp assert_single_doc!([]), do: :ok
   defp assert_single_doc!([{_, _} | _]), do: :ok
-  defp assert_single_doc!(other) do
-    raise ArgumentError, "expected single document, got: #{inspect other}"
-  end
+  defp assert_single_doc!(other), do: raise ArgumentError, "expected single document, got: #{inspect other}"
 
   defp assert_many_docs!([first | _]) when not is_tuple(first), do: :ok
-  defp assert_many_docs!(other) do
-    raise ArgumentError, "expected list of documents, got: #{inspect other}"
-  end
+  defp assert_many_docs!(other), do: raise ArgumentError, "expected list of documents, got: #{inspect other}"
 
   defp defaults(opts) do
     Keyword.put_new(opts, :timeout, @timeout)
@@ -1023,25 +1018,18 @@ defmodule Mongo do
     map |> Map.to_list |> add_id
   end
 
+  ##
+  # Inserts an ID to the document. A distinction is made as to whether binaries or atoms are used as keys.
+  #
   defp add_id(doc) do
     id = Mongo.IdServer.new
     {id, add_id(doc, id)}
   end
-  defp add_id([{key, _}|_] = list, id) when is_atom(key) do
-    [{:_id, id}|list]
-  end
-  defp add_id([{key, _}|_] = list, id) when is_binary(key) do
-    [{"_id", id}|list]
-  end
-  defp add_id([], id) do
-    # Why are you inserting empty documents =(
-    [{"_id", id}]
-  end
-
-  defp index_map([], _ix, map), do: map
-  defp index_map([elem|list], ix, map), do: index_map(list, ix+1, Map.put(map, ix, elem))
+  defp add_id([{key, _}|_] = list, id) when is_atom(key), do: [{:_id, id}|list]
+  defp add_id([{key, _}|_] = list, id) when is_binary(key), do: [{"_id", id}|list]
+  defp add_id([], id), do: [{"_id", id}]
 
   defp maybe_failure(op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}])) when (@reply_query_failure &&& flags) != 0, do: {:error, Mongo.Error.exception(message: reason, code: code)}
-  defp maybe_failure(op_reply(flags: flags))  when (@reply_cursor_not_found &&& flags) != 0, do: {:error, Mongo.Error.exception(message: "cursor not found")}
+  defp maybe_failure(op_reply(flags: flags)) when (@reply_cursor_not_found &&& flags) != 0, do: {:error, Mongo.Error.exception(message: "cursor not found")}
   defp maybe_failure(_op_reply),  do: :ok
 end
