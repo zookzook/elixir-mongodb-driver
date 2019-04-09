@@ -77,17 +77,17 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp maybe_ssl(opts, %{ssl: true} = state), do: ssl(state, opts)
-  defp maybe_ssl(opts, state), do: {:ok, state}
+  defp maybe_ssl(opts, %{ssl: true} = state), do: ssl(opts, state)
+  defp maybe_ssl(_opts, state), do: {:ok, state}
 
-  defp ssl(%{socket: {:gen_tcp, sock}} = s, opts) do
-    host      = (opts[:hostname] || "localhost") |> to_charlist
+  defp ssl(opts, %{socket: {:gen_tcp, sock}} = state) do
+    host     = (opts[:hostname] || "localhost") |> to_charlist
     ssl_opts = Keyword.put_new(opts[:ssl_opts] || [], :server_name_indication, host)
-    case :ssl.connect(sock, ssl_opts, s.connect_timeout_ms) do
-      {:ok, ssl_sock}  -> {:ok, %{s | socket: {:ssl, ssl_sock}}}
+    case :ssl.connect(sock, ssl_opts, state.connect_timeout_ms) do
+      {:ok, ssl_sock}  -> {:ok, %{state | socket: {:ssl, ssl_sock}}}
       {:error, reason} ->
         :gen_tcp.close(sock)
-        {:error, Mongo.Error.exception(tag: :ssl, action: "connect", reason: reason, host: s.host)}
+        {:error, Mongo.Error.exception(tag: :ssl, action: "connect", reason: reason, host: state.host)}
     end
   end
 
@@ -126,13 +126,8 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  def checkout(state) do
-    {:ok, state}
-  end
-
-  def checkin(state) do
-    {:ok, state}
-  end
+  def checkout(state), do: {:ok, state}
+  def checkin(state), do: {:ok, state}
 
   def handle_execute_close(query, params, opts, s) do
     handle_execute(query, params, opts, s)
@@ -218,7 +213,7 @@ defmodule Mongo.MongoDBConnection do
   end
 
   def ping(%{wire_version: wire_version} = state) do
-    with {:ok, %{wire_version: ^wire_version}} <- wire_version(state),  do: {:ok, state}
+    with {:ok, %{wire_version: ^wire_version}} <- wire_version(state), do: {:ok, state}
   end
 
 end
