@@ -510,12 +510,6 @@ defmodule Mongo do
     |> Enum.at(0)
   end
 
-  @doc false
-  def raw_find(conn, coll, query, _select, opts) do
-    direct_command(conn, query, opts)
-  end
-
-
   @doc """
   Issue a database command. If the command has parameters use a keyword
   list for the document because the "command key" has to be the first
@@ -554,6 +548,14 @@ defmodule Mongo do
   @spec command!(GenServer.server, BSON.document, Keyword.t) :: result!(BSON.document)
   def command!(topology_pid, query, opts \\ []) do
     bangify(command(topology_pid, query, opts))
+  end
+
+  @doc """
+  Sends a ping command to the server.
+  """
+  @spec ping(GenServer.server) :: result!(BSON.document)
+  def ping(topology_pid) do
+    command(topology_pid, %{ping: 1}, [batch_size: 1])
   end
 
   @doc """
@@ -726,6 +728,7 @@ defmodule Mongo do
             0 -> {:ok, %Mongo.DeleteResult{acknowledged: false}}
             _ -> {:ok, %Mongo.DeleteResult{deleted_count: n}}
           end
+        _ -> {:ok, nil}
       end
     end
   end
@@ -848,6 +851,7 @@ defmodule Mongo do
             0 -> {:ok, %Mongo.UpdateResult{acknowledged: false}}
             _ -> {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n_modified}}
           end
+          _ -> {:ok, nil}
       end
     end
   end
