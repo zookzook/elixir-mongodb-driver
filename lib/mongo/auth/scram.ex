@@ -1,7 +1,7 @@
 defmodule Mongo.Auth.SCRAM do
   @moduledoc false
   import Mongo.BinaryUtils
-  import Mongo.Protocol.Utils
+  import Mongo.MongoDBConnection.Utils
   import Bitwise
 
   def auth({username, password}, s) do

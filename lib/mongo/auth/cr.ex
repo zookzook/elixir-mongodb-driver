@@ -1,6 +1,6 @@
 defmodule Mongo.Auth.CR do
   @moduledoc false
-  import Mongo.Protocol.Utils
+  import Mongo.MongoDBConnection.Utils
 
   def auth({username, password}, s) do
     with {:ok, message} <- command(-2, [getnonce: 1], s),

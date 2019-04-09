@@ -1,4 +1,4 @@
-defmodule Mongo.Protocol.Utils do
+defmodule Mongo.MongoDBConnection.Utils do
   @moduledoc false
   import Kernel, except: [send: 2]
   import Mongo.Messages

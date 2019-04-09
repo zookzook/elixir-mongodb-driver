@@ -5,12 +5,10 @@ defmodule Mongo.MongoDBConnection do
 
   use DBConnection
   use Mongo.Messages
-  alias Mongo.Protocol.Utils
+  alias Mongo.MongoDBConnection.Utils
 
   @timeout        5000
-  @find_flags     ~w(tailable_cursor slave_ok no_cursor_timeout await_data exhaust allow_partial_results oplog_replay)a
   @find_one_flags ~w(slave_ok exhaust partial)a
-  @insert_flags   ~w(continue_on_error)a
   @update_flags   ~w(upsert)a
   @write_concern  ~w(w j wtimeout)a
 
@@ -141,7 +139,6 @@ defmodule Mongo.MongoDBConnection do
   end
 
   def handle_execute(%Mongo.Query{action: action, extra: extra}, params, opts, original_state) do
-    {mod, sock} = original_state.socket
     tmp_state = %{original_state | database: Keyword.get(opts, :database, original_state.database)}
     with {:ok, reply, tmp_state} <- handle_execute(action, extra, params, opts, tmp_state) do
       {:ok, reply, Map.put(tmp_state, :database, original_state.database)}
@@ -220,9 +217,8 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  def ping(%{wire_version: wire_version, socket: {mod, sock}} = s) do
-    with {:ok, %{wire_version: ^wire_version}} <- wire_version(s),
-         do: {:ok, s}
+  def ping(%{wire_version: wire_version} = state) do
+    with {:ok, %{wire_version: ^wire_version}} <- wire_version(state),  do: {:ok, state}
   end
 
 end
