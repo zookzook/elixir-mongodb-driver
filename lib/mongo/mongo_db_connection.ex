@@ -1,5 +1,7 @@
-defmodule Mongo.Protocol do
-  @moduledoc false
+defmodule Mongo.MongoDBConnection do
+  @moduledoc """
+  Implementierung für das DBConnection-Protokoll.
+  """
 
   use DBConnection
   use Mongo.Messages
@@ -11,15 +13,6 @@ defmodule Mongo.Protocol do
   @insert_flags   ~w(continue_on_error)a
   @update_flags   ~w(upsert)a
   @write_concern  ~w(w j wtimeout)a
-
-  def disconnect(_error, %{socket: {mod, sock}} = s) do
-    notify_disconnect(s)
-    mod.close(sock)
-  end
-
-  defp notify_disconnect(%{connection_type: type, topology_pid: pid, host: host}) do
-    GenServer.cast(pid, {:disconnect, type, host})
-  end
 
   def connect(opts) do
     {write_concern, opts} = Keyword.split(opts, @write_concern)
@@ -42,57 +35,58 @@ defmodule Mongo.Protocol do
     connect(opts, state)
   end
 
-  defp connect(opts, s) do
+  def disconnect(_error, %{socket: {mod, sock}} = state) do
+    notify_disconnect(state)
+    mod.close(sock)
+  end
+
+  defp notify_disconnect(%{connection_type: type, topology_pid: pid, host: host}) do
+    GenServer.cast(pid, {:disconnect, type, host})
+  end
+
+  defp connect(opts, state) do
     result =
-      with {:ok, s} <- tcp_connect(opts, s),
-           {:ok, s} <- maybe_ssl(opts, s),
-           {:ok, s} <- wire_version(s),
-           {:ok, s} <- maybe_auth(opts, s) do
-
-        {mod, sock} = s.socket
-        :ok = setopts(mod, sock, active: :once)
-
-        {:ok, s}
+      with {:ok, state} <- tcp_connect(opts, state),
+           {:ok, state} <- maybe_ssl(opts, state),
+           {:ok, state} <- wire_version(state),
+           {:ok, state} <- maybe_auth(opts, state) do
+        {:ok, state}
       end
 
     case result do
-      {:ok, s} ->
-        {:ok, s}
-      {:disconnect, reason, s} ->
+      {:ok, state} ->
+        IO.puts inspect state
+        {:ok, state}
+
+      {:disconnect, reason, state} ->
         reason = case reason do
-          {:tcp_recv, reason} -> Mongo.Error.exception(tag: :tcp, action: "recv", reason: reason, host: s.host)
-          {:tcp_send, reason} -> Mongo.Error.exception(tag: :tcp, action: "send", reason: reason, host: s.host)
+          {:tcp_recv, reason} -> Mongo.Error.exception(tag: :tcp, action: "recv", reason: reason, host: state.host)
+          {:tcp_send, reason} -> Mongo.Error.exception(tag: :tcp, action: "send", reason: reason, host: state.host)
           %Mongo.Error{} = reason -> reason
         end
-        {mod, sock} = s.socket
+        {mod, sock} = state.socket
         mod.close(sock)
         {:error, reason}
-      {:error, reason} ->
-        {:error, reason}
+
+      {:error, reason} ->  {:error, reason}
     end
   end
 
-  defp maybe_auth(opts, s) do
-    if opts[:skip_auth] do
-      {:ok, s}
-    else
-      Mongo.Auth.run(opts, s)
+  defp maybe_auth(opts, state) do
+    case opts[:skip_auth] do
+      true -> {:ok, state}
+      _    -> Mongo.Auth.run(opts, state)
     end
   end
 
-  defp maybe_ssl(opts, s) do
-    if s.ssl do
-      ssl(s, opts)
-    else
-      {:ok, s}
-    end
-  end
+  defp maybe_ssl(opts, %{ssl: true} = state), do: ssl(state, opts)
+  defp maybe_ssl(opts, state), do: {:ok, state}
+
   defp ssl(%{socket: {:gen_tcp, sock}} = s, opts) do
     host      = (opts[:hostname] || "localhost") |> to_charlist
     ssl_opts = Keyword.put_new(opts[:ssl_opts] || [], :server_name_indication, host)
     case :ssl.connect(sock, ssl_opts, s.connect_timeout_ms) do
-      {:ok, ssl_sock} ->
-        {:ok, %{s | socket: {:ssl, ssl_sock}}}
+      {:ok, ssl_sock}  -> {:ok, %{s | socket: {:ssl, ssl_sock}}}
       {:error, reason} ->
         :gen_tcp.close(sock)
         {:error, Mongo.Error.exception(tag: :ssl, action: "connect", reason: reason, host: s.host)}
@@ -111,15 +105,13 @@ defmodule Mongo.Protocol do
       {:ok, socket} ->
         # A suitable :buffer is only set if :recbuf is included in
         # :socket_options.
-        {:ok, [sndbuf: sndbuf, recbuf: recbuf, buffer: buffer]} =
-          :inet.getopts(socket, [:sndbuf, :recbuf, :buffer])
+        {:ok, [sndbuf: sndbuf, recbuf: recbuf, buffer: buffer]} = :inet.getopts(socket, [:sndbuf, :recbuf, :buffer])
         buffer = buffer |> max(sndbuf) |> max(recbuf)
         :ok = :inet.setopts(socket, buffer: buffer)
 
         {:ok, %{s | socket: {:gen_tcp, socket}}}
 
-      {:error, reason} ->
-        {:error, Mongo.Error.exception(tag: :tcp, action: "connect", reason: reason, host: s.host)}
+      {:error, reason} -> {:error, Mongo.Error.exception(tag: :tcp, action: "connect", reason: reason, host: s.host)}
     end
   end
 
@@ -136,55 +128,12 @@ defmodule Mongo.Protocol do
     end
   end
 
-  def handle_info({:tcp, data}, s) do
-    err = Mongo.Error.exception(message: "unexpected async recv: #{inspect data}")
-    {:disconnect, err, s}
+  def checkout(state) do
+    {:ok, state}
   end
 
-  def handle_info({:tcp_closed, _}, s) do
-    err = Mongo.Error.exception(tag: :tcp, action: "async recv", reason: :closed, host: s.host)
-    {:disconnect, err, s}
-  end
-
-  def handle_info({:tcp_error, _, reason}, s) do
-    err = Mongo.Error.exception(tag: :tcp, action: "async recv", reason: reason, host: s.host)
-    {:disconnect, err, s}
-  end
-
-  def handle_info({:ssl_closed, _}, s) do
-    err = Mongo.Error.exception(tag: :ssl, action: "async recv", reason: :closed, host: s.host)
-    {:disconnect, err, s}
-  end
-
-  def checkout(%{socket: {mod, sock}} = s) do
-    case setopts(mod, sock, [active: :false]) do
-      :ok                       -> recv_buffer(s)
-      {:error, _} =             err -> err
-    end
-  end
-
-  defp recv_buffer(%{socket: {:gen_tcp, sock}} = s) do
-    receive do
-      {:tcp, ^sock, _buffer} ->
-        {:ok, s}
-    after
-      0 ->
-        {:ok, s}
-    end
-  end
-  defp recv_buffer(%{socket: {:ssl, sock}} = s) do
-    receive do
-      {:ssl, ^sock, _buffer} ->
-        {:ok, s}
-    after
-      0 ->
-        {:ok, s}
-    end
-  end
-
-  def checkin(%{socket: {mod, sock}} = s) do
-    :ok = setopts(mod, sock, [active: :once])
-    {:ok, s}
+  def checkin(state) do
+    {:ok, state}
   end
 
   def handle_execute_close(query, params, opts, s) do
@@ -193,10 +142,8 @@ defmodule Mongo.Protocol do
 
   def handle_execute(%Mongo.Query{action: action, extra: extra}, params, opts, original_state) do
     {mod, sock} = original_state.socket
-    :ok = setopts(mod, sock, active: false)
     tmp_state = %{original_state | database: Keyword.get(opts, :database, original_state.database)}
     with {:ok, reply, tmp_state} <- handle_execute(action, extra, params, opts, tmp_state) do
-      :ok = setopts(mod, sock, active: :once)
       {:ok, reply, Map.put(tmp_state, :database, original_state.database)}
     end
   end
@@ -240,10 +187,6 @@ defmodule Mongo.Protocol do
 
   defp handle_execute(:command, nil, [query], opts, s) do
     flags = Keyword.take(opts, @find_one_flags)
-
-    # todo: Post(coll: Utils.namespace("$cmd", s, opts[:database]), query: query, select: "",
-    #             num_skip: 0, num_return: 1, flags: flags(flags))
-    # |> get_response(state)
     op_query(coll: Utils.namespace("$cmd", s, opts[:database]), query: query, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
     |> get_response(s)
   end
@@ -278,16 +221,8 @@ defmodule Mongo.Protocol do
   end
 
   def ping(%{wire_version: wire_version, socket: {mod, sock}} = s) do
-    {:ok, active} = getopts(mod, sock, [:active])
-    :ok = setopts(mod, sock, [active: false])
     with {:ok, %{wire_version: ^wire_version}} <- wire_version(s),
-         :ok = setopts(mod, sock, active),
          do: {:ok, s}
   end
 
-  defp setopts(:gen_tcp, sock, opts), do: :inet.setopts(sock, opts)
-  defp setopts(:ssl, sock, opts), do: :ssl.setopts(sock, opts)
-
-  defp getopts(:gen_tcp, sock, opts), do: :inet.getopts(sock, opts)
-  defp getopts(:ssl, sock, opts), do: :ssl.getopts(sock, opts)
 end

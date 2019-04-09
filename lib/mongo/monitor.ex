@@ -43,7 +43,7 @@ defmodule Mongo.Monitor do
       |> Keyword.put(:connection_type, :monitor)
       |> Keyword.put(:topology_pid, topology_pid)
 
-    {:ok, pid} = DBConnection.start_link(Mongo.Protocol, opts)
+    {:ok, pid} = DBConnection.start_link(Mongo.MongoDBConnection, opts)
     :ok = GenServer.cast(self(), :check)
     {:ok, %{
       connection_pid: pid,
