@@ -15,6 +15,8 @@ to implement the current requirements for the driver.
   * Understand the magic in the code
   * Simplify code: remove raw_find (raw_find called from cursors, raw_find called with "$cmd"), so raw_find is more calling a command than a find query.
   * Better support for new MongoDB version, for example the ability to use views
+  * Upgrade to DBConnection 2.x
+  * Because the driver is used in production environments, quick adjustments are necessary.
 
 ## Features
 
