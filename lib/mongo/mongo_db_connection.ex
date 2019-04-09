@@ -144,18 +144,6 @@ defmodule Mongo.MongoDBConnection do
     {:ok, state.wire_version, state}
   end
 
-  defp handle_execute(:delete_one, coll, [query], opts, s) do
-    flags = [:single]
-    op    = op_delete(coll: Utils.namespace(coll, s, opts[:database]), query: query, flags: flags)
-    message_gle(-13, op, opts, s)
-  end
-
-  defp handle_execute(:delete_many, coll, [query], opts, s) do
-    flags = []
-    op = op_delete(coll: Utils.namespace(coll, s, opts[:database]), query: query, flags: flags)
-    message_gle(-14, op, opts, s)
-  end
-
   defp handle_execute(:replace_one, coll, [query, replacement], opts, s) do
     flags  = flags(Keyword.take(opts, @update_flags))
     op     = op_update(coll: Utils.namespace(coll, s, opts[:database]), query: query, update: replacement,

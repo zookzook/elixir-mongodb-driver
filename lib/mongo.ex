@@ -672,13 +672,7 @@ defmodule Mongo do
   """
   @spec delete_one(GenServer.server, collection, BSON.document, Keyword.t) :: result(Mongo.DeleteResult.t)
   def delete_one(topology_pid, coll, filter, opts \\ []) do
-    params = [filter]
-    query = %Query{action: :delete_one, extra: coll}
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, reply} <- DBConnection.execute(conn, query, params, defaults(opts)),
-         :ok <- maybe_failure(reply),
-         {:ok, %{"n" => n}} <- get_last_error(reply),
-         do: {:ok, %Mongo.DeleteResult{deleted_count: n}}
+    delete_documents(topology_pid, coll, filter, 1, opts)
   end
 
   @doc """
@@ -694,13 +688,46 @@ defmodule Mongo do
   """
   @spec delete_many(GenServer.server, collection, BSON.document, Keyword.t) :: result(Mongo.DeleteResult.t)
   def delete_many(topology_pid, coll, filter, opts \\ []) do
-    params = [filter]
-    query = %Query{action: :delete_many, extra: coll}
+    delete_documents(topology_pid, coll, filter, 0, opts)
+  end
+
+  ##
+  # This is the implementation of the delete command for
+  # delete_one and delete_many
+  #
+  defp delete_documents(topology_pid, coll, filter, limit, opts \\ [])  do
+
+    # see https://docs.mongodb.com/manual/reference/command/delete/#dbcmd.delete
+    write_concern = %{
+                      w: Keyword.get(opts, :w),
+                      j: Keyword.get(opts, :j),
+                      wtimeout: Keyword.get(opts, :wtimeout)
+                    } |> filter_nils()
+
+    filter = %{
+               q: filter,
+               limit: limit,
+               collation: Keyword.get(opts, :collation)
+             } |> filter_nils()
+
+    query = [
+              delete: coll,
+              deletes: [filter],
+              ordered: Keyword.get(opts, :ordered),
+              writeConcern: write_concern
+            ] |> filter_nils()
+
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, reply} <- DBConnection.execute(conn, query, params, defaults(opts)),
-         :ok <- maybe_failure(reply),
-         {:ok, %{"n" => n}} <- get_last_error(reply),
-         do: {:ok, %Mongo.DeleteResult{deleted_count: n}}
+         {:ok, doc} <- direct_command(conn, query, opts) do
+      case doc do
+        %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+        %{ "ok" => _ok, "n" => n } ->
+          case Map.get(write_concern, :w) do
+            0 -> {:ok, %Mongo.DeleteResult{acknowledged: false}}
+            _ -> {:ok, %Mongo.DeleteResult{deleted_count: n}}
+          end
+      end
+    end
   end
 
   @doc """
