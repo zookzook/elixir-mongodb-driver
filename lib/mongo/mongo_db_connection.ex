@@ -55,7 +55,7 @@ defmodule Mongo.MongoDBConnection do
 
     case result do
       {:ok, state} ->
-        #IO.puts inspect state
+        IO.puts inspect state
         {:ok, state}
 
       {:disconnect, reason, state} ->
