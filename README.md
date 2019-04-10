@@ -1,9 +1,9 @@
 # An alternative Mongodb driver for Elixir
 [![Build Status](https://travis-ci.org/zookzook/elixir-mongodb-driver.svg?branch=master)](https://travis-ci.org/zookzook/elixir-mongodb-driver)
-[![Hex.pm](https://img.shields.io/hexpm/v/mongodb_driver.svg)]()
-[![Hex.pm](https://img.shields.io/hexpm/dt/mongodb_driver.svg)]()
-[![Hex.pm](https://img.shields.io/hexpm/dw/mongodb_driver.svg)]()
-[![Hex.pm](https://img.shields.io/hexpm/dd/mongodb_driver.svg)]()
+[![Hex.pm](https://img.shields.io/hexpm/v/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
+[![Hex.pm](https://img.shields.io/hexpm/dt/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
+[![Hex.pm](https://img.shields.io/hexpm/dw/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
+[![Hex.pm](https://img.shields.io/hexpm/dd/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
 
 This is an alternative development from the [original](https://github.com/ankhers/mongodb), which was the starting point
 and already contained very nice code.
