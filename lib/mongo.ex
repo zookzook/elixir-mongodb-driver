@@ -98,9 +98,6 @@ defmodule Mongo do
     connecting to a replica set)
     * `:type` - a hint of the topology type. See `t:initial_type/0` for
       valid values (default: `:unknown`)
-    * `:pool` - The pool module to use, see `DBConnection` for pool dependent
-      options, this option must be included with all requests contacting the
-      pool if not `DBConnection.Connection` (default: `DBConnection.Connection`)
     * `:idle` - The idle strategy, `:passive` to avoid checkin when idle and
       `:active` to checking when idle (default: `:passive`)
     * `:idle_timeout` - The idle timeout to ping the database (default: `1_000`)
@@ -408,46 +405,15 @@ defmodule Mongo do
   Selects documents in a collection and returns a cursor for the selected
   documents.
 
-  ## Options
+  For all options see https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find
 
-    * `:comment` - Associates a comment to a query
-    * `:cursor_type` - Set to :tailable or :tailable_await to return a tailable
-      cursor
-    * `:max_time` - Specifies a time limit in milliseconds
-    * `:modifiers` - Meta-operators modifying the output or behavior of a query,
-      see http://docs.mongodb.org/manual/reference/operator/query-modifier/
-    * `:cursor_timeout` - Set to false if cursor should not close after 10
-      minutes (Default: true)
-    * `:sort` - Sorts the results of a query in ascending or descending order
-    * `:projection` - Limits the fields to return for all matching document
-    * `:skip` - The number of documents to skip before returning (Default: 0)
+  Use the underscore style, for example to set the option `singleBatch` use `single_batch`. Another example:
+
+       Mongo.find(top, "jobs", %{}, batch_size: 2)
+
   """
   @spec find(GenServer.server, collection, BSON.document, Keyword.t) :: cursor
   def find(topology_pid, coll, filter, opts \\ []) do
-
-    #   "find": <string>,
-    #   "filter": <document>,
-    #   "sort": <document>,
-    #   "projection": <document>,
-    #   "hint": <document or string>,
-    #   "skip": <int>,
-    #   "limit": <int>,
-    #   "batchSize": <int>,
-    #   "singleBatch": <bool>,
-    #   "comment": <string>,
-    #   "maxScan": <int>,   // Deprecated in MongoDB 4.0
-    #   "maxTimeMS": <int>,
-    #   "readConcern": <document>,
-    #   "max": <document>,
-    #   "min": <document>,
-    #   "returnKey": <bool>,
-    #   "showRecordId": <bool>,
-    #   "tailable": <bool>,
-    #   "oplogReplay": <bool>,
-    #   "noCursorTimeout": <bool>,
-    #   "awaitData": <bool>,
-    #   "allowPartialResults": <bool>,
-    #   "collation": <document>
 
     filter = case normalize_doc(filter) do
       []    -> nil
@@ -455,22 +421,34 @@ defmodule Mongo do
     end
 
     query = [
-      {"find", coll},
-      {"filter", filter},
-      {"limit", opts[:limit]},
-      {"batchSize", opts[:batch_size]},
-      {"projection", opts[:projection]},
-      {"comment", opts[:comment]},
-      {"maxTimeMS", opts[:max_time]},
-      {"skip", opts[:skip]},
-      {"sort", opts[:sort]}
-    ] ++ Enum.into(opts[:modifiers] || [], [])
+              {"find", coll},
+              {"filter", filter},
+              {"limit", opts[:limit]},
+              {"hint", opts[:hint]},
+              {"singleBatch", opts[:single_batch]},
+              {"readConcern", opts[:read_concern]},
+              {"max", opts[:max]},
+              {"min", opts[:min]},
+              {"collation", opts[:collation]},
+              {"returnKey", opts[:return_key]},
+              {"showRecordId", opts[:show_record_id]},
+              {"tailable", opts[:tailable]},
+              {"oplogReplay", opts[:oplog_replay]},
+              {"tailable", opts[:tailable]},
+              {"noCursorTimeout", opts[:no_cursor_timeout]},
+              {"awaitData", opts[:await_data]},
+              {"batchSize", opts[:batch_size]},
+              {"projection", opts[:projection]},
+              {"comment", opts[:comment]},
+              {"maxTimeMS", opts[:max_time]},
+              {"skip", opts[:skip]},
+              {"sort", opts[:sort]}
+            ]
 
     query = filter_nils(query)
 
-    opts = if Keyword.get(opts, :cursor_timeout, true), do: opts, else: [{:no_cursor_timeout, true}|opts]
-    drop = ~w(projection comment max_time skip sort modifiers limit cursor_timeout)a
-    opts = cursor_type(opts[:cursor_type]) ++ Keyword.drop(opts, drop)
+    drop = ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data batch_size projection comment max_time skip sort)a
+    opts = Keyword.drop(opts, drop)
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
          do: cursor(conn, coll, query, opts)
@@ -483,24 +461,16 @@ defmodule Mongo do
   If multiple documents satisfy the query, this method returns the first document
   according to the natural order which reflects the order of documents on the disk.
 
-  ## Options
+  For all options see https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find
 
-    * `:comment` - Associates a comment to a query
-    * `:cursor_type` - Set to :tailable or :tailable_await to return a tailable
-      cursor
-    * `:max_time` - Specifies a time limit in milliseconds
-    * `:modifiers` - Meta-operators modifying the output or behavior of a query,
-      see http://docs.mongodb.org/manual/reference/operator/query-modifier/
-    * `:cursor_timeout` - Set to false if cursor should not close after 10
-      minutes (Default: true)
-    * `:projection` - Limits the fields to return for all matching document
-    * `:skip` - The number of documents to skip before returning (Default: 0)
+  Use the underscore style, for example to set the option `readConcern` use `read_concern`. Another example:
+
+       Mongo.find_one(top, "jobs", %{}, read_concern: %{level: "local"})
   """
   @spec find_one(GenServer.server, collection, BSON.document, Keyword.t) ::
     BSON.document | nil
   def find_one(conn, coll, filter, opts \\ []) do
     opts = opts
-           |> Keyword.delete(:order_by)
            |> Keyword.delete(:sort)
            |> Keyword.put(:limit, 1)
            |> Keyword.put(:batch_size, 1)
@@ -998,10 +968,6 @@ defmodule Mongo do
   end
 
   defp invalid_doc(doc), do: raise ArgumentError, "invalid document containing atom and string keys: #{inspect doc}"
-
-  defp cursor_type(nil), do: []
-  defp cursor_type(:tailable),  do: [tailable_cursor: true]
-  defp cursor_type(:tailable_await), do: [tailable_cursor: true, await_data: true]
 
   defp assert_single_doc!(doc) when is_map(doc), do: :ok
   defp assert_single_doc!([]), do: :ok
