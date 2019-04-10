@@ -1,5 +1,10 @@
 # An alternative Mongodb driver for Elixir
 
+[![Hex.pm](https://img.shields.io/hexpm/v/mongodb_driver.svg)]()
+[![Hex.pm](https://img.shields.io/hexpm/dt/mongodb_driver.svg)]()
+[![Hex.pm](https://img.shields.io/hexpm/dw/mongodb_driver.svg)]()
+[![Hex.pm](https://img.shields.io/hexpm/dd/mongodb_driver.svg)]()
+
 This is an alternative development from the [original](https://github.com/ankhers/mongodb), which was the starting point
 and already contained very nice code.
 
