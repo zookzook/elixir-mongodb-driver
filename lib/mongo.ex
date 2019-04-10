@@ -769,14 +769,10 @@ defmodule Mongo do
   @doc """
   Update all documents matching the filter.
 
-  Uses MongoDB update operators to specify the updates. For more information
+  Uses MongoDB update operators to specify the updates. For more information and all options
   please refer to the
-  [MongoDB documentation](http://docs.mongodb.org/manual/reference/operator/update/)
+  [MongoDB documentation](https://docs.mongodb.com/manual/reference/command/update/#dbcmd.update)
 
-  ## Options
-
-    * `:upsert` - if set to `true` creates a new document when no document
-      matches the filter (default: `false`)
   """
   @spec update_many(GenServer.server, collection, BSON.document, BSON.document, Keyword.t) :: result(Mongo.UpdateResult.t)
   def update_many(topology_pid, coll, filter, update, opts \\ []) do
@@ -784,10 +780,13 @@ defmodule Mongo do
     update_documents(topology_pid, coll, filter, update, true, opts)
   end
 
+  ##
+  # Calls the update command:
+  #
+  # see https://docs.mongodb.com/manual/reference/command/update/#update-command-output
+  #
   defp update_documents(topology_pid, coll, filter, update, multi, opts) do
 
-    # see https://docs.mongodb.com/manual/reference/command/update/#update-command-output
-    # validation of the update document
     write_concern = %{
                       w: Keyword.get(opts, :w),
                       j: Keyword.get(opts, :j),
@@ -799,7 +798,7 @@ defmodule Mongo do
                u: update,
                upsert: Keyword.get(opts, :upsert),
                multi: multi,
-               collation: Keyword.get(opts, :ordered),
+               collation: Keyword.get(opts, :collation),
                arrayFilters: Keyword.get(opts, :filters)
              } |> filter_nils()
 
@@ -812,19 +811,32 @@ defmodule Mongo do
             ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts) do
+         {:ok, doc}        <- direct_command(conn, query, opts) do
+
       case doc do
-        # todo: better handling off the result
+
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+
+        %{"n" => n, "nModified" => n_modified, "upserted" => upserted} ->
+          case Map.get(write_concern, :w) do
+            0 -> {:ok, %Mongo.UpdateResult{acknowledged: false}}
+            _ -> {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n_modified, upserted_ids: filter_upsert_ids(upserted)}}
+          end
+
         %{"n" => n, "nModified" => n_modified} ->
           case Map.get(write_concern, :w) do
             0 -> {:ok, %Mongo.UpdateResult{acknowledged: false}}
             _ -> {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n_modified}}
           end
-          _ -> {:ok, nil}
+
+        _ -> {:ok, nil}
+
       end
     end
   end
+
+  defp filter_upsert_ids(nil), do: []
+  defp filter_upsert_ids(upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
 
   @doc """
   Similar to `update_many/5` but unwraps the result and raises on error.
