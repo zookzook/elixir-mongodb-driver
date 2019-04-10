@@ -193,7 +193,9 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 
 ## License
 
+Copyright 2015 Eric Meadows-Jönsson
 Copyright 2015 Justin Wood
+Copyright 2019 Michael Maier
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
