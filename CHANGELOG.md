@@ -1,3 +1,10 @@
+## v0.5.0-dev
+
+* Enhancements
+  * upgraded to DBConnection 2.0.6
+  * Refactored code
+  * replaced deprecated op_code by database commands
+
 ## v0.4.8-dev
 
 * Enhancements

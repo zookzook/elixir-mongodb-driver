@@ -42,6 +42,7 @@ defmodule Mongo.Monitor do
       |> Keyword.put(:backoff_type, :rand)
       |> Keyword.put(:connection_type, :monitor)
       |> Keyword.put(:topology_pid, topology_pid)
+      |> Keyword.put(:pool_size, 1)
 
     {:ok, pid} = DBConnection.start_link(Mongo.MongoDBConnection, opts)
     :ok = GenServer.cast(self(), :check)
@@ -103,8 +104,7 @@ defmodule Mongo.Monitor do
     result = try do
       Mongo.direct_command(conn_pid, %{isMaster: 1}, opts)
     rescue
-      e ->
-        {:error, e}
+      e -> {:error, e}
     end
     finish_time = System.monotonic_time
     rtt = System.convert_time_unit(finish_time - start_time, :native, :millisecond)
