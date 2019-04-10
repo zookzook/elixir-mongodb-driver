@@ -405,7 +405,7 @@ defmodule Mongo do
   Selects documents in a collection and returns a cursor for the selected
   documents.
 
-  For all options see https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find
+  For all options see [Options](https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find)
 
   Use the underscore style, for example to set the option `singleBatch` use `single_batch`. Another example:
 
@@ -461,7 +461,7 @@ defmodule Mongo do
   If multiple documents satisfy the query, this method returns the first document
   according to the natural order which reflects the order of documents on the disk.
 
-  For all options see https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find
+  For all options see [Options](https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find)
 
   Use the underscore style, for example to set the option `readConcern` use `read_concern`. Another example:
 
@@ -581,16 +581,12 @@ defmodule Mongo do
   @doc """
   Insert multiple documents into the collection.
 
-  If any of the documents is missing the `_id` field or it is `nil`, an ObjectId
-  will be generated, and insertd into the document.
+  If any of the documents is missing the `_id` field or it is `nil`, an ObjectId will be generated, and insertd into the document.
   Ids of all documents will be returned in the result struct.
 
   ## Options
 
-    * `:continue_on_error` - even if insert fails for one of the documents
-      continue inserting the remaining ones (default: `false`)
-    * `:ordered` - A boolean specifying whether the mongod instance should
-      perform an ordered or unordered insert. (default: `true`)
+  For more information about options see [Options](https://docs.mongodb.com/manual/reference/command/insert/)
 
   ## Examples
 
@@ -618,14 +614,11 @@ defmodule Mongo do
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
          {:ok, doc} <- direct_command(conn, query, opts) do
       case doc do
-        %{"writeErrors" => _} ->
-          {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+        %{"writeErrors" => _} ->  {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
           case Map.get(write_concern, :w) do
-            0 ->
-              {:ok, %Mongo.InsertManyResult{acknowledged: false}}
-            _ ->
-              {:ok, %Mongo.InsertManyResult{inserted_ids: ids}}
+            0 -> {:ok, %Mongo.InsertManyResult{acknowledged: false}}
+            _ -> {:ok, %Mongo.InsertManyResult{inserted_ids: ids}}
           end
       end
     end
@@ -770,8 +763,7 @@ defmodule Mongo do
   Update all documents matching the filter.
 
   Uses MongoDB update operators to specify the updates. For more information and all options
-  please refer to the
-  [MongoDB documentation](https://docs.mongodb.com/manual/reference/command/update/#dbcmd.update)
+  please refer to the [MongoDB documentation](https://docs.mongodb.com/manual/reference/command/update/#dbcmd.update)
 
   """
   @spec update_many(GenServer.server, collection, BSON.document, BSON.document, Keyword.t) :: result(Mongo.UpdateResult.t)
