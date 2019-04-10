@@ -1,4 +1,4 @@
-# Mongodb
+# An alternative Mongodb driver for Elixir
 
 This is an alternative development from the [original](https://github.com/ankhers/mongodb), which was the starting point
 and already contained very nice code.
