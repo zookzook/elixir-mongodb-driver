@@ -157,7 +157,6 @@ defmodule Mongo.MongoDBConnection do
     with {:ok, %{wire_version: ^wire_version}} <- wire_version(state), do: {:ok, state}
   end
 
-
   def handle_execute_close(query, params, opts, s) do
     handle_execute(query, params, opts, s)
   end

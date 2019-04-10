@@ -43,6 +43,7 @@ defmodule Mongo.Monitor do
       |> Keyword.put(:connection_type, :monitor)
       |> Keyword.put(:topology_pid, topology_pid)
       |> Keyword.put(:pool_size, 1)
+      |> Keyword.put(:idle_interval, 5_000)
 
     {:ok, pid} = DBConnection.start_link(Mongo.MongoDBConnection, opts)
     :ok = GenServer.cast(self(), :check)

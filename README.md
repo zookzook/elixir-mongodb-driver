@@ -59,16 +59,16 @@ to implement the current requirements for the driver.
 
 ### Installation:
 
-Add mongodb to your mix.exs `deps` and `:applications` (replace `>= 0.0.0` in `deps` if you want a specific version). Mongodb supports the same pooling libraries db_connection does (currently: no pooling, poolboy, and sbroker). If you want to use poolboy as pooling library you should set up your project like this:
+Add mongodb_driver to your mix.exs `deps` and `:applications` (replace `>= 0.0.0` in `deps` if you want a specific version). 
+The driver supports pooling by db_connection (2.x). If you want to use pooling you should set up your project like this:
 
 ```elixir
 def application do
-  [applications: [:mongodb, :poolboy]]
+  [applications: [:mongodb_driver]]
 end
 
 defp deps do
-  [{:mongodb, ">= 0.0.0"},
-   {:poolboy, ">= 0.0.0"}]
+  [{:mongodb_driver, "~> 0.5.0"}]
 end
 ```
 
@@ -76,7 +76,8 @@ Then run `mix deps.get` to fetch dependencies.
 
 ### Connection pooling
 
-By default mongodb will start a single connection, but it also supports pooling with the `:pool` option. For poolboy add the `pool: DBConnection.Poolboy` option to `Mongo.start_link` and to all function calls in `Mongo` using the pool.
+By default mongodb will start a single connection, but it also supports pooling with the `:pool_size` option. 
+For 3 connections add the `pool_size: 3` option to `Mongo.start_link` and to all function calls in `Mongo` using the pool.
 
 ```elixir
 # Starts an unpooled connection
@@ -97,24 +98,12 @@ def start(_type, _args) do
   import Supervisor.Spec
 
   children = [
-    worker(Mongo, [[name: :mongo, database: "test", pool: DBConnection.Poolboy]])
+    worker(Mongo, [[name: :mongo, database: "test", pool_size: 3]])
   ]
 
   opts = [strategy: :one_for_one, name: MyApp.Supervisor]
   Supervisor.start_link(children, opts)
 end
-```
-
-DBConnection.Poolboy defaults to [10 Poolboy connections](https://hexdocs.pm/db_connection/1.1.3/DBConnection.Poolboy.html#content), but you can change that with the `:pool_size` option:
-```elixir
-{:ok, conn} = Mongo.start_link(name: :mongo, database: "test", pool: DBConnection.Poolboy, pool_size: 2)
-```
- 
-
-Remember to specify the pool in each query. There is [some discussion](https://github.com/ankhers/mongodb/issues/175) on how to change this requirement.
-
-```elixir
-Mongo.find(:mongo, "collection", %{}, limit: 20, pool: DBConnection.Poolboy)
 ```
 
 ### Replica Sets
