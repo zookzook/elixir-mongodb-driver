@@ -56,7 +56,7 @@ defmodule Mongo do
 
   @timeout 5000
 
-  @dialyzer [no_match: [count_documents!: 4]]
+  #@dialyzer [no_match: [count_documents!: 4]]
 
   @type conn :: DbConnection.Conn
   @type collection :: String.t
@@ -336,8 +336,8 @@ defmodule Mongo do
 
     case documents do
       [%{"n" => count}] -> {:ok, count}
-      [] -> {:error, :nothing_returned}
-      _  -> {:error, :too_many_documents_returned}
+      []                -> {:error, :nothing_returned}
+      _                 -> {:error, :too_many_documents_returned}
     end
   end
 
@@ -523,7 +523,7 @@ defmodule Mongo do
   @doc """
   Sends a ping command to the server.
   """
-  @spec ping(GenServer.server) :: result!(BSON.document)
+  @spec ping(GenServer.server) :: result(BSON.document)
   def ping(topology_pid) do
     command(topology_pid, %{ping: 1}, [batch_size: 1])
   end

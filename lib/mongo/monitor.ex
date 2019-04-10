@@ -77,7 +77,8 @@ defmodule Mongo.Monitor do
 
   @doc false
   def handle_call(:check, _from, state) do
-    check(state)
+    {_, state, diff} = check(state)
+    {:reply, diff, state}
   end
 
   @doc false

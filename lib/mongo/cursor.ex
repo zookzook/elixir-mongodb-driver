@@ -100,11 +100,6 @@ defmodule Mongo.Cursor do
       Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
     end
 
-    defp filter_nils(map) when is_map(map) do
-      Enum.reject(map, fn {_key, value} -> is_nil(value) end)
-      |> Enum.into(%{})
-    end
-
     defp after_fun(opts) do
       fn
         state(cursor: 0)                              -> :ok
