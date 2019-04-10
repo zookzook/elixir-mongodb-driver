@@ -9,6 +9,8 @@ replaced some op code calls with command calls.
 This is currently under development and there is no version management yet. The main goal is to simplify the API and
 to implement the current requirements for the driver.
 
+[Documentation](https://hexdocs.pm/mongodb_driver/readme.html)
+
 ## Motivation
 
   * Refactoring old code into new
@@ -21,7 +23,7 @@ to implement the current requirements for the driver.
 ## Features
 
   * Supports MongoDB versions 3.0, 3.2, 3.4, 3.6, 4.0
-  * Connection pooling (through db_connection)
+  * Connection pooling (through db_connection 2.x)
   * Streaming cursors
   * Performant ObjectID generation
   * Follows driver specification set by 10gen
