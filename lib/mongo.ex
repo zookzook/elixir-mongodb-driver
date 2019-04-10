@@ -56,7 +56,7 @@ defmodule Mongo do
 
   @timeout 5000
 
-  #@dialyzer [no_match: [count_documents!: 4]]
+  @dialyzer [no_match: [count_documents!: 4]]
 
   @type conn :: DbConnection.Conn
   @type collection :: String.t
@@ -336,8 +336,8 @@ defmodule Mongo do
 
     case documents do
       [%{"n" => count}] -> {:ok, count}
-      []                -> {:error, :nothing_returned}
-      _                 -> {:error, :too_many_documents_returned}
+      []                -> {:error, Mongo.Error.exception(message: "nothing returned")}
+      _                 -> :ok # fixes {:error, :too_many_documents_returned}
     end
   end
 

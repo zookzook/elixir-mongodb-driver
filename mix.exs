@@ -42,7 +42,7 @@ defmodule Mongodb.Mixfile do
       {:jason,         "~> 1.0.0", only: :test},
       {:ex_doc,        "~> 0.20.1 ", only: :dev},
       {:earmark,       ">= 0.0.0", only: :dev},
-      {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false}
+      {:dialyxir,      "~> 0.5", only: [:dev], runtime: false}
     ]
   end
 
