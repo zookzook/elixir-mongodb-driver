@@ -169,18 +169,11 @@ defmodule BSON.Decoder do
     {string, rest}
   end
 
-  defp subtype(0x00),
-    do: :generic
-  defp subtype(0x01),
-    do: :function
-  defp subtype(0x02),
-    do: :binary_old
-  defp subtype(0x03),
-    do: :uuid_old
-  defp subtype(0x04),
-    do: :uuid
-  defp subtype(0x05),
-    do: :md5
-  defp subtype(int) when is_integer(int) and int in 0x80..0xFF,
-    do: int
+  defp subtype(0x00), do: :generic
+  defp subtype(0x01), do: :function
+  defp subtype(0x02), do: :binary_old
+  defp subtype(0x03), do: :uuid_old
+  defp subtype(0x04), do: :uuid
+  defp subtype(0x05),  do: :md5
+  defp subtype(int) when is_integer(int) and int in 0x80..0xFF, do: int
 end

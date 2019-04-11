@@ -548,6 +548,26 @@ defmodule Mongo do
     end
   end
 
+  @doc false
+  @spec direct_command_msg(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
+  def direct_command_msg(conn, doc, opts \\ []) do
+    docs = [doc]
+    query = %Query{action: :msg}
+
+    with {:ok, response} <- DBConnection.execute(conn, query, docs, defaults(opts)) do
+      case response do
+        op_msg(docs: [%{"ok" => ok} = doc]) when ok == 1 -> {:ok, doc}
+        op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}]) when (@reply_query_failure &&& flags) != 0  -> {:error, Mongo.Error.exception(message: reason, code: code)}
+        op_reply(flags: flags) when (@reply_cursor_not_found &&& flags) != 0 ->  {:error, Mongo.Error.exception(message: "cursor not found")}
+        op_reply(docs: [%{"ok" => 0.0, "errmsg" => reason} = error]) ->  {:error, %Mongo.Error{message: "command failed: #{reason}", code: error["code"]}}
+        op_reply(docs: [%{"ok" => ok} = doc]) when ok == 1 ->   {:ok, doc}
+        # TODO: Check if needed
+        op_reply(docs: []) ->  {:ok, nil}
+      end
+    end
+  end
+
+
   @doc """
   Similar to `command/3` but unwraps the result and raises on error.
   """
@@ -579,6 +599,7 @@ defmodule Mongo do
 
     query = [
       insert: coll,
+      "$db": "test",
       documents: [doc],
       ordered: Keyword.get(opts, :ordered),
       writeConcern: write_concern,
@@ -586,7 +607,7 @@ defmodule Mongo do
     ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts) do
+         {:ok, doc} <- direct_command_msg(conn, query, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -644,7 +665,7 @@ defmodule Mongo do
     ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts) do
+         {:ok, doc} <- direct_command_msg(conn, query, opts) do
       case doc do
         %{"writeErrors" => _} ->
           {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}

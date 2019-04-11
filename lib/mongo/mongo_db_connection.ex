@@ -143,11 +143,23 @@ defmodule Mongo.MongoDBConnection do
     {:ok, state.wire_version, state}
   end
 
+  defp handle_execute(:msg, nil, [doc], opts, state) do
+    op_msg(docs: [doc])
+    |> get_response_msg(state)
+  end
+
+  defp get_response_msg(op, state) do
+    with {:ok, response} <- Utils.post_msg(state.request_id, op, state),
+         state = %{state | request_id: state.request_id + 1},
+         do: {:ok, response, state}
+  end
+
   defp handle_execute(:command, nil, [query], opts, s) do
     flags = Keyword.take(opts, @find_one_flags)
     op_query(coll: Utils.namespace("$cmd", s, opts[:database]), query: query, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
     |> get_response(s)
   end
+
 
   defp get_response(op, state) do
     with {:ok, response} <- Utils.post_request(state.request_id, op, state),

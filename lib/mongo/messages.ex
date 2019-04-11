@@ -20,6 +20,7 @@ defmodule Mongo.Messages do
   @op_get_more      2005
   @op_delete        2006
   @op_kill_cursors  2007
+  @op_msg_code      2013
 
   @update_flags [
     upsert: 0x1,
@@ -54,6 +55,7 @@ defmodule Mongo.Messages do
   defrecord  :op_delete, [:coll, :flags, :query]
   defrecord  :op_kill_cursors, [:cursor_ids]
   defrecord  :op_reply, [:flags, :cursor_id, :from, :num, :docs]
+  defrecord  :op_msg, [:flags, :type, :docs]
 
   def encode(request_id, op) do
     iodata = encode_op(op)
@@ -63,6 +65,25 @@ defmodule Mongo.Messages do
 
     [encode_header(header)|iodata]
   end
+
+  def decode_response_msg(msg_header(length: length) = header, iolist) when is_list(iolist) do
+    IO.puts "decode_response_msg: #{inspect header}"
+    if IO.iodata_length(iolist) >= length,
+       do: decode_response_msg(header, IO.iodata_to_binary(iolist)),
+       else: :error
+  end
+  def decode_response_msg(msg_header(length: length, response_to: response_to) = header, binary) when byte_size(binary) >= length do
+    IO.puts "decode_response_msg: #{inspect header}"
+    <<response::binary(length), rest::binary>> = binary
+
+    IO.puts inspect decode_msg(response)
+    IO.puts inspect rest
+    {:ok, response_to, decode_msg(response), rest}
+  end
+  def decode_response_msg(_header, _binary) do
+    :error
+  end
+
 
   def decode_response(msg_header(length: length) = header, iolist) when is_list(iolist) do
     if IO.iodata_length(iolist) >= length,
@@ -82,8 +103,7 @@ defmodule Mongo.Messages do
       do: IO.iodata_to_binary(iolist) |> decode_header,
     else: :error
   end
-  def decode_header(<<length::int32, request_id::int32, response_to::int32,
-                       op_code::int32, rest::binary>>) do
+  def decode_header(<<length::int32, request_id::int32, response_to::int32, op_code::int32, rest::binary>>) do
     header = msg_header(length: length-@header_size, request_id: request_id, response_to: response_to, op_code: op_code)
     {:ok, header, rest}
   end
@@ -104,6 +124,10 @@ defmodule Mongo.Messages do
      coll,
      0x00,
      docs]
+  end
+
+  defp encode_op(op_msg(flags: flags, docs: [doc])) do
+    [<<0::int32>>, <<0x00>>, doc]
   end
 
   defp encode_op(op_query(flags: flags, coll: coll, num_skip: num_skip,
@@ -140,9 +164,14 @@ defmodule Mongo.Messages do
   defp op_to_code(op_get_more()),     do: @op_get_more
   defp op_to_code(op_delete()),       do: @op_delete
   defp op_to_code(op_kill_cursors()), do: @op_kill_cursors
+  defp op_to_code(op_msg()),          do: @op_msg_code
 
   defp decode_reply(<<flags::int32, cursor_id::int64, from::int32, num::int32, rest::binary>>) do
     op_reply(flags: flags, cursor_id: cursor_id, from: from, num: num, docs: rest)
+  end
+
+  defp decode_msg(<<flags::int32, _type::int8, rest::binary>>) do
+    op_msg(flags: flags, docs: rest)
   end
 
   defp encode_header(msg_header(length: length, request_id: request_id,

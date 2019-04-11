@@ -17,6 +17,20 @@ defmodule Mongo.MongoDBConnection.Utils do
          do: {:ok, response}
   end
 
+  @doc"""
+    Sends a request id and waits for the response with the same id
+  """
+  def post_msg(id, ops, state) when is_list(ops) do
+    with :ok <- send(ops, state),
+         {:ok, ^id, response} <- recv_msg(state),
+         do: {:ok, response}
+  end
+  def post_msg(id, op, state) do
+    with :ok <- send(id, op, state),
+         {:ok, ^id, response} <- recv_msg(state),
+         do: {:ok, response}
+  end
+
   def command(id, command, s) do
     ns =
       if Keyword.get(command, :mechanism) == "MONGODB-X509" && Keyword.get(command, :authenticate) == 1 do
@@ -80,6 +94,30 @@ defmodule Mongo.MongoDBConnection.Utils do
 
   def recv(s) do
     recv(nil, "", s)
+  end
+
+  def recv_msg(s) do
+    recv_msg(nil, "", s)
+  end
+  defp recv_msg(nil, data, %{socket: {mod, sock}} = s) do
+    case decode_header(data) do
+      {:ok, header, rest} -> recv_msg(header, rest, s)
+      :error ->
+        case mod.recv(sock, 0, s.timeout) do
+          {:ok, tail}      -> recv_msg(nil, [data|tail], s)
+          {:error, reason} -> recv_error(reason, s)
+        end
+    end
+  end
+  defp recv_msg(header, data, %{socket: {mod, sock}} = s) do
+    case decode_response_msg(header, data) do
+      {:ok, id, msg, ""} -> {:ok, id, msg}
+      :error ->
+        case mod.recv(sock, 0, s.timeout) do
+          {:ok, tail}      -> recv_msg(header, [data|tail], s)
+          {:error, reason} -> recv_error(reason, s)
+        end
+    end
   end
 
   # TODO: Optimize to reduce :gen_tcp.recv and decode_response calls
