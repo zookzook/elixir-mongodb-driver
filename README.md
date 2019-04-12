@@ -23,12 +23,13 @@ to implement the current requirements for the driver.
   * [x] Simplify code: remove raw_find (raw_find called from cursors, raw_find called with "$cmd"), so raw_find is more calling a command than a find query.
   * [x] Better support for new MongoDB version, for example the ability to use views
   * [x] Upgrade to DBConnection 2.x
+  * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
   * [ ] Because the driver is used in production environments, quick adjustments are necessary.
 
 ## Features
 
   * Supports MongoDB versions 3.2, 3.4, 3.6, 4.0
-  * Connection pooling (through db_connection 2.x)
+  * Connection pooling (through DBConnection 2.x)
   * Streaming cursors
   * Performant ObjectID generation
   * Follows driver specification set by 10gen
@@ -64,8 +65,7 @@ to implement the current requirements for the driver.
 
 ### Installation:
 
-Add mongodb_driver to your mix.exs `deps` and `:applications` (replace `>= 0.0.0` in `deps` if you want a specific version). 
-The driver supports pooling by db_connection (2.x). If you want to use pooling you should set up your project like this:
+Add `mongodb_driver` to your mix.exs `deps` and `:applications`.
 
 ```elixir
 def application do
@@ -79,14 +79,26 @@ end
 
 Then run `mix deps.get` to fetch dependencies.
 
-### Connection pooling
-
-By default mongodb will start a single connection, but it also supports pooling with the `:pool_size` option. 
-For 3 connections add the `pool_size: 3` option to `Mongo.start_link` and to all function calls in `Mongo` using the pool.
-
 ```elixir
 # Starts an unpooled connection
 {:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/db-name")
+
+# Gets an enumerable cursor for the results
+cursor = Mongo.find(conn, "test-collection", %{})
+
+cursor
+|> Enum.to_list()
+|> IO.inspect
+```
+
+### Connection pooling
+The driver supports pooling by DBConnection (2.x). By default `mongodb_driver` will start a single 
+connection, but it also supports pooling with the `:pool_size` option. For 3 connections add the `pool_size: 3` option to `Mongo.start_link` and to all 
+function calls in `Mongo` using the pool:
+
+```elixir
+# Starts an pooled connection
+{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/db-name", pool_size: 3)
 
 # Gets an enumerable cursor for the results
 cursor = Mongo.find(conn, "test-collection", %{})
@@ -111,19 +123,24 @@ def start(_type, _args) do
 end
 ```
 
+Due to the mongodb specification, an additional connection is always set up for the monitor process.
+
 ### Replica Sets
 
-To connect to a Mongo cluster that is using replica sets, it is recommended to use the `:seeds` list instead of a `:hostname` and `:port` pair.
+To connect to a Mongo cluster that is using replica sets, it is recommended to use the `:seeds` list instead 
+of a `:hostname` and `:port` pair.
 
 ```elixir
 {:ok, pid} = Mongo.start_link(database: "test", seeds: ["hostname1.net:27017", "hostname2.net:27017"])
 ```
 
-This will allow for scenarios where the first `"hostname1.net:27017"` is unreachable for any reason and will automatically try to connect to each of the following entries in the list to connect to the cluster.
+This will allow for scenarios where the first `"hostname1.net:27017"` is unreachable for any reason 
+and will automatically try to connect to each of the following entries in the list to connect to the cluster.
 
 ### Auth mechanisms
 
-For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM. If you'd like to use [MONGODB-X509](https://docs.mongodb.com/manual/tutorial/configure-x509-client-authentication/#authenticate-with-a-x-509-certificate) 
+For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM. 
+If you'd like to use [MONGODB-X509](https://docs.mongodb.com/manual/tutorial/configure-x509-client-authentication/#authenticate-with-a-x-509-certificate) 
 authentication, you can specify that as a `start_link` option.
 
 ```elixir
@@ -132,7 +149,8 @@ authentication, you can specify that as a `start_link` option.
 
 ### AWS, TLS and Erlang SSL ciphers
 
-Some MongoDB cloud providers (notably AWS) require a particular TLS cipher that isn't enabled by default in the Erlang SSL module. In order to connect to these services,
+Some MongoDB cloud providers (notably AWS) require a particular TLS cipher that isn't enabled 
+by default in the Erlang SSL module. In order to connect to these services,
 you'll want to add this cipher to your `ssl_opts`: 
 
 ```elixir
