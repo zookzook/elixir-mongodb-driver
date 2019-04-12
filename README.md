@@ -22,14 +22,14 @@ to implement the current requirements for the driver.
   * [ ] Understand the magic in the code
   * [x] Simplify code: remove raw_find (raw_find called from cursors, raw_find called with "$cmd"), so raw_find is more calling a command than a find query.
   * [x] Better support for new MongoDB version, for example the ability to use views
-  * [x] Upgrade to DBConnection 2.x
+  * [x] Upgrade to ([DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
   * [ ] Because the driver is used in production environments, quick adjustments are necessary.
 
 ## Features
 
   * Supports MongoDB versions 3.2, 3.4, 3.6, 4.0
-  * Connection pooling (through DBConnection 2.x)
+  * Connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * Streaming cursors
   * Performant ObjectID generation
   * Follows driver specification set by 10gen
