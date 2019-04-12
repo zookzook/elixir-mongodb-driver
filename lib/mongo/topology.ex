@@ -115,6 +115,14 @@ defmodule Mongo.Topology do
     {:reply, Map.fetch(state.connection_pools, address), state}
   end
 
+  def handle_call(:wait_for_connection, _from, %{connection_pools: pools} = state) when map_size(pools) > 0 do
+    servers = Enum.map(pools, fn {key, _value} -> key end)
+    {:reply, {:connected, servers}, state}
+  end
+  def handle_call(:wait_for_connection, from, %{waiting_pids: waiting} = state) do
+    {:noreply, %{state | waiting_pids: [from | waiting]}}
+  end
+
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#updating-the-topologydescription
   def handle_cast({:server_description, server_description}, state) do
     new_state = handle_server_description(state, server_description)
@@ -126,14 +134,6 @@ defmodule Mongo.Topology do
       })
     end
     {:noreply, new_state}
-  end
-
-  def handle_call(:wait_for_connection, _from, %{connection_pools: pools} = state) when map_size(pools) > 0 do
-    servers = Enum.map(pools, fn {key, _value} -> key end)
-    {:reply, {:connected, servers}, state}
-  end
-  def handle_call(:wait_for_connection, from, %{waiting_pids: waiting} = state) do
-    {:noreply, %{state | waiting_pids: [from | waiting]}}
   end
 
   def handle_cast(:reconcile, state) do

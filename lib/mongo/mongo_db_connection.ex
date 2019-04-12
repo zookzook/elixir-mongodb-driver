@@ -162,24 +162,20 @@ defmodule Mongo.MongoDBConnection do
   end
 
   @impl true
-  def handle_execute(%Mongo.Query{action: action, extra: extra} = query, params, opts, original_state) do
+  def handle_execute(%Mongo.Query{action: action} = query, params, opts, original_state) do
     tmp_state = %{original_state | database: Keyword.get(opts, :database, original_state.database)}
-    with {:ok, reply, tmp_state} <- handle_execute(action, extra, params, opts, tmp_state) do
+    with {:ok, reply, tmp_state} <- execute_action(action, params, opts, tmp_state) do
       {:ok, query, reply, Map.put(tmp_state, :database, original_state.database)}
     end
   end
 
-  defp handle_execute(:wire_version, _, _, _, state) do
+  defp execute_action(:wire_version, _, _, state) do
     {:ok, state.wire_version, state}
   end
 
-  defp handle_execute(:command, nil, [query], opts, s) do
+  defp execute_action(:command, [query], opts, state) do
     flags = Keyword.take(opts, @find_one_flags)
-    op_query(coll: Utils.namespace("$cmd", s, opts[:database]), query: query, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
-    |> get_response(s)
-  end
-
-  defp get_response(op, state) do
+    op = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: query, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
     with {:ok, response} <- Utils.post_request(state.request_id, op, state),
          state = %{state | request_id: state.request_id + 1},
          do: {:ok, response, state}
