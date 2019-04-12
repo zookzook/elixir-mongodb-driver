@@ -17,7 +17,7 @@ defmodule Mongo.MongoDBConnection do
     write_concern = Keyword.put_new(write_concern, :w, 1)
 
     state = %{
-      socket: nil,
+      connection: nil,
       request_id: 0,
       timeout: opts[:timeout] || @timeout,
       connect_timeout_ms: opts[:connect_timeout_ms] || @timeout,
@@ -34,9 +34,9 @@ defmodule Mongo.MongoDBConnection do
   end
 
   @impl true
-  def disconnect(_error, %{socket: {mod, sock}} = state) do
+  def disconnect(_error, %{connection: {mod, socket}} = state) do
     notify_disconnect(state)
-    mod.close(sock)
+    mod.close(socket)
   end
 
   defp notify_disconnect(%{connection_type: type, topology_pid: pid, host: host}) do
@@ -64,8 +64,8 @@ defmodule Mongo.MongoDBConnection do
           {:tcp_send, reason} -> Mongo.Error.exception(tag: :tcp, action: "send", reason: reason, host: state.host)
           %Mongo.Error{} = reason -> reason
         end
-        {mod, sock} = state.socket
-        mod.close(sock)
+        {mod, socket} = state.connection
+        mod.close(socket)
         {:error, reason}
 
       {:error, reason} -> {:error, reason}
@@ -82,13 +82,13 @@ defmodule Mongo.MongoDBConnection do
   defp maybe_ssl(opts, %{ssl: true} = state), do: ssl(opts, state)
   defp maybe_ssl(_opts, state), do: {:ok, state}
 
-  defp ssl(opts, %{socket: {:gen_tcp, sock}} = state) do
+  defp ssl(opts, %{connection: {:gen_tcp, socket}} = state) do
     host     = (opts[:hostname] || "localhost") |> to_charlist
     ssl_opts = Keyword.put_new(opts[:ssl_opts] || [], :server_name_indication, host)
-    case :ssl.connect(sock, ssl_opts, state.connect_timeout_ms) do
-      {:ok, ssl_sock}  -> {:ok, %{state | socket: {:ssl, ssl_sock}}}
+    case :ssl.connect(socket, ssl_opts, state.connect_timeout_ms) do
+      {:ok, ssl_sock}  -> {:ok, %{state | connection: {:ssl, ssl_sock}}}
       {:error, reason} ->
-        :gen_tcp.close(sock)
+        :gen_tcp.close(socket)
         {:error, Mongo.Error.exception(tag: :ssl, action: "connect", reason: reason, host: state.host)}
     end
   end
@@ -109,7 +109,7 @@ defmodule Mongo.MongoDBConnection do
         buffer = buffer |> max(sndbuf) |> max(recbuf)
         :ok = :inet.setopts(socket, buffer: buffer)
 
-        {:ok, %{s | socket: {:gen_tcp, socket}}}
+        {:ok, %{s | connection: {:gen_tcp, socket}}}
 
       {:error, reason} -> {:error, Mongo.Error.exception(tag: :tcp, action: "connect", reason: reason, host: s.host)}
     end
@@ -134,23 +134,23 @@ defmodule Mongo.MongoDBConnection do
   def checkin(state), do: {:ok, state}
 
   @impl true
-  def handle_begin(opts, state), do: {:ok, nil, state}
+  def handle_begin(_opts, state), do: {:ok, nil, state}
   @impl true
-  def handle_close(query, opts, state), do: {:ok, nil, state}
+  def handle_close(_query, _opts, state), do: {:ok, nil, state}
   @impl true
-  def handle_commit(opts, state), do: {:ok, nil, state}
+  def handle_commit(_opts, state), do: {:ok, nil, state}
   @impl true
-  def handle_deallocate(query, cursor, opts, state), do:  {:ok, nil, state}
+  def handle_deallocate(_query, _cursor, _opts, state), do:  {:ok, nil, state}
   @impl true
-  def handle_declare(query, params, opts, state), do: {:ok, query, nil, state}
+  def handle_declare(query, _params, _opts, state), do: {:ok, query, nil, state}
   @impl true
-  def handle_fetch(query, cursor, opts, state), do: {:halt, nil, state}
+  def handle_fetch(_query, _cursor, _opts, state), do: {:halt, nil, state}
   @impl true
-  def handle_prepare(query, opts, state), do: {:ok, query, state}
+  def handle_prepare(query, _opts, state), do: {:ok, query, state}
   @impl true
-  def handle_rollback(opts, state), do: {:ok, nil, state}
+  def handle_rollback(_opts, state), do: {:ok, nil, state}
   @impl true
-  def handle_status(opts, state), do: {:idle, state}
+  def handle_status(_opts, state), do: {:idle, state}
 
   @impl true
   def ping(%{wire_version: wire_version} = state) do

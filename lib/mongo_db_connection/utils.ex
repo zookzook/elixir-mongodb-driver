@@ -42,34 +42,34 @@ defmodule Mongo.MongoDBConnection.Utils do
   @doc """
     This function sends the raw data to the mongodb server
   """
-  def send_data(data, %{socket: {mod, sock}} = s) do
-    case mod.send(sock, data) do
+  def send_data(data, %{connection: {mod, socket}} = s) do
+    case mod.send(socket, data) do
       :ok              -> :ok
       {:error, reason} -> send_error(reason, s)
     end
   end
 
-  defp recv_data(nil, "", %{socket: {mod, sock}} = state) do
-    case mod.recv(sock, 0, state.timeout) do
+  defp recv_data(nil, "", %{connection: {mod, socket}} = state) do
+    case mod.recv(socket, 0, state.timeout) do
       {:ok, tail}      -> recv_data(nil, tail, state)
       {:error, reason} -> recv_error(reason, state)
     end
   end
-  defp recv_data(nil, data, %{socket: {mod, sock}} = state) do
+  defp recv_data(nil, data, %{connection: {mod, socket}} = state) do
     case decode_header(data) do
       {:ok, header, rest} -> recv_data(header, rest, state)
       :error ->
-        case mod.recv(sock, 0, state.timeout) do
+        case mod.recv(socket, 0, state.timeout) do
           {:ok, tail}      -> recv_data(nil, [data|tail], state)
           {:error, reason} -> recv_error(reason, state)
         end
     end
   end
-  defp recv_data(header, data, %{socket: {mod, sock}} = state) do
+  defp recv_data(header, data, %{connection: {mod, socket}} = state) do
     case decode_response(header, data) do
       {:ok, id, reply, ""} -> {:ok, id, reply}
       :error ->
-        case mod.recv(sock, 0, state.timeout) do
+        case mod.recv(socket, 0, state.timeout) do
           {:ok, tail}      -> recv_data(header, [data|tail], state)
           {:error, reason} -> recv_error(reason, state)
         end

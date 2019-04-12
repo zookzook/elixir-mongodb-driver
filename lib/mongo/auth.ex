@@ -17,8 +17,8 @@ defmodule Mongo.Auth do
         :ok ->
           nil
         error ->
-          {mod, sock} = s.socket
-          mod.close(sock)
+          {mod, socket} = s.connection
+          mod.close(socket)
           error
       end
     end) || {:ok, Map.put(s,:database, opts[:database])}
