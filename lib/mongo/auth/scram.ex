@@ -1,8 +1,9 @@
 defmodule Mongo.Auth.SCRAM do
   @moduledoc false
   import Mongo.BinaryUtils
-  import Mongo.MongoDBConnection.Utils
   import Bitwise
+
+  alias Mongo.MongoDBConnection.Utils
 
   def auth({username, password}, s) do
     # TODO: Wrap and log error
@@ -13,11 +14,11 @@ defmodule Mongo.Auth.SCRAM do
     message    = [saslStart: 1, mechanism: "SCRAM-SHA-1", payload: payload]
 
     result =
-      with {:ok, %{"ok" => ok} = reply} when ok == 1 <- command(-2, message, s),
+      with {:ok, %{"ok" => ok} = reply} when ok == 1 <- Utils.command(-2, message, s),
            {message, signature} = first(reply, first_bare, username, password, nonce),
-           {:ok, %{"ok" => ok} = reply} when ok == 1 <- command(-3, message, s),
+           {:ok, %{"ok" => ok} = reply} when ok == 1 <- Utils.command(-3, message, s),
            message = second(reply, signature),
-           {:ok, %{"ok" => ok} = reply} when ok == 1 <- command(-4, message, s),
+           {:ok, %{"ok" => ok} = reply} when ok == 1 <- Utils.command(-4, message, s),
            do: final(reply)
 
     case result do
@@ -36,7 +37,7 @@ defmodule Mongo.Auth.SCRAM do
     server_nonce    = params["r"]
     salt            = params["s"] |> Base.decode64!
     iter            = params["i"] |> String.to_integer
-    pass            = digest_password(username, password)
+    pass            = Utils.digest_password(username, password)
     salted_password = hi(pass, salt, iter)
 
     <<^client_nonce::binary(24), _::binary>> = server_nonce

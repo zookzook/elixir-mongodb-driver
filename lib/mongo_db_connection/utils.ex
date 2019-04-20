@@ -6,143 +6,72 @@ defmodule Mongo.MongoDBConnection.Utils do
   @doc"""
     Sends a request id and waits for the response with the same id
   """
-  def post_request(id, ops, state) when is_list(ops) do
-    with :ok <- send(ops, state),
-         {:ok, ^id, response} <- recv(state),
-         do: {:ok, response}
-  end
   def post_request(id, op, state) do
-    with :ok <- send(id, op, state),
-         {:ok, ^id, response} <- recv(state),
+    with :ok <- send_data(encode(id, op), state),
+         {:ok, ^id, response} <- recv_data(nil, "", state),
          do: {:ok, response}
   end
 
-  @doc"""
-    Sends a request id and waits for the response with the same id
+  @doc """
+    Invoking a command using connection stored in state, that means within a DBConnection call. Therefore
+    we cannot call DBConnect.execute() to reuse the command function in Monto.direct_command()
+
+    Using op_query structure to invoke the command
   """
-  def post_msg(id, ops, state) when is_list(ops) do
-    with :ok <- send(ops, state),
-         {:ok, ^id, response} <- recv_msg(state),
-         do: {:ok, response}
-  end
-  def post_msg(id, op, state) do
-    with :ok <- send(id, op, state),
-         {:ok, ^id, response} <- recv_msg(state),
-         do: {:ok, response}
-  end
+  def command(id, command, state) do
 
-  def command(id, command, s) do
-    ns =
-      if Keyword.get(command, :mechanism) == "MONGODB-X509" && Keyword.get(command, :authenticate) == 1 do
-        namespace("$cmd", nil, "$external")
-      else
-        namespace("$cmd", s, nil)
+    # In case of authenticate sometimes the namespace has to be modified
+    # If using X509 we need to add the keyword $external to use the external database for the client certificates
+    ns = case Keyword.get(command, :mechanism) == "MONGODB-X509" && Keyword.get(command, :authenticate) == 1 do
+      true  -> namespace("$cmd", nil, "$external")
+      false -> namespace("$cmd", state, nil)
     end
 
-    op = op_query(coll: ns, query: BSON.Encoder.document(command), select: "", num_skip: 0, num_return: 1, flags: [])
+    op = op_query(coll: ns, query: command, select: "", num_skip: 0, num_return: 1, flags: [])
 
-    case post_request(id, op, s) do
+    case post_request(id, op, state) do
       {:ok, op_reply(docs: docs)} ->
-        case BSON.Decoder.documents(docs) do
+        case docs do
           []    -> {:ok, nil}
           [doc] -> {:ok, doc}
         end
-      {:disconnect, _, _} = error ->
-        error
+      {:disconnect, _, _} = error ->  error
     end
   end
 
-  def send(id, op, %{socket: {mod, sock}} = s) do
-    case mod.send(sock, encode(id, op)) do
+  @doc """
+    This function sends the raw data to the mongodb server
+  """
+  def send_data(data, %{connection: {mod, socket}} = s) do
+    case mod.send(socket, data) do
       :ok              -> :ok
       {:error, reason} -> send_error(reason, s)
     end
   end
 
-  # Performance regressions of a factor of 1000x have been observed on
-  # linux systems for write operations that do not include the getLastError
-  # command in the same call to :gen_tcp.send/2 so we hide the workaround
-  # for mongosniff behind a flag
-  if Mix.env in [:dev, :test] && System.get_env("MONGO_NO_BATCH_SEND") do
-    def send(ops, %{socket: {mod, sock}} = s) do
-      # Do a separate :gen_tcp.send/2 for each message because mongosniff
-      # cannot handle more than one message per packet. TCP is a stream
-      # protocol, but no.
-      # https://jira.mongodb.org/browse/TOOLS-821
-      Enum.find_value(List.wrap(ops), fn {id, op} ->
-        data = encode(id, op)
-        case mod.send(sock, data) do
-          :ok              -> nil
-          {:error, reason} -> send_error(reason, s)
-        end
-      end)
-      || :ok
-    end
-  else
-    def send(ops, %{socket: {mod, sock}} = s) do
-      data =
-        Enum.reduce(List.wrap(ops), "", fn {id, op}, acc ->
-          [acc|encode(id, op)]
-        end)
-
-      case mod.send(sock, data) do
-        :ok              -> :ok
-        {:error, reason} -> send_error(reason, s)
-      end
+  defp recv_data(nil, "", %{connection: {mod, socket}} = state) do
+    case mod.recv(socket, 0, state.timeout) do
+      {:ok, tail}      -> recv_data(nil, tail, state)
+      {:error, reason} -> recv_error(reason, state)
     end
   end
-
-  def recv(s) do
-    recv(nil, "", s)
-  end
-
-  def recv_msg(s) do
-    recv_msg(nil, "", s)
-  end
-  defp recv_msg(nil, data, %{socket: {mod, sock}} = s) do
+  defp recv_data(nil, data, %{connection: {mod, socket}} = state) do
     case decode_header(data) do
-      {:ok, header, rest} -> recv_msg(header, rest, s)
+      {:ok, header, rest} -> recv_data(header, rest, state)
       :error ->
-        case mod.recv(sock, 0, s.timeout) do
-          {:ok, tail}      -> recv_msg(nil, [data|tail], s)
-          {:error, reason} -> recv_error(reason, s)
+        case mod.recv(socket, 0, state.timeout) do
+          {:ok, tail}      -> recv_data(nil, [data|tail], state)
+          {:error, reason} -> recv_error(reason, state)
         end
     end
   end
-  defp recv_msg(header, data, %{socket: {mod, sock}} = s) do
-    case decode_response_msg(header, data) do
-      {:ok, id, msg, ""} -> {:ok, id, msg}
-      :error ->
-        case mod.recv(sock, 0, s.timeout) do
-          {:ok, tail}      -> recv_msg(header, [data|tail], s)
-          {:error, reason} -> recv_error(reason, s)
-        end
-    end
-  end
-
-  # TODO: Optimize to reduce :gen_tcp.recv and decode_response calls
-  #       based on message size in header.
-  #       :gen.tcp.recv(socket, min(size, max_packet))
-  #       where max_packet = 64mb
-  defp recv(nil, data, %{socket: {mod, sock}} = s) do
-    case decode_header(data) do
-      {:ok, header, rest} ->
-        recv(header, rest, s)
-      :error ->
-        case mod.recv(sock, 0, s.timeout) do
-          {:ok, tail}      -> recv(nil, [data|tail], s)
-          {:error, reason} -> recv_error(reason, s)
-        end
-    end
-  end
-  defp recv(header, data, %{socket: {mod, sock}} = s) do
+  defp recv_data(header, data, %{connection: {mod, socket}} = state) do
     case decode_response(header, data) do
-      {:ok, id, reply, ""} ->
-        {:ok, id, reply}
+      {:ok, id, reply, ""} -> {:ok, id, reply}
       :error ->
-        case mod.recv(sock, 0, s.timeout) do
-          {:ok, tail}      -> recv(header, [data|tail], s)
-          {:error, reason} -> recv_error(reason, s)
+        case mod.recv(socket, 0, state.timeout) do
+          {:ok, tail}      -> recv_data(header, [data|tail], state)
+          {:error, reason} -> recv_error(reason, state)
         end
     end
   end
@@ -157,7 +86,7 @@ defmodule Mongo.MongoDBConnection.Utils do
     {:disconnect, error, s}
   end
 
-  def namespace(coll, s, nil), do: [s.database, ?. | coll]
+  def namespace(coll, state, nil), do: [state.database, ?. | coll]
   def namespace(coll, _, database), do: [database, ?. | coll]
 
   def digest(nonce, username, password) do

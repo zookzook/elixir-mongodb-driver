@@ -1,3 +1,12 @@
+## v0.5.0-dev
+
+* Enhancements
+  * upgraded to DBConnection 2.0.6
+  * refactored code, simplified code and api
+  * replaced deprecated op_code by database commands
+  * update_one, update_many, replace_one, replace_many return upserted ids
+  * support for all find options
+
 ## v0.4.8-dev
 
 * Enhancements

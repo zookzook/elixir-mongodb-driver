@@ -42,6 +42,8 @@ defmodule Mongo.Monitor do
       |> Keyword.put(:backoff_type, :rand)
       |> Keyword.put(:connection_type, :monitor)
       |> Keyword.put(:topology_pid, topology_pid)
+      |> Keyword.put(:pool_size, 1)
+      |> Keyword.put(:idle_interval, 5_000)
 
     {:ok, pid} = DBConnection.start_link(Mongo.MongoDBConnection, opts)
     :ok = GenServer.cast(self(), :check)
@@ -75,7 +77,8 @@ defmodule Mongo.Monitor do
 
   @doc false
   def handle_call(:check, _from, state) do
-    check(state)
+    {_, state, diff} = check(state)
+    {:reply, diff, state}
   end
 
   @doc false
@@ -92,7 +95,7 @@ defmodule Mongo.Monitor do
     else
       server_description = is_master(state.connection_pid, state.server_description, state.opts)
 
-      :ok = GenServer.call(state.topology_pid, {:server_description, server_description}, 30_000)
+      :ok = GenServer.cast(state.topology_pid, {:server_description, server_description})
       {:noreply, %{state | server_description: server_description}, state.heartbeat_frequency_ms}
     end
   end
@@ -103,8 +106,7 @@ defmodule Mongo.Monitor do
     result = try do
       Mongo.direct_command(conn_pid, %{isMaster: 1}, opts)
     rescue
-      e ->
-        {:error, e}
+      e -> {:error, e}
     end
     finish_time = System.monotonic_time
     rtt = System.convert_time_unit(finish_time - start_time, :native, :millisecond)

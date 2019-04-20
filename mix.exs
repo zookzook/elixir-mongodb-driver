@@ -1,14 +1,14 @@
 defmodule Mongodb.Mixfile do
   use Mix.Project
 
-  @version "0.4.7"
+  @version "0.5.0"
 
-  def project do
-    [app: :mongodb,
+  def project() do
+    [app: :mongodb_driver,
      version: @version,
      elixirc_paths: elixirc_paths(Mix.env),
      elixir: "~> 1.4",
-     name: "Mongodb",
+     name: "mongodb-driver",
      deps: deps(),
      docs: docs(),
      description: description(),
@@ -25,7 +25,7 @@ defmodule Mongodb.Mixfile do
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_),     do: ["lib"]
 
-  def application do
+  def application() do
     [applications: applications(Mix.env),
      mod: {Mongo.App, []},
      env: []]
@@ -34,33 +34,32 @@ defmodule Mongodb.Mixfile do
   def applications(:test), do: [:logger, :connection, :db_connection]
   def applications(_), do: [:logger, :connection, :db_connection]
 
-  defp deps do
+  defp deps() do
     [
       {:connection,    "~> 1.0"},
-      {:db_connection, "~> 1.1"},
+      {:db_connection, "~> 2.0.6"},
       {:decimal,       "~> 1.0"},
-      {:poolboy,       ">= 0.0.0", only: :test},
       {:jason,         "~> 1.0.0", only: :test},
-      {:ex_doc,        ">= 0.0.0", only: :dev},
+      {:ex_doc,        "~> 0.20.1 ", only: :dev},
       {:earmark,       ">= 0.0.0", only: :dev},
-      {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false}
+      {:dialyxir,      "~> 0.5", only: [:dev], runtime: false}
     ]
   end
 
-  defp docs do
+  defp docs() do
     [main: "readme",
      extras: ["README.md"],
      source_ref: "v#{@version}",
-     source_url: "https://github.com/ankhers/mongodb"]
+     source_url: "https://github.com/zookzook/elixir-mongodb-driver"]
   end
 
-  defp description do
-    "MongoDB driver for Elixir"
+  defp description() do
+    "An alternative MongoDB driver for Elixir"
   end
 
-  defp package do
-    [maintainers: ["Eric Meadows-Jönsson", "Justin Wood"],
+  defp package() do
+    [maintainers: ["Michael Maier"],
      licenses: ["Apache 2.0"],
-     links: %{"GitHub" => "https://github.com/ankhers/mongodb"}]
+     links: %{"GitHub" => "https://github.com/zookzook/elixir-mongodb-driver"}]
   end
 end

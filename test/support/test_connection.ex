@@ -3,7 +3,7 @@ defmodule Mongo.TestConnection do
 
   def connect() do
     with {_, 0} <- System.cmd("bash", ["./start_mongo.bash"]) do
-      Mongo.start_link(database: "mongodb_test", seeds: @seeds)
+      Mongo.start_link(database: "mongodb_test", seeds: @seeds, show_sensitive_data_on_connection_error: true)
     else
       {error, exit_code} ->
         {:error, {exit_code, error}}

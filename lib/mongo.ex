@@ -98,9 +98,6 @@ defmodule Mongo do
     connecting to a replica set)
     * `:type` - a hint of the topology type. See `t:initial_type/0` for
       valid values (default: `:unknown`)
-    * `:pool` - The pool module to use, see `DBConnection` for pool dependent
-      options, this option must be included with all requests contacting the
-      pool if not `DBConnection.Connection` (default: `DBConnection.Connection`)
     * `:idle` - The idle strategy, `:passive` to avoid checkin when idle and
       `:active` to checking when idle (default: `:passive`)
     * `:idle_timeout` - The idle timeout to ping the database (default: `1_000`)
@@ -167,7 +164,7 @@ defmodule Mongo do
 
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
           opts = Keyword.put(opts, :slave_ok, slave_ok),
-         {:ok, version} <- DBConnection.execute(conn, wv_query, [], defaults(opts)) do
+         {:ok, _query, version} <- DBConnection.execute(conn, wv_query, [], defaults(opts)) do
       cursor? = version >= 1 and Keyword.get(opts, :use_cursor, true)
       opts = Keyword.drop(opts, ~w(allow_disk_use max_time use_cursor)a)
 
@@ -339,8 +336,8 @@ defmodule Mongo do
 
     case documents do
       [%{"n" => count}] -> {:ok, count}
-      [] -> {:error, :nothing_returned}
-      _  -> {:error, :too_many_documents_returned}
+      []                -> {:error, Mongo.Error.exception(message: "nothing returned")}
+      _                 -> :ok # fixes {:error, :too_many_documents_returned}
     end
   end
 
@@ -408,46 +405,15 @@ defmodule Mongo do
   Selects documents in a collection and returns a cursor for the selected
   documents.
 
-  ## Options
+  For all options see [Options](https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find)
 
-    * `:comment` - Associates a comment to a query
-    * `:cursor_type` - Set to :tailable or :tailable_await to return a tailable
-      cursor
-    * `:max_time` - Specifies a time limit in milliseconds
-    * `:modifiers` - Meta-operators modifying the output or behavior of a query,
-      see http://docs.mongodb.org/manual/reference/operator/query-modifier/
-    * `:cursor_timeout` - Set to false if cursor should not close after 10
-      minutes (Default: true)
-    * `:sort` - Sorts the results of a query in ascending or descending order
-    * `:projection` - Limits the fields to return for all matching document
-    * `:skip` - The number of documents to skip before returning (Default: 0)
+  Use the underscore style, for example to set the option `singleBatch` use `single_batch`. Another example:
+
+       Mongo.find(top, "jobs", %{}, batch_size: 2)
+
   """
   @spec find(GenServer.server, collection, BSON.document, Keyword.t) :: cursor
   def find(topology_pid, coll, filter, opts \\ []) do
-
-    #   "find": <string>,
-    #   "filter": <document>,
-    #   "sort": <document>,
-    #   "projection": <document>,
-    #   "hint": <document or string>,
-    #   "skip": <int>,
-    #   "limit": <int>,
-    #   "batchSize": <int>,
-    #   "singleBatch": <bool>,
-    #   "comment": <string>,
-    #   "maxScan": <int>,   // Deprecated in MongoDB 4.0
-    #   "maxTimeMS": <int>,
-    #   "readConcern": <document>,
-    #   "max": <document>,
-    #   "min": <document>,
-    #   "returnKey": <bool>,
-    #   "showRecordId": <bool>,
-    #   "tailable": <bool>,
-    #   "oplogReplay": <bool>,
-    #   "noCursorTimeout": <bool>,
-    #   "awaitData": <bool>,
-    #   "allowPartialResults": <bool>,
-    #   "collation": <document>
 
     filter = case normalize_doc(filter) do
       []    -> nil
@@ -455,22 +421,34 @@ defmodule Mongo do
     end
 
     query = [
-      {"find", coll},
-      {"filter", filter},
-      {"limit", opts[:limit]},
-      {"batchSize", opts[:batch_size]},
-      {"projection", opts[:projection]},
-      {"comment", opts[:comment]},
-      {"maxTimeMS", opts[:max_time]},
-      {"skip", opts[:skip]},
-      {"sort", opts[:sort]}
-    ] ++ Enum.into(opts[:modifiers] || [], [])
+              {"find", coll},
+              {"filter", filter},
+              {"limit", opts[:limit]},
+              {"hint", opts[:hint]},
+              {"singleBatch", opts[:single_batch]},
+              {"readConcern", opts[:read_concern]},
+              {"max", opts[:max]},
+              {"min", opts[:min]},
+              {"collation", opts[:collation]},
+              {"returnKey", opts[:return_key]},
+              {"showRecordId", opts[:show_record_id]},
+              {"tailable", opts[:tailable]},
+              {"oplogReplay", opts[:oplog_replay]},
+              {"tailable", opts[:tailable]},
+              {"noCursorTimeout", opts[:no_cursor_timeout]},
+              {"awaitData", opts[:await_data]},
+              {"batchSize", opts[:batch_size]},
+              {"projection", opts[:projection]},
+              {"comment", opts[:comment]},
+              {"maxTimeMS", opts[:max_time]},
+              {"skip", opts[:skip]},
+              {"sort", opts[:sort]}
+            ]
 
     query = filter_nils(query)
 
-    opts = if Keyword.get(opts, :cursor_timeout, true), do: opts, else: [{:no_cursor_timeout, true}|opts]
-    drop = ~w(projection comment max_time skip sort modifiers limit cursor_timeout)a
-    opts = cursor_type(opts[:cursor_type]) ++ Keyword.drop(opts, drop)
+    drop = ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data batch_size projection comment max_time skip sort)a
+    opts = Keyword.drop(opts, drop)
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
          do: cursor(conn, coll, query, opts)
@@ -483,24 +461,16 @@ defmodule Mongo do
   If multiple documents satisfy the query, this method returns the first document
   according to the natural order which reflects the order of documents on the disk.
 
-  ## Options
+  For all options see [Options](https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find)
 
-    * `:comment` - Associates a comment to a query
-    * `:cursor_type` - Set to :tailable or :tailable_await to return a tailable
-      cursor
-    * `:max_time` - Specifies a time limit in milliseconds
-    * `:modifiers` - Meta-operators modifying the output or behavior of a query,
-      see http://docs.mongodb.org/manual/reference/operator/query-modifier/
-    * `:cursor_timeout` - Set to false if cursor should not close after 10
-      minutes (Default: true)
-    * `:projection` - Limits the fields to return for all matching document
-    * `:skip` - The number of documents to skip before returning (Default: 0)
+  Use the underscore style, for example to set the option `readConcern` use `read_concern`. Another example:
+
+       Mongo.find_one(top, "jobs", %{}, read_concern: %{level: "local"})
   """
   @spec find_one(GenServer.server, collection, BSON.document, Keyword.t) ::
     BSON.document | nil
   def find_one(conn, coll, filter, opts \\ []) do
     opts = opts
-           |> Keyword.delete(:order_by)
            |> Keyword.delete(:sort)
            |> Keyword.put(:limit, 1)
            |> Keyword.put(:batch_size, 1)
@@ -509,12 +479,6 @@ defmodule Mongo do
     |> find(coll, filter, opts)
     |> Enum.at(0)
   end
-
-  @doc false
-  def raw_find(conn, coll, query, _select, opts) do
-    direct_command(conn, query, opts)
-  end
-
 
   @doc """
   Issue a database command. If the command has parameters use a keyword
@@ -536,7 +500,7 @@ defmodule Mongo do
     params = [query]
     query = %Query{action: :command}
 
-    with {:ok, response} <- DBConnection.execute(conn, query, params, defaults(opts)) do
+    with {:ok, _query, response} <- DBConnection.execute(conn, query, params, defaults(opts)) do
       case response do
         op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}]) when (@reply_query_failure &&& flags) != 0  -> {:error, Mongo.Error.exception(message: reason, code: code)}
         op_reply(flags: flags) when (@reply_cursor_not_found &&& flags) != 0 ->  {:error, Mongo.Error.exception(message: "cursor not found")}
@@ -574,6 +538,14 @@ defmodule Mongo do
   @spec command!(GenServer.server, BSON.document, Keyword.t) :: result!(BSON.document)
   def command!(topology_pid, query, opts \\ []) do
     bangify(command(topology_pid, query, opts))
+  end
+
+  @doc """
+  Sends a ping command to the server.
+  """
+  @spec ping(GenServer.server) :: result(BSON.document)
+  def ping(topology_pid) do
+    command(topology_pid, %{ping: 1}, [batch_size: 1])
   end
 
   @doc """
@@ -630,16 +602,12 @@ defmodule Mongo do
   @doc """
   Insert multiple documents into the collection.
 
-  If any of the documents is missing the `_id` field or it is `nil`, an ObjectId
-  will be generated, and insertd into the document.
+  If any of the documents is missing the `_id` field or it is `nil`, an ObjectId will be generated, and insertd into the document.
   Ids of all documents will be returned in the result struct.
 
   ## Options
 
-    * `:continue_on_error` - even if insert fails for one of the documents
-      continue inserting the remaining ones (default: `false`)
-    * `:ordered` - A boolean specifying whether the mongod instance should
-      perform an ordered or unordered insert. (default: `true`)
+  For more information about options see [Options](https://docs.mongodb.com/manual/reference/command/insert/)
 
   ## Examples
 
@@ -667,14 +635,11 @@ defmodule Mongo do
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
          {:ok, doc} <- direct_command_msg(conn, query, opts) do
       case doc do
-        %{"writeErrors" => _} ->
-          {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+        %{"writeErrors" => _} ->  {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
           case Map.get(write_concern, :w) do
-            0 ->
-              {:ok, %Mongo.InsertManyResult{acknowledged: false}}
-            _ ->
-              {:ok, %Mongo.InsertManyResult{inserted_ids: ids}}
+            0 -> {:ok, %Mongo.InsertManyResult{acknowledged: false}}
+            _ -> {:ok, %Mongo.InsertManyResult{inserted_ids: ids}}
           end
       end
     end
@@ -747,6 +712,7 @@ defmodule Mongo do
             0 -> {:ok, %Mongo.DeleteResult{acknowledged: false}}
             _ -> {:ok, %Mongo.DeleteResult{deleted_count: n}}
           end
+        _ -> {:ok, nil}
       end
     end
   end
@@ -817,14 +783,9 @@ defmodule Mongo do
   @doc """
   Update all documents matching the filter.
 
-  Uses MongoDB update operators to specify the updates. For more information
-  please refer to the
-  [MongoDB documentation](http://docs.mongodb.org/manual/reference/operator/update/)
+  Uses MongoDB update operators to specify the updates. For more information and all options
+  please refer to the [MongoDB documentation](https://docs.mongodb.com/manual/reference/command/update/#dbcmd.update)
 
-  ## Options
-
-    * `:upsert` - if set to `true` creates a new document when no document
-      matches the filter (default: `false`)
   """
   @spec update_many(GenServer.server, collection, BSON.document, BSON.document, Keyword.t) :: result(Mongo.UpdateResult.t)
   def update_many(topology_pid, coll, filter, update, opts \\ []) do
@@ -832,10 +793,13 @@ defmodule Mongo do
     update_documents(topology_pid, coll, filter, update, true, opts)
   end
 
+  ##
+  # Calls the update command:
+  #
+  # see https://docs.mongodb.com/manual/reference/command/update/#update-command-output
+  #
   defp update_documents(topology_pid, coll, filter, update, multi, opts) do
 
-    # see https://docs.mongodb.com/manual/reference/command/update/#update-command-output
-    # validation of the update document
     write_concern = %{
                       w: Keyword.get(opts, :w),
                       j: Keyword.get(opts, :j),
@@ -847,7 +811,7 @@ defmodule Mongo do
                u: update,
                upsert: Keyword.get(opts, :upsert),
                multi: multi,
-               collation: Keyword.get(opts, :ordered),
+               collation: Keyword.get(opts, :collation),
                arrayFilters: Keyword.get(opts, :filters)
              } |> filter_nils()
 
@@ -860,18 +824,32 @@ defmodule Mongo do
             ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts) do
+         {:ok, doc}        <- direct_command(conn, query, opts) do
+
       case doc do
-        # todo: better handling off the result
+
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+
+        %{"n" => n, "nModified" => n_modified, "upserted" => upserted} ->
+          case Map.get(write_concern, :w) do
+            0 -> {:ok, %Mongo.UpdateResult{acknowledged: false}}
+            _ -> {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n_modified, upserted_ids: filter_upsert_ids(upserted)}}
+          end
+
         %{"n" => n, "nModified" => n_modified} ->
           case Map.get(write_concern, :w) do
             0 -> {:ok, %Mongo.UpdateResult{acknowledged: false}}
             _ -> {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n_modified}}
           end
+
+        _ -> {:ok, nil}
+
       end
     end
   end
+
+  defp filter_upsert_ids(nil), do: []
+  defp filter_upsert_ids(upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
 
   @doc """
   Similar to `update_many/5` but unwraps the result and raises on error.
@@ -1015,10 +993,6 @@ defmodule Mongo do
   end
 
   defp invalid_doc(doc), do: raise ArgumentError, "invalid document containing atom and string keys: #{inspect doc}"
-
-  defp cursor_type(nil), do: []
-  defp cursor_type(:tailable),  do: [tailable_cursor: true]
-  defp cursor_type(:tailable_await), do: [tailable_cursor: true, await_data: true]
 
   defp assert_single_doc!(doc) when is_map(doc), do: :ok
   defp assert_single_doc!([]), do: :ok

@@ -1,4 +1,9 @@
-# Mongodb
+# An alternative Mongodb driver for Elixir
+[![Build Status](https://travis-ci.org/zookzook/elixir-mongodb-driver.svg?branch=master)](https://travis-ci.org/zookzook/elixir-mongodb-driver)
+[![Hex.pm](https://img.shields.io/hexpm/v/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
+[![Hex.pm](https://img.shields.io/hexpm/dt/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
+[![Hex.pm](https://img.shields.io/hexpm/dw/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
+[![Hex.pm](https://img.shields.io/hexpm/dd/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
 
 This is an alternative development from the [original](https://github.com/ankhers/mongodb), which was the starting point
 and already contained very nice code.
@@ -9,19 +14,22 @@ replaced some op code calls with command calls.
 This is currently under development and there is no version management yet. The main goal is to simplify the API and
 to implement the current requirements for the driver.
 
+[Documentation](https://hexdocs.pm/mongodb_driver/readme.html)
+
 ## Motivation
 
-  * Refactoring old code into new
-  * Understand the magic in the code
-  * Simplify code: remove raw_find (raw_find called from cursors, raw_find called with "$cmd"), so raw_find is more calling a command than a find query.
-  * Better support for new MongoDB version, for example the ability to use views
-  * Upgrade to DBConnection 2.x
-  * Because the driver is used in production environments, quick adjustments are necessary.
+  * [ ] Refactoring old code into new
+  * [ ] Understand the magic in the code
+  * [x] Simplify code: remove raw_find (raw_find called from cursors, raw_find called with "$cmd"), so raw_find is more calling a command than a find query.
+  * [x] Better support for new MongoDB version, for example the ability to use views
+  * [x] Upgrade to ([DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
+  * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
+  * [ ] Because the driver is used in production environments, quick adjustments are necessary.
 
 ## Features
 
-  * Supports MongoDB versions 3.0, 3.2, 3.4, 3.6, 4.0
-  * Connection pooling (through db_connection)
+  * Supports MongoDB versions 3.2, 3.4, 3.6, 4.0
+  * Connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * Streaming cursors
   * Performant ObjectID generation
   * Follows driver specification set by 10gen
@@ -57,28 +65,40 @@ to implement the current requirements for the driver.
 
 ### Installation:
 
-Add mongodb to your mix.exs `deps` and `:applications` (replace `>= 0.0.0` in `deps` if you want a specific version). Mongodb supports the same pooling libraries db_connection does (currently: no pooling, poolboy, and sbroker). If you want to use poolboy as pooling library you should set up your project like this:
+Add `mongodb_driver` to your mix.exs `deps` and `:applications`.
 
 ```elixir
 def application do
-  [applications: [:mongodb, :poolboy]]
+  [applications: [:mongodb_driver]]
 end
 
 defp deps do
-  [{:mongodb, ">= 0.0.0"},
-   {:poolboy, ">= 0.0.0"}]
+  [{:mongodb_driver, "~> 0.5.0"}]
 end
 ```
 
 Then run `mix deps.get` to fetch dependencies.
 
-### Connection pooling
-
-By default mongodb will start a single connection, but it also supports pooling with the `:pool` option. For poolboy add the `pool: DBConnection.Poolboy` option to `Mongo.start_link` and to all function calls in `Mongo` using the pool.
-
 ```elixir
 # Starts an unpooled connection
 {:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/db-name")
+
+# Gets an enumerable cursor for the results
+cursor = Mongo.find(conn, "test-collection", %{})
+
+cursor
+|> Enum.to_list()
+|> IO.inspect
+```
+
+### Connection pooling
+The driver supports pooling by DBConnection (2.x). By default `mongodb_driver` will start a single 
+connection, but it also supports pooling with the `:pool_size` option. For 3 connections add the `pool_size: 3` option to `Mongo.start_link` and to all 
+function calls in `Mongo` using the pool:
+
+```elixir
+# Starts an pooled connection
+{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/db-name", pool_size: 3)
 
 # Gets an enumerable cursor for the results
 cursor = Mongo.find(conn, "test-collection", %{})
@@ -95,7 +115,7 @@ def start(_type, _args) do
   import Supervisor.Spec
 
   children = [
-    worker(Mongo, [[name: :mongo, database: "test", pool: DBConnection.Poolboy]])
+    worker(Mongo, [[name: :mongo, database: "test", pool_size: 3]])
   ]
 
   opts = [strategy: :one_for_one, name: MyApp.Supervisor]
@@ -103,31 +123,24 @@ def start(_type, _args) do
 end
 ```
 
-DBConnection.Poolboy defaults to [10 Poolboy connections](https://hexdocs.pm/db_connection/1.1.3/DBConnection.Poolboy.html#content), but you can change that with the `:pool_size` option:
-```elixir
-{:ok, conn} = Mongo.start_link(name: :mongo, database: "test", pool: DBConnection.Poolboy, pool_size: 2)
-```
- 
-
-Remember to specify the pool in each query. There is [some discussion](https://github.com/ankhers/mongodb/issues/175) on how to change this requirement.
-
-```elixir
-Mongo.find(:mongo, "collection", %{}, limit: 20, pool: DBConnection.Poolboy)
-```
+Due to the mongodb specification, an additional connection is always set up for the monitor process.
 
 ### Replica Sets
 
-To connect to a Mongo cluster that is using replica sets, it is recommended to use the `:seeds` list instead of a `:hostname` and `:port` pair.
+To connect to a Mongo cluster that is using replica sets, it is recommended to use the `:seeds` list instead 
+of a `:hostname` and `:port` pair.
 
 ```elixir
 {:ok, pid} = Mongo.start_link(database: "test", seeds: ["hostname1.net:27017", "hostname2.net:27017"])
 ```
 
-This will allow for scenarios where the first `"hostname1.net:27017"` is unreachable for any reason and will automatically try to connect to each of the following entries in the list to connect to the cluster.
+This will allow for scenarios where the first `"hostname1.net:27017"` is unreachable for any reason 
+and will automatically try to connect to each of the following entries in the list to connect to the cluster.
 
 ### Auth mechanisms
 
-For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM. If you'd like to use [MONGODB-X509](https://docs.mongodb.com/manual/tutorial/configure-x509-client-authentication/#authenticate-with-a-x-509-certificate) 
+For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM. 
+If you'd like to use [MONGODB-X509](https://docs.mongodb.com/manual/tutorial/configure-x509-client-authentication/#authenticate-with-a-x-509-certificate) 
 authentication, you can specify that as a `start_link` option.
 
 ```elixir
@@ -136,7 +149,8 @@ authentication, you can specify that as a `start_link` option.
 
 ### AWS, TLS and Erlang SSL ciphers
 
-Some MongoDB cloud providers (notably AWS) require a particular TLS cipher that isn't enabled by default in the Erlang SSL module. In order to connect to these services,
+Some MongoDB cloud providers (notably AWS) require a particular TLS cipher that isn't enabled 
+by default in the Erlang SSL module. In order to connect to these services,
 you'll want to add this cipher to your `ssl_opts`: 
 
 ```elixir
@@ -191,7 +205,10 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 
 ## License
 
-Copyright 2015 Justin Wood
+Copyright 2015 Eric Meadows-Jönsson and Justin Wood
+
+Copyright 2019 Michael Maier
+
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

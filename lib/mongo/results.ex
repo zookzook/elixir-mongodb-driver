@@ -50,15 +50,15 @@ defmodule Mongo.UpdateResult do
 
     * `:matched_count` - Number of matched documents
     * `:modified_count` - Number of modified documents
-    * `:upserted_id` - If the operation was an upsert, the upserted id
+    * `:upserted_ids` - If the operation was an upsert, the upserted ids
   """
 
   @type t :: %__MODULE__{
     acknowledged: boolean,
     matched_count: non_neg_integer,
     modified_count: non_neg_integer,
-    upserted_id: nil | BSON.ObjectId.t
+    upserted_ids: list(BSON.ObjectId.t)
   }
 
-  defstruct [acknowledged: true, matched_count: 0, modified_count: 0, upserted_id: 0]
+  defstruct [acknowledged: true, matched_count: 0, modified_count: 0, upserted_ids: []]
 end

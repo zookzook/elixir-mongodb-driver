@@ -8,10 +8,8 @@ defmodule BSON.Decoder do
     map
   end
 
-  def documents(binary),
-    do: documents(binary, [])
-  def documents("", acc),
-    do: Enum.reverse(acc)
+  def documents(binary), do: documents(binary, [])
+  def documents("", acc), do: Enum.reverse(acc)
   def documents(binary, acc) do
     {doc, rest} = document(binary)
     documents(rest, [doc|acc])
@@ -174,6 +172,6 @@ defmodule BSON.Decoder do
   defp subtype(0x02), do: :binary_old
   defp subtype(0x03), do: :uuid_old
   defp subtype(0x04), do: :uuid
-  defp subtype(0x05),  do: :md5
+  defp subtype(0x05), do: :md5
   defp subtype(int) when is_integer(int) and int in 0x80..0xFF, do: int
 end

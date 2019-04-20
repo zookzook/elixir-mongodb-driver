@@ -1,5 +1,9 @@
 defmodule Mongo.Messages do
-  @moduledoc false
+  @moduledoc """
+    This module encodes and decodes the data from and to the mongodb server.
+    We only support MongoDB >= 3.2 and use op_query with the hack collection "$cmd"
+    Other op codes are deprecated. Therefore only op_reply and op_query are supported.
+  """
 
   defmacro __using__(_opts) do
     quote do
@@ -14,22 +18,9 @@ defmodule Mongo.Messages do
   import Record
   import Mongo.BinaryUtils
 
-  @op_update        2001
-  @op_insert        2002
-  @op_query         2004
-  @op_get_more      2005
-  @op_delete        2006
-  @op_kill_cursors  2007
-  @op_msg_code      2013
-
-  @update_flags [
-    upsert: 0x1,
-    multi:  0x2
-  ]
-
-  @insert_flags [
-    continue_on_error: 0x1
-  ]
+  @op_reply    1
+  @op_query    2004
+  @op_msg_code 2013
 
   @query_flags [
     tailable_cursor:   0x2,
@@ -41,89 +32,61 @@ defmodule Mongo.Messages do
     partial:           0x80
   ]
 
-  @delete_flags [
-    single: 0x1
-  ]
-
   @header_size 4 * 4
 
   defrecordp :msg_header, [:length, :request_id, :response_to, :op_code]
-  defrecord  :op_update, [:coll, :flags, :query, :update]
-  defrecord  :op_insert, [:flags, :coll, :docs]
   defrecord  :op_query, [:flags, :coll, :num_skip, :num_return, :query, :select]
-  defrecord  :op_get_more, [:coll, :num_return, :cursor_id]
-  defrecord  :op_delete, [:coll, :flags, :query]
-  defrecord  :op_kill_cursors, [:cursor_ids]
   defrecord  :op_reply, [:flags, :cursor_id, :from, :num, :docs]
   defrecord  :op_msg, [:flags, :type, :docs]
 
-  def encode(request_id, op) do
-    iodata = encode_op(op)
-    header = msg_header(length: IO.iodata_length(iodata) + @header_size,
-                        request_id: request_id, response_to: 0,
-                        op_code: op_to_code(op))
+  @doc """
+    Decodes the header from response of a request sent by the mongodb server
+  """
+  def decode_header(iolist) when is_list(iolist) do
+    case IO.iodata_length(iolist) >= @header_size do
+      true  -> iolist |> IO.iodata_to_binary() |> decode_header()
+      false -> :error
+    end
+  end
+  def decode_header(<<length::int32, request_id::int32, response_to::int32, op_code::int32, rest::binary>>) do
+    header = msg_header(length: length - @header_size, request_id: request_id, response_to: response_to, op_code: op_code) ## todo don't subtract header-size here
+    {:ok, header, rest}
+  end
+  def decode_header(_binary), do: :error
 
+  @doc """
+    Decodes the response body of a request sent by the mongodb server
+  """
+  def decode_response(msg_header(length: length) = header, iolist) when is_list(iolist) do
+    case IO.iodata_length(iolist) >= length do
+      true  -> decode_response(header, IO.iodata_to_binary(iolist))
+      false -> :error
+    end
+  end
+  def decode_response(msg_header(length: length, response_to: response_to, op_code: op_code), binary)  when byte_size(binary) >= length do
+    <<response::binary(length), rest::binary>> = binary
+    case op_code do
+      @op_reply -> {:ok, response_to, decode_reply(response), rest}
+      _         -> :error
+    end
+  end
+  def decode_response(_header, _binary), do: :error
+
+  @doc """
+    Decodes a reply message from the response
+  """
+  def decode_reply(<<flags::int32, cursor_id::int64, from::int32, num::int32, rest::binary>>) do
+    op_reply(flags: flags, cursor_id: cursor_id, from: from, num: num, docs: BSON.Decoder.documents(rest))
+  end
+
+  def encode(request_id, op_query() = op) do
+    iodata = encode_op(op)
+    header = msg_header(length: IO.iodata_length(iodata) + @header_size,  request_id: request_id, response_to: 0, op_code: @op_query)
     [encode_header(header)|iodata]
   end
 
-  def decode_response_msg(msg_header(length: length) = header, iolist) when is_list(iolist) do
-    IO.puts "decode_response_msg: #{inspect header}"
-    if IO.iodata_length(iolist) >= length,
-       do: decode_response_msg(header, IO.iodata_to_binary(iolist)),
-       else: :error
-  end
-  def decode_response_msg(msg_header(length: length, response_to: response_to) = header, binary) when byte_size(binary) >= length do
-    IO.puts "decode_response_msg: #{inspect header}"
-    <<response::binary(length), rest::binary>> = binary
-
-    IO.puts inspect decode_msg(response)
-    IO.puts inspect rest
-    {:ok, response_to, decode_msg(response), rest}
-  end
-  def decode_response_msg(_header, _binary) do
-    :error
-  end
-
-
-  def decode_response(msg_header(length: length) = header, iolist) when is_list(iolist) do
-    if IO.iodata_length(iolist) >= length,
-      do: decode_response(header, IO.iodata_to_binary(iolist)),
-    else: :error
-  end
-  def decode_response(msg_header(length: length, response_to: response_to), binary)  when byte_size(binary) >= length do
-    <<response::binary(length), rest::binary>> = binary
-    {:ok, response_to, decode_reply(response), rest}
-  end
-  def decode_response(_header, _binary) do
-    :error
-  end
-
-  def decode_header(iolist) when is_list(iolist) do
-    if IO.iodata_length(iolist) >= @header_size,
-      do: IO.iodata_to_binary(iolist) |> decode_header,
-    else: :error
-  end
-  def decode_header(<<length::int32, request_id::int32, response_to::int32, op_code::int32, rest::binary>>) do
-    header = msg_header(length: length-@header_size, request_id: request_id, response_to: response_to, op_code: op_code)
-    {:ok, header, rest}
-  end
-  def decode_header(_binary) do
-    :error
-  end
-
-  defp encode_op(op_update(coll: coll, flags: flags, query: query, update: update)) do
-    [<<0x00::int32>>,
-     coll,
-     <<0x00, blit_flags(:update, flags)::int32>>,
-     query,
-     update]
-  end
-
-  defp encode_op(op_insert(flags: flags, coll: coll, docs: docs)) do
-    [<<blit_flags(:insert, flags)::int32>>,
-     coll,
-     0x00,
-     docs]
+  defp encode_header(msg_header(length: length, request_id: request_id, response_to: response_to, op_code: op_code)) do
+    <<length::int32, request_id::int32, response_to::int32, op_code::int32>>
   end
 
   defp encode_op(op_msg(flags: flags, docs: [doc])) do
@@ -135,48 +98,8 @@ defmodule Mongo.Messages do
     [<<blit_flags(:query, flags)::int32>>,
      coll,
      <<0x00, num_skip::int32, num_return::int32>>,
-     query,
+     BSON.Encoder.document(query),
      select]
-  end
-
-  defp encode_op(op_get_more(coll: coll, num_return: num_return, cursor_id: cursor_id)) do
-    [<<0x00::int32>>,
-     coll,
-     <<0x00, num_return::int32, cursor_id::int64>>]
-  end
-
-  defp encode_op(op_delete(coll: coll, flags: flags, query: query)) do
-    [<<0x00::int32>>,
-     coll,
-     <<0x00, blit_flags(:delete, flags)::int32>> |
-     query]
-  end
-
-  defp encode_op(op_kill_cursors(cursor_ids: ids)) do
-    binary_ids = for id <- ids, into: "", do: <<id::int64>>
-    num = div byte_size(binary_ids), 8
-    [<<0x00::int32, num::int32>>, binary_ids]
-  end
-
-  defp op_to_code(op_update()),       do: @op_update
-  defp op_to_code(op_insert()),       do: @op_insert
-  defp op_to_code(op_query()),        do: @op_query
-  defp op_to_code(op_get_more()),     do: @op_get_more
-  defp op_to_code(op_delete()),       do: @op_delete
-  defp op_to_code(op_kill_cursors()), do: @op_kill_cursors
-  defp op_to_code(op_msg()),          do: @op_msg_code
-
-  defp decode_reply(<<flags::int32, cursor_id::int64, from::int32, num::int32, rest::binary>>) do
-    op_reply(flags: flags, cursor_id: cursor_id, from: from, num: num, docs: rest)
-  end
-
-  defp decode_msg(<<flags::int32, _type::int8, rest::binary>>) do
-    op_msg(flags: flags, docs: rest)
-  end
-
-  defp encode_header(msg_header(length: length, request_id: request_id,
-                                response_to: response_to, op_code: op_code)) do
-    <<length::int32, request_id::int32, response_to::int32, op_code::int32>>
   end
 
   defp blit_flags(op, flags) when is_list(flags) do
@@ -187,20 +110,8 @@ defmodule Mongo.Messages do
     flags
   end
 
-  Enum.each(@update_flags, fn {flag, bit} ->
-    defp flag_to_bit(:update, unquote(flag)), do: unquote(bit)
-  end)
-
-  Enum.each(@insert_flags, fn {flag, bit} ->
-    defp flag_to_bit(:insert, unquote(flag)), do: unquote(bit)
-  end)
-
   Enum.each(@query_flags, fn {flag, bit} ->
     defp flag_to_bit(:query, unquote(flag)), do: unquote(bit)
-  end)
-
-  Enum.each(@delete_flags, fn {flag, bit} ->
-    defp flag_to_bit(:delete, unquote(flag)), do: unquote(bit)
   end)
 
   defp flag_to_bit(_op, _flag), do: 0x0
