@@ -24,6 +24,7 @@ to implement the current requirements for the driver.
   * [x] Better support for new MongoDB version, for example the ability to use views
   * [x] Upgrade to ([DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
+  * [x] Support for SCRAM-SHA-256 (MongoDB 4.x)
   * [ ] Because the driver is used in production environments, quick adjustments are necessary.
 
 ## Features
