@@ -90,12 +90,15 @@ defmodule Mongo.MongoDBConnection.Utils do
   def namespace(coll, _, database), do: [database, ?. | coll]
 
   def digest(nonce, username, password) do
-    :crypto.hash(:md5, [nonce, username, digest_password(username, password)])
+    :crypto.hash(:md5, [nonce, username, digest_password(username, password, :sha)])
     |> Base.encode16(case: :lower)
   end
 
-  def digest_password(username, password) do
+  def digest_password(username, password, :sha) do
     :crypto.hash(:md5, [username, ":mongo:", password])
     |> Base.encode16(case: :lower)
+  end
+  def digest_password(username, password, :sha256) do
+    password
   end
 end
