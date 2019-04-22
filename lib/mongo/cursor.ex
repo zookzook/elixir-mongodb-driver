@@ -63,7 +63,7 @@ defmodule Mongo.Cursor do
       query = [
         {"getMore", cursor},
         {"collection", coll},
-        {"batchSize", 2}, ##opts[:batch_size]},
+        {"batchSize", opts[:batch_size]},
         {"maxTimeMS", opts[:max_time]}
       ]
 
