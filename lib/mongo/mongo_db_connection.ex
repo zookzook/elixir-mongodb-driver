@@ -7,7 +7,7 @@ defmodule Mongo.MongoDBConnection do
   use Mongo.Messages
   alias Mongo.MongoDBConnection.Utils
 
-  @timeout        5000
+  @timeout        5_000
   @find_one_flags ~w(slave_ok exhaust partial)a
   @write_concern  ~w(w j wtimeout)a
 
@@ -20,7 +20,7 @@ defmodule Mongo.MongoDBConnection do
       connection: nil,
       request_id: 0,
       timeout: opts[:timeout] || @timeout,
-      connect_timeout_ms: opts[:connect_timeout_ms] || @timeout,
+      connect_timeout: opts[:connect_timeout] || @timeout,
       database: Keyword.fetch!(opts, :database),
       write_concern: Map.new(write_concern),
       wire_version: nil,
@@ -85,7 +85,7 @@ defmodule Mongo.MongoDBConnection do
   defp ssl(opts, %{connection: {:gen_tcp, socket}} = state) do
     host     = (opts[:hostname] || "localhost") |> to_charlist
     ssl_opts = Keyword.put_new(opts[:ssl_opts] || [], :server_name_indication, host)
-    case :ssl.connect(socket, ssl_opts, state.connect_timeout_ms) do
+    case :ssl.connect(socket, ssl_opts, state.connect_timeout) do
       {:ok, ssl_sock}  -> {:ok, %{state | connection: {:ssl, ssl_sock}}}
       {:error, reason} ->
         :gen_tcp.close(socket)
@@ -101,7 +101,7 @@ defmodule Mongo.MongoDBConnection do
 
     s = Map.put(s, :host, "#{host}:#{port}")
 
-    case :gen_tcp.connect(host, port, sock_opts, s.connect_timeout_ms) do
+    case :gen_tcp.connect(host, port, sock_opts, s.connect_timeout) do
       {:ok, socket} ->
         # A suitable :buffer is only set if :recbuf is included in
         # :socket_options.
@@ -174,11 +174,18 @@ defmodule Mongo.MongoDBConnection do
   end
 
   defp execute_action(:command, [query], opts, state) do
-    flags = Keyword.take(opts, @find_one_flags)
-    op = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: query, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
-    with {:ok, response} <- Utils.post_request(state.request_id, op, state),
+    timeout = Keyword.get(opts, :max_time, 0)
+    flags   = Keyword.take(opts, @find_one_flags)
+    op      = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: query, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
+
+    with {:ok, response} <- Utils.post_request(state.request_id, op, state, timeout),
          state = %{state | request_id: state.request_id + 1},
          do: {:ok, response, state}
+  end
+
+  defp execute_action(:error, _query, _opts, state) do
+    exception = Mongo.Error.exception("Test-case")
+    {:disconnect, exception, state}
   end
 
   defp flags(flags) do

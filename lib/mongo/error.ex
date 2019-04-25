@@ -26,7 +26,7 @@ defmodule Mongo.Error do
     %Mongo.Error{message: message, code: code}
   end
 
-  def exception(message: message) do
+  def exception(message) do
     %Mongo.Error{message: message}
   end
 end
