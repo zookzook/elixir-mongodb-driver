@@ -100,7 +100,7 @@ defmodule Mongo.ConnectionTest do
            Mongo.insert_one(pid, coll, %{foo: 42}, [continue_on_error: true])
   end
 
-  def find(pid, coll, query, select, opts) do
+  def find(pid, coll, query, _select, opts) do
     Mongo.find(pid, coll, query, opts) |> Enum.to_list() |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
   end
 
@@ -113,7 +113,7 @@ defmodule Mongo.ConnectionTest do
   test "find" do
     pid = connect_auth()
     coll = unique_name()
-    {:ok, conn, _, _} = Mongo.select_server(pid, :read)
+    {:ok, _conn, _, _} = Mongo.select_server(pid, :read)
 
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 42}, [])
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 43}, [])
@@ -166,7 +166,7 @@ defmodule Mongo.ConnectionTest do
     coll   = unique_name()
     size   = 1024*1024
     binary = <<0::size(size)>>
-    {:ok, conn, _, _} = Mongo.select_server(pid, :read)
+    {:ok, _conn, _, _} = Mongo.select_server(pid, :read)
 
     Enum.each(1..10, fn _ ->
       Mongo.insert_one(pid, coll, %{data: binary}, [w: 0])

@@ -139,8 +139,15 @@ defmodule Mongo do
     Mongo.IdServer.new
   end
 
-  @doc"""
+  @doc """
+  Converts the DataTime to a MongoDB timestamp.
+  """
+  @spec timestamp(DateTime.t) :: BSON.Timestamp.t
+  def timestamp(datetime) do
+    %BSON.Timestamp{value: DateTime.to_unix(datetime), ordinal: 1}
+  end
 
+  @doc"""
   Creates a change stream cursor on collections.
 
   `on_resume_token` is function that takes the new resume token, if it changed.
@@ -188,9 +195,26 @@ defmodule Mongo do
 
   end
 
+  @doc"""
+  Creates a change stream cursor all collections of the database.
+
+  `on_resume_token` is function that takes the new resume token, if it changed.
+
+  ## Options
+
+    * `:full_document` -
+    * `:max_time` - Specifies a time limit in milliseconds. This option is used on `getMore` commands
+    * `:batch_size` - Specifies the number of maximum number of documents to
+      return (default: 1)
+    * `:resume_after` - Specifies the logical starting point for the new change stream.
+    * `:start_at_operation_time` - The change stream will only provide changes that occurred at or after the specified timestamp (since 4.0)
+    * `:start_after` - Similar to `resumeAfter`, this option takes a resume token and starts a new change stream
+        returning the first notification after the token. This will allow users to watch collections that have been dropped and recreated
+        or newly renamed collections without missing any notifications. (since 4.0.7)
+  """
   @spec watch_db(GenServer.server, [BSON.document], fun, Keyword.it) :: cursor
   def watch_db(topology_pid, pipeline, on_resume_token \\ nil, opts \\ []) do
-    watch_collection(topology_pid, 0, pipeline, on_resume_token, opts)
+    watch_collection(topology_pid, 1, pipeline, on_resume_token, opts)
   end
 
   @doc """
@@ -537,16 +561,10 @@ defmodule Mongo do
 
   @doc false
   @spec direct_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
-  def direct_command(conn, query, opts \\ []) do
-    params = [query]
+  def direct_command(conn, cmd, opts \\ []) do
+    action = %Query{action: :command}
 
-    query = case Keyword.has_key?(opts, :error) do
-      false -> %Query{action: :command}
-      true ->   %Query{action: :error}
-    end
-    ## query = %Query{action: :command}
-
-    with {:ok, _query, response} <- DBConnection.execute(conn, query, params, defaults(opts)) do
+    with {:ok, _query, response} <- DBConnection.execute(conn, action, [cmd], defaults(opts)) do
       case response do
         op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}]) when (@reply_query_failure &&& flags) != 0  -> {:error, Mongo.Error.exception(message: reason, code: code)}
         op_reply(flags: flags) when (@reply_cursor_not_found &&& flags) != 0 ->  {:error, Mongo.Error.exception(message: "cursor not found")}
