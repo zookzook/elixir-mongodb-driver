@@ -33,7 +33,7 @@
               }
             }
           ],
-          "cursor": { "batchSize": 2 }
+          "batchSize": 2
         }
       },
       "outcome": {
