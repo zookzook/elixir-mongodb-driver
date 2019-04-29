@@ -1,4 +1,4 @@
-## v0.5.0-dev
+## v0.5.1
 
 * Enhancements
   * upgraded to DBConnection 2.0.6
@@ -6,6 +6,8 @@
   * replaced deprecated op_code by database commands
   * update_one, update_many, replace_one, replace_many return upserted ids
   * support for all find options
+  * Support for MongoDB 3.6 collection [Change Streams](https://docs.mongodb.com/manual/changeStreams/)
+  * Support for SCRAM-SHA-256 (MongoDB 4.x)
 
 ## v0.4.8-dev
 

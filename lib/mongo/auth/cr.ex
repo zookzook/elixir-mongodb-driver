@@ -2,7 +2,7 @@ defmodule Mongo.Auth.CR do
   @moduledoc false
   alias Mongo.MongoDBConnection.Utils
 
-  def auth({username, password}, s) do
+  def auth({username, password}, _db, s) do
     with {:ok, message} <- Utils.command(-2, [getnonce: 1], s),
          do: nonce(message, username, password, s)
   end

@@ -1,27 +1,30 @@
 defmodule Mongo.Auth do
   @moduledoc false
 
-  def run(opts, s) do
-    auth = setup(opts)
-    auther = mechanism(s)
+  def run(opts, state) do
 
-    auth_source = opts[:auth_source]
-    wire_version = s[:wire_version]
+    db           = opts[:database]
+    auth         = setup(opts)
+    auther       = mechanism(state)
+    auth_source  = opts[:auth_source]
+    wire_version = state[:wire_version]
 
-    s = if auth_source != nil && wire_version > 0,
-          do: Map.put(s, :database, auth_source),
-        else: s
+    # change database for auth
+    state = case auth_source != nil && wire_version > 0 do
+      true  -> Map.put(state, :database, auth_source)
+      false -> state
+    end
 
-    Enum.find_value(auth, fn opts ->
-      case auther.auth(opts, s) do
-        :ok ->
-          nil
+    # do auth
+    Enum.find_value(auth, fn credentials ->
+      case auther.auth(credentials, db, state) do
+        :ok -> nil    # everything is okay, then return nil
         error ->
-          {mod, socket} = s.connection
+          {mod, socket} = state.connection
           mod.close(socket)
           error
       end
-    end) || {:ok, Map.put(s,:database, opts[:database])}
+    end) || {:ok, Map.put(state, :database, opts[:database])} # restore old database
   end
 
   defp setup(opts) do
@@ -39,10 +42,7 @@ defmodule Mongo.Auth do
     if username && password, do: auth ++ [{username, password}], else: auth
   end
 
-  defp mechanism(%{wire_version: version, auth_mechanism: :x509}) when version >= 3,
-    do: Mongo.Auth.X509
-  defp mechanism(%{wire_version: version}) when version >= 3,
-    do: Mongo.Auth.SCRAM
-  defp mechanism(_),
-    do: Mongo.Auth.CR
+  defp mechanism(%{wire_version: version, auth_mechanism: :x509}) when version >= 3, do: Mongo.Auth.X509
+  defp mechanism(%{wire_version: version}) when version >= 3,  do: Mongo.Auth.SCRAM
+  defp mechanism(_), do: Mongo.Auth.CR
 end

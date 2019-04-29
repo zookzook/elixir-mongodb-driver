@@ -7,8 +7,8 @@ defmodule Mongo.PBKDF2Cache do
     GenServer.start_link(__MODULE__, [], name: @name)
   end
 
-  def pbkdf2(password, salt, iterations) do
-    GenServer.call(@name, {password, salt, iterations})
+  def pbkdf2(password, salt, iterations, digest) do
+    GenServer.call(@name, {password, salt, iterations, digest})
   end
 
   def init([]) do
@@ -17,10 +17,8 @@ defmodule Mongo.PBKDF2Cache do
 
   def handle_call(key, from, s) do
     cond do
-      salted_password = s.cache[key] ->
-        {:reply, salted_password, s}
-      list = s.pending[key] ->
-        {:noreply, put_in(s.pending[key], [from|list])}
+      salted_password = s.cache[key] -> {:reply, salted_password, s}
+      list = s.pending[key] -> {:noreply, put_in(s.pending[key], [from|list])}
       true ->
         _ = run_task(key)
         {:noreply, put_in(s.pending[key], [from])}
@@ -41,12 +39,15 @@ defmodule Mongo.PBKDF2Cache do
     {:noreply, s}
   end
 
-  defp run_task({password, salt, iterations} = key) do
+  defp run_task({password, salt, iterations, :sha256} = key) do
     Task.async(fn ->
-      result = Mongo.PBKDF2.generate(password, salt,
-                                     iterations: iterations,
-                                     length: 20,
-                                     digest: :sha)
+      result = Mongo.PBKDF2.generate(password, salt, iterations: iterations, length: 32, digest: :sha256)
+      {key, result}
+    end)
+  end
+  defp run_task({password, salt, iterations, :sha} = key) do
+    Task.async(fn ->
+      result = Mongo.PBKDF2.generate(password, salt, iterations: iterations, length: 20, digest: :sha)
       {key, result}
     end)
   end

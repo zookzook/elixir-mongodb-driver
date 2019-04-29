@@ -20,7 +20,7 @@ defmodule Mongo do
       a 1-arity fun, `{module, function, args}` with `DBConnection.LogEntry.t`
       prepended to `args` or `nil`. See `DBConnection.LogEntry` (default: `nil`)
     * `:database` - the database to run the operation on
-    * `:connect_timeout_ms` - maximum timeout for connect (default: `5_000`)
+    * `:connect_timeout` - maximum timeout for connect (default: `5_000`)
 
   ## Read options
 
@@ -54,7 +54,7 @@ defmodule Mongo do
   alias Mongo.Topology
   alias Mongo.UrlParser
 
-  @timeout 5000
+  @timeout 15000 # 5000
 
   @dialyzer [no_match: [count_documents!: 4]]
 
@@ -63,8 +63,6 @@ defmodule Mongo do
   @opaque cursor :: Mongo.Cursor.t
   @type result(t) :: :ok | {:ok, t} | {:error, Mongo.Error.t}
   @type result!(t) :: nil | t | no_return
-
-  @cmd_collection "$cmd"
 
   defmacrop bangify(result) do
     quote do
@@ -101,7 +99,7 @@ defmodule Mongo do
     * `:idle` - The idle strategy, `:passive` to avoid checkin when idle and
       `:active` to checking when idle (default: `:passive`)
     * `:idle_timeout` - The idle timeout to ping the database (default: `1_000`)
-    * `:connect_timeout_ms` - The maximum timeout for the initial connection
+    * `:connect_timeout` - The maximum timeout for the initial connection
       (default: `5_000`)
     * `:backoff_min` - The minimum backoff interval (default: `1_000`)
     * `:backoff_max` - The maximum backoff interval (default: `30_000`)
@@ -142,40 +140,109 @@ defmodule Mongo do
   end
 
   @doc """
-  Performs aggregation operation using the aggregation pipeline.
+  Converts the DataTime to a MongoDB timestamp.
+  """
+  @spec timestamp(DateTime.t) :: BSON.Timestamp.t
+  def timestamp(datetime) do
+    %BSON.Timestamp{value: DateTime.to_unix(datetime), ordinal: 1}
+  end
+
+  @doc"""
+  Creates a change stream cursor on collections.
+
+  `on_resume_token` is function that takes the new resume token, if it changed.
 
   ## Options
 
-    * `:allow_disk_use` - Enables writing to temporary files (Default: false)
-    * `:collation` - Optionally specifies a collation to use in MongoDB 3.4 and
-    * `:max_time` - Specifies a time limit in milliseconds
-    * `:use_cursor` - Use a cursor for a batched response (Default: true)
+    * `:full_document` -
+    * `:max_time` - Specifies a time limit in milliseconds. This option is used on `getMore` commands
+    * `:batch_size` - Specifies the number of maximum number of documents to
+      return (default: 1)
+    * `:resume_after` - Specifies the logical starting point for the new change stream.
+    * `:start_at_operation_time` - The change stream will only provide changes that occurred at or after the specified timestamp (since 4.0)
+    * `:start_after` - Similar to `resumeAfter`, this option takes a resume token and starts a new change stream
+        returning the first notification after the token. This will allow users to watch collections that have been dropped and recreated
+        or newly renamed collections without missing any notifications. (since 4.0.7)
+  """
+  @spec watch_collection(GenServer.server, collection, [BSON.document], fun, Keyword.it) :: cursor
+  def watch_collection(topology_pid, coll, pipeline, on_resume_token \\ nil, opts \\ []) do
+
+    stream_opts = %{
+                    fullDocument: opts[:full_document] || "default",
+                    resumeAfter: opts[:resume_after],
+                    startAtOperationTime: opts[:start_at_operation_time],
+                    startAfter: opts[:start_after]
+                  } |> filter_nils()
+
+    cmd = [
+            aggregate: coll,
+            pipeline:  [%{"$changeStream" => stream_opts} | pipeline],
+            explain: opts[:explain],
+            allowDiskUse: opts[:allow_disk_use],
+            collation: opts[:collation],
+            maxTimeMS: opts[:max_time],
+            cursor: filter_nils(%{batchSize: opts[:batch_size]}),
+            bypassDocumentValidation: opts[:bypass_document_validation],
+            hint: opts[:hint],
+            comment: opts[:comment],
+            readConcern: opts[:read_concern]
+          ] |> filter_nils()
+
+    opts = Keyword.drop(opts, ~w(full_document resume_after start_at_operation_time start_after explain allow_disk_use collation bypass_document_validation hint comment read_concern)a)
+
+    on_resume_token = on_resume_token || (fn _token -> nil end)
+    change_stream_cursor(topology_pid, cmd, on_resume_token, opts)
+
+  end
+
+  @doc"""
+  Creates a change stream cursor all collections of the database.
+
+  `on_resume_token` is function that takes the new resume token, if it changed.
+
+  ## Options
+
+    * `:full_document` -
+    * `:max_time` - Specifies a time limit in milliseconds. This option is used on `getMore` commands
+    * `:batch_size` - Specifies the number of maximum number of documents to
+      return (default: 1)
+    * `:resume_after` - Specifies the logical starting point for the new change stream.
+    * `:start_at_operation_time` - The change stream will only provide changes that occurred at or after the specified timestamp (since 4.0)
+    * `:start_after` - Similar to `resumeAfter`, this option takes a resume token and starts a new change stream
+        returning the first notification after the token. This will allow users to watch collections that have been dropped and recreated
+        or newly renamed collections without missing any notifications. (since 4.0.7)
+  """
+  @spec watch_db(GenServer.server, [BSON.document], fun, Keyword.it) :: cursor
+  def watch_db(topology_pid, pipeline, on_resume_token \\ nil, opts \\ []) do
+    watch_collection(topology_pid, 1, pipeline, on_resume_token, opts)
+  end
+
+  @doc """
+  Performs aggregation operation using the aggregation pipeline.
+
+  For all options see [Options](https://docs.mongodb.com/manual/reference/command/aggregate/#aggregate)
+
   """
   @spec aggregate(GenServer.server, collection, [BSON.document], Keyword.t) :: cursor
   def aggregate(topology_pid, coll, pipeline, opts \\ []) do
-    query = [
+
+    cmd = [
       aggregate: coll,
       pipeline: pipeline,
+      explain: opts[:explain],
       allowDiskUse: opts[:allow_disk_use],
       collation: opts[:collation],
-      maxTimeMS: opts[:max_time]
-    ] |> filter_nils
-    wv_query = %Query{action: :wire_version}
+      maxTimeMS: opts[:max_time],
+      cursor: filter_nils(%{batchSize: opts[:batch_size]}),
+      bypassDocumentValidation: opts[:bypass_document_validation],
+      hint: opts[:hint],
+      comment: opts[:comment],
+      readConcern: opts[:read_concern]
+    ] |> filter_nils()
 
-    with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
-          opts = Keyword.put(opts, :slave_ok, slave_ok),
-         {:ok, _query, version} <- DBConnection.execute(conn, wv_query, [], defaults(opts)) do
-      cursor? = version >= 1 and Keyword.get(opts, :use_cursor, true)
-      opts = Keyword.drop(opts, ~w(allow_disk_use max_time use_cursor)a)
+    opts = Keyword.drop(opts, ~w(explain allow_disk_use collation bypass_document_validation hint comment read_concern)a)
 
-      if cursor? do
-        query = query ++ [cursor: filter_nils(%{batchSize: opts[:batch_size]})]
-        cursor(conn, @cmd_collection, query, opts)
-      else
-        query = query ++ [cursor: %{}]
-        cursor(conn, @cmd_collection, query, opts)
-      end
-    end
+    cursor(topology_pid, cmd, opts)
   end
 
   @doc """
@@ -209,7 +276,7 @@ defmodule Mongo do
       sort:                     opts[:sort],
       upsert:                   opts[:upsert],
       collation:                opts[:collation],
-    ] |> filter_nils
+    ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
@@ -249,7 +316,7 @@ defmodule Mongo do
       sort:                     opts[:sort],
       upsert:                   opts[:upsert],
       collation:                opts[:collation],
-    ] |> filter_nils
+    ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
@@ -281,7 +348,7 @@ defmodule Mongo do
       fields:        opts[:projection],
       sort:          opts[:sort],
       collation:     opts[:collation],
-    ] |> filter_nils
+    ] |> filter_nils()
     opts = Keyword.drop(opts, ~w(max_time projection sort collation)a)
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
@@ -298,7 +365,7 @@ defmodule Mongo do
       skip: opts[:skip],
       hint: opts[:hint],
       collation: opts[:collation]
-    ] |> filter_nils
+    ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(limit skip hint collation)a)
 
@@ -323,11 +390,11 @@ defmodule Mongo do
   @spec count_documents(GenServer.server, collection, BSON.document, Keyword.t) :: result(non_neg_integer)
   def count_documents(topology_pid, coll, filter, opts \\ []) do
     pipeline = [
-      {"$match", filter},
-      {"$skip", opts[:skip]},
-      {"$limit", opts[:limit]},
-      {"$group", %{"_id" => nil, "n" => %{"$sum" => 1}}}
-    ] |> filter_nils |> Enum.map(&List.wrap/1)
+      "$match": filter,
+      "$skip": opts[:skip],
+      "$limit": opts[:limit],
+      "$group": %{"_id" => nil, "n" => %{"$sum" => 1}}
+    ] |> filter_nils() |> Enum.map(&List.wrap/1)
 
     documents =
       topology_pid
@@ -383,7 +450,7 @@ defmodule Mongo do
       query: filter,
       collation: opts[:collation],
       maxTimeMS: opts[:max_time]
-    ] |> filter_nils
+    ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(max_time)a)
 
@@ -420,7 +487,7 @@ defmodule Mongo do
       other -> other
     end
 
-    query = [
+    cmd = [
               {"find", coll},
               {"filter", filter},
               {"limit", opts[:limit]},
@@ -445,13 +512,11 @@ defmodule Mongo do
               {"sort", opts[:sort]}
             ]
 
-    query = filter_nils(query)
+    cmd = filter_nils(cmd)
 
     drop = ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data batch_size projection comment max_time skip sort)a
     opts = Keyword.drop(opts, drop)
-    with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
-         opts = Keyword.put(opts, :slave_ok, slave_ok),
-         do: cursor(conn, coll, query, opts)
+    cursor(topology_pid, cmd, opts)
   end
 
   @doc """
@@ -496,11 +561,10 @@ defmodule Mongo do
 
   @doc false
   @spec direct_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
-  def direct_command(conn, query, opts \\ []) do
-    params = [query]
-    query = %Query{action: :command}
+  def direct_command(conn, cmd, opts \\ []) do
+    action = %Query{action: :command}
 
-    with {:ok, _query, response} <- DBConnection.execute(conn, query, params, defaults(opts)) do
+    with {:ok, _query, response} <- DBConnection.execute(conn, action, [cmd], defaults(opts)) do
       case response do
         op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}]) when (@reply_query_failure &&& flags) != 0  -> {:error, Mongo.Error.exception(message: reason, code: code)}
         op_reply(flags: flags) when (@reply_cursor_not_found &&& flags) != 0 ->  {:error, Mongo.Error.exception(message: "cursor not found")}
@@ -512,25 +576,16 @@ defmodule Mongo do
     end
   end
 
-  @doc false
-  @spec direct_command_msg(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
-  def direct_command_msg(conn, doc, opts \\ []) do
-    docs = [doc]
-    query = %Query{action: :msg}
 
-    with {:ok, response} <- DBConnection.execute(conn, query, docs, defaults(opts)) do
-      case response do
-        op_msg(docs: [%{"ok" => ok} = doc]) when ok == 1 -> {:ok, doc}
-        op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}]) when (@reply_query_failure &&& flags) != 0  -> {:error, Mongo.Error.exception(message: reason, code: code)}
-        op_reply(flags: flags) when (@reply_cursor_not_found &&& flags) != 0 ->  {:error, Mongo.Error.exception(message: "cursor not found")}
-        op_reply(docs: [%{"ok" => 0.0, "errmsg" => reason} = error]) ->  {:error, %Mongo.Error{message: "command failed: #{reason}", code: error["code"]}}
-        op_reply(docs: [%{"ok" => ok} = doc]) when ok == 1 ->   {:ok, doc}
-        # TODO: Check if needed
-        op_reply(docs: []) ->  {:ok, nil}
-      end
+  @doc """
+  Returns the current wire version.
+  """
+  def wire_version(conn, opts \\ []) do
+    cmd = %Query{action: :wire_version}
+    with {:ok, _query, version} <- DBConnection.execute(conn, cmd, %{}, defaults(opts)) do
+      {:ok, version}
     end
   end
-
 
   @doc """
   Similar to `command/3` but unwraps the result and raises on error.
@@ -571,7 +626,6 @@ defmodule Mongo do
 
     query = [
       insert: coll,
-      "$db": "test",
       documents: [doc],
       ordered: Keyword.get(opts, :ordered),
       writeConcern: write_concern,
@@ -579,7 +633,7 @@ defmodule Mongo do
     ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command_msg(conn, query, opts) do
+         {:ok, doc} <- direct_command(conn, query, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -633,7 +687,7 @@ defmodule Mongo do
     ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command_msg(conn, query, opts) do
+         {:ok, doc} <- direct_command(conn, query, opts) do
       case doc do
         %{"writeErrors" => _} ->  {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -864,11 +918,8 @@ defmodule Mongo do
   """
   @spec list_indexes(GenServer.server, String.t, Keyword.t) :: cursor
   def list_indexes(topology_pid, coll, opts \\ []) do
-    with {:ok, conn, slave_ok, _} <- Mongo.select_server(topology_pid, :read, opts) do
-      opts = Keyword.put(opts, :slave_ok, slave_ok)
-      query = [listIndexes: coll]
-      cursor(conn, @cmd_collection, query, opts)
-    end
+    cmd = [listIndexes: coll]
+    cursor(topology_pid, cmd, opts)
   end
 
   @doc """
@@ -893,13 +944,10 @@ defmodule Mongo do
     #
     # In versions 2.8.0-rc3 and later, the listCollections command returns a cursor!
     #
-    with {:ok, conn, slave_ok, _} <- Mongo.select_server(topology_pid, :read, opts) do
-      params = [listCollections: 1]
-      opts = Keyword.put(opts, :slave_ok, slave_ok)
-      cursor(conn, @cmd_collection, params, opts)
-      |> Stream.filter(fn coll -> coll["type"] == "collection" end)
-      |> Stream.map(fn coll -> coll["name"] end)
-    end
+    cmd = [listCollections: 1]
+    cursor(topology_pid, cmd, opts)
+    |> Stream.filter(fn coll -> coll["type"] == "collection" end)
+    |> Stream.map(fn coll -> coll["name"] end)
   end
 
   @doc"""
@@ -960,12 +1008,12 @@ defmodule Mongo do
   defp key_to_string(key) when is_atom(key), do: Atom.to_string(key)
   defp key_to_string(key) when is_binary(key), do: key
 
-  defp cursor(conn, coll, query, opts) do
-    %Mongo.Cursor{
-      conn: conn,
-      coll: coll,
-      query: query,
-      opts: opts}
+  defp cursor(topology_pid, cmd, opts) do
+    %Mongo.Cursor{topology_pid: topology_pid, cmd: cmd, on_resume_token: nil, opts: opts}
+  end
+
+  defp change_stream_cursor(topology_pid, cmd, fun, opts) do
+    %Mongo.Cursor{topology_pid: topology_pid, cmd: cmd, on_resume_token: fun, opts: opts}
   end
 
   defp filter_nils(keyword) when is_list(keyword) do
