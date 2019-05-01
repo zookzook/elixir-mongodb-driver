@@ -4,8 +4,8 @@ defmodule Mongo.MongoDBConnection.Utils do
   import Mongo.Messages
   use Bitwise
 
-  @reply_cursor_not_found   0x1
-  @reply_query_failure      0x2
+  # @reply_cursor_not_found   0x1
+  # @reply_query_failure      0x2
   # currently not used @reply_shard_config_stale 0x4
   # currently not used @reply_await_capable      0x8
 
@@ -29,15 +29,14 @@ defmodule Mongo.MongoDBConnection.Utils do
   """
   def command(id, command, %{wire_version: version} = state) when is_integer(version) and version >= 6 do
 
-    # todo ?
     # In case of authenticate sometimes the namespace has to be modified
     # If using X509 we need to add the keyword $external to use the external database for the client certificates
-    #ns = case Keyword.get(command, :mechanism) == "MONGODB-X509" && Keyword.get(command, :authenticate) == 1 do
-    #  true  -> namespace("$cmd", nil, "$external")
-    #  false -> namespace("$cmd", state, nil)
-    #end
+    db = case Keyword.get(command, :mechanism) == "MONGODB-X509" && Keyword.get(command, :authenticate) == 1 do
+      true  -> "$external"
+      false -> state.database
+    end
 
-    command = command ++ ["$db": state.database]
+    command = command ++ ["$db": db]
 
     op_msg(flags: 0, sections: [section(payload_type: 0, payload: payload(doc: command))])
     |> post_request(id, state, 0)
