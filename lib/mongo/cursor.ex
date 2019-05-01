@@ -132,10 +132,10 @@ defmodule Mongo.Cursor do
     def get_more(conn, coll, cursor, nil, opts) do
 
       cmd = [
-        {"getMore", cursor},
-        {"collection", coll},
-        {"batchSize", opts[:batch_size]},
-        {"maxTimeMS", opts[:max_time]}
+        getMore: cursor,
+        collection: coll,
+        batchSize: opts[:batch_size],
+        maxTimeMS: opts[:max_time]
       ] |> filter_nils()
 
       with {:ok, %{"cursor" => %{ "id" => cursor_id, "nextBatch" => docs}, "ok" => ok}} when ok == 1 <- Mongo.direct_command(conn, cmd, opts) do
@@ -149,10 +149,10 @@ defmodule Mongo.Cursor do
                                on_resume_token: fun, topology_pid: topology_pid) = change_stream, opts) do
 
       get_more = [
-                  {"getMore", cursor_id},
-                  {"collection", coll},
-                  {"batchSize", opts[:batch_size]},
-                  {"maxTimeMS", opts[:max_time]}
+                   getMore: cursor_id,
+                   collection: coll,
+                   batchSize: opts[:batch_size],
+                   maxTimeMS: opts[:max_time]
                  ] |> filter_nils()
 
       with {:ok, %{"operationTime" => op_time,
@@ -266,8 +266,8 @@ defmodule Mongo.Cursor do
     def kill_cursors(conn, coll, cursor_ids, opts) do
 
       cmd = [
-        {"killCursors", coll},
-        {"cursors", cursor_ids}
+        killCursors: coll,
+        cursors: cursor_ids
       ]
 
       cmd = filter_nils(cmd)

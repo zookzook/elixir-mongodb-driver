@@ -94,8 +94,8 @@ defmodule Mongo.GridFs.Bucket do
   """
   @spec drop(Bucket.t) :: Mongo.result(BSON.document)
   def drop(%Bucket{topology_pid: topology_pid, opts: opts} = bucket) do
-    {:ok, _} = Mongo.command(topology_pid, %{drop: files_collection_name(bucket)}, opts)
-    {:ok, _} = Mongo.command(topology_pid, %{drop: chunks_collection_name(bucket)}, opts)
+    {:ok, _} = Mongo.command(topology_pid, [drop: files_collection_name(bucket)], opts)
+    {:ok, _} = Mongo.command(topology_pid, [drop: chunks_collection_name(bucket)], opts)
   end
 
   @doc """

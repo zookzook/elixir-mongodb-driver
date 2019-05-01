@@ -1,6 +1,6 @@
 defmodule Mongo.MongoDBConnection do
   @moduledoc """
-  Implementierung für das DBConnection-Protokoll.
+  Implementation of the DBConnection behaviour module.
   """
 
   use DBConnection
@@ -13,6 +13,7 @@ defmodule Mongo.MongoDBConnection do
 
   @impl true
   def connect(opts) do
+
     {write_concern, opts} = Keyword.split(opts, @write_concern)
     write_concern = Keyword.put_new(write_concern, :w, 1)
 
@@ -54,9 +55,7 @@ defmodule Mongo.MongoDBConnection do
       end
 
     case result do
-      {:ok, state} ->
-        ## IO.puts inspect state
-        {:ok, state}
+      {:ok, state} -> {:ok, state}
 
       {:disconnect, reason, state} ->
         reason = case reason do
@@ -128,6 +127,7 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
+  @impl true
   def checkout(state), do: {:ok, state}
   @impl true
   def checkin(state), do: {:ok, state}
@@ -171,21 +171,38 @@ defmodule Mongo.MongoDBConnection do
   defp execute_action(:wire_version, _, _, state) do
     {:ok, state.wire_version, state}
   end
+  defp execute_action(:command, [cmd], opts, %{wire_version: version} = state) when version >= 6 do
 
-  defp execute_action(:command, [query], opts, state) do
+    cmd = cmd ++ ["$db": opts[:database] || state.database,
+                  "$readPreference": [mode: update_read_preferences(opts[:slave_ok])]]
+
+    timeout = Keyword.get(opts, :max_time, 0)
+    op      = op_msg(flags: 0, sections: [section(payload_type: 0, payload: payload(doc: cmd))])
+
+    with {:ok, doc} <- Utils.post_request(op, state.request_id, state, timeout),
+         state = %{state | request_id: state.request_id + 1} do
+      {:ok, doc, state}
+    end
+  end
+  defp execute_action(:command, [cmd], opts, state) do
+
     timeout = Keyword.get(opts, :max_time, 0)
     flags   = Keyword.take(opts, @find_one_flags)
-    op      = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: query, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
+    op      = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: cmd, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
 
-    with {:ok, response} <- Utils.post_request(state.request_id, op, state, timeout),
-         state = %{state | request_id: state.request_id + 1},
-         do: {:ok, response, state}
+    with {:ok, doc} <- Utils.post_request(op, state.request_id, state, timeout),
+         state = %{state | request_id: state.request_id + 1}  do
+      {:ok, doc, state}
+    end
   end
-
   defp execute_action(:error, _query, _opts, state) do
     exception = Mongo.Error.exception("Test-case")
     {:disconnect, exception, state}
   end
+
+  def update_read_preferences(true), do: "primaryPreferred"
+  def update_read_preferences(false), do: "primary"
+  def update_read_preferences(nil), do: "primary"
 
   defp flags(flags) do
     Enum.reduce(flags, [], fn

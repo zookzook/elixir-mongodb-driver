@@ -281,8 +281,12 @@ defmodule Mongo do
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts), do: {:ok, doc["value"]}
+         {:ok, doc} <- direct_command(conn, query, opts) do
+        {:ok, doc["value"]}
+    end
+
   end
+
 
   @doc """
   Finds a document and replaces it.
@@ -487,30 +491,29 @@ defmodule Mongo do
       other -> other
     end
 
-    cmd = [
-              {"find", coll},
-              {"filter", filter},
-              {"limit", opts[:limit]},
-              {"hint", opts[:hint]},
-              {"singleBatch", opts[:single_batch]},
-              {"readConcern", opts[:read_concern]},
-              {"max", opts[:max]},
-              {"min", opts[:min]},
-              {"collation", opts[:collation]},
-              {"returnKey", opts[:return_key]},
-              {"showRecordId", opts[:show_record_id]},
-              {"tailable", opts[:tailable]},
-              {"oplogReplay", opts[:oplog_replay]},
-              {"tailable", opts[:tailable]},
-              {"noCursorTimeout", opts[:no_cursor_timeout]},
-              {"awaitData", opts[:await_data]},
-              {"batchSize", opts[:batch_size]},
-              {"projection", opts[:projection]},
-              {"comment", opts[:comment]},
-              {"maxTimeMS", opts[:max_time]},
-              {"skip", opts[:skip]},
-              {"sort", opts[:sort]}
-            ]
+    cmd = [find: coll,
+           filter: filter,
+           limit: opts[:limit],
+           hint: opts[:hint],
+           singleBatch: opts[:single_batch],
+           readConcern: opts[:read_concern],
+           max: opts[:max],
+           min: opts[:min],
+           collation: opts[:collation],
+           returnKey: opts[:return_key],
+           showRecordId: opts[:show_record_id],
+           tailable: opts[:tailable],
+           oplogReplay: opts[:oplog_replay],
+           tailable: opts[:tailable],
+           noCursorTimeout: opts[:no_cursor_timeout],
+           awaitData: opts[:await_data],
+           batchSize: opts[:batch_size],
+           projection: opts[:projection],
+           comment: opts[:comment],
+           maxTimeMS: opts[:max_time],
+           skip: opts[:skip],
+           sort: opts[:sort]
+          ]
 
     cmd = filter_nils(cmd)
 
@@ -564,18 +567,18 @@ defmodule Mongo do
   def direct_command(conn, cmd, opts \\ []) do
     action = %Query{action: :command}
 
-    with {:ok, _query, response} <- DBConnection.execute(conn, action, [cmd], defaults(opts)) do
-      case response do
-        op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}]) when (@reply_query_failure &&& flags) != 0  -> {:error, Mongo.Error.exception(message: reason, code: code)}
-        op_reply(flags: flags) when (@reply_cursor_not_found &&& flags) != 0 ->  {:error, Mongo.Error.exception(message: "cursor not found")}
-        op_reply(docs: [%{"ok" => 0.0, "errmsg" => reason} = error]) ->  {:error, %Mongo.Error{message: "command failed: #{reason}", code: error["code"]}}
-        op_reply(docs: [%{"ok" => ok} = doc]) when ok == 1 ->   {:ok, doc}
-        # TODO: Check if needed
-        op_reply(docs: []) ->  {:ok, nil}
-      end
+    with {:ok, _query, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
+         {:ok, doc} <- check_for_error(doc) do
+      {:ok, doc}
     end
   end
 
+  defp check_for_error(%{"ok" => ok} = response) when ok == 1 do
+    {:ok, response}
+  end
+  defp check_for_error(%{"code" => code, "codeName" => _name, "errmsg" => msg}) do
+    {:error, Mongo.Error.exception(message: msg, code: code)}
+  end
 
   @doc """
   Returns the current wire version.
@@ -600,7 +603,7 @@ defmodule Mongo do
   """
   @spec ping(GenServer.server) :: result(BSON.document)
   def ping(topology_pid) do
-    command(topology_pid, %{ping: 1}, [batch_size: 1])
+    command(topology_pid, [ping: 1], [batch_size: 1])
   end
 
   @doc """
@@ -977,7 +980,7 @@ defmodule Mongo do
   defp select_servers(topology_pid, type, opts, start_time) do
     topology = Topology.topology(topology_pid)
     with {:ok, servers, slave_ok, mongos?} <- TopologyDescription.select_servers(topology, type, opts) do
-      case Enum.empty? servers do
+      case Enum.empty?(servers) do
         true ->
           case Topology.wait_for_connection(topology_pid, @sel_timeout, start_time) do
             {:ok, _servers} -> select_servers(topology_pid, type, opts, start_time)
@@ -1054,24 +1057,6 @@ defmodule Mongo do
     Keyword.put_new(opts, :timeout, @timeout)
   end
 
-  defp get_last_error(:ok) do
-    :ok
-  end
-  defp get_last_error(op_reply(docs: [%{"ok" => ok, "err" => nil} = doc])) when ok == 1 do
-    {:ok, doc}
-  end
-  defp get_last_error(op_reply(docs: [%{"ok" => ok, "err" => message, "code" => code}])) when ok == 1 do
-    # If a batch insert (OP_INSERT) fails some documents may still have been
-    # inserted, but mongo always returns {n: 0}
-    # When we support the 2.6 bulk write API we will get number of inserted
-    # documents and should change the return value to be something like:
-    # {:error, %WriteResult{}, %Error{}}
-    {:error, Mongo.Error.exception(message: message, code: code)}
-  end
-  defp get_last_error(op_reply(docs: [%{"ok" => 0.0, "errmsg" => message, "code" => code}])) do
-    {:error, Mongo.Error.exception(message: message, code: code)}
-  end
-
   defp assign_ids(list) when is_list(list) do
     Enum.map(list, &assign_id/1)
     |> Enum.unzip
@@ -1101,7 +1086,4 @@ defmodule Mongo do
   defp add_id([{key, _}|_] = list, id) when is_binary(key), do: [{"_id", id}|list]
   defp add_id([], id), do: [{"_id", id}]
 
-  defp maybe_failure(op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}])) when (@reply_query_failure &&& flags) != 0, do: {:error, Mongo.Error.exception(message: reason, code: code)}
-  defp maybe_failure(op_reply(flags: flags)) when (@reply_cursor_not_found &&& flags) != 0, do: {:error, Mongo.Error.exception(message: "cursor not found")}
-  defp maybe_failure(_op_reply),  do: :ok
 end

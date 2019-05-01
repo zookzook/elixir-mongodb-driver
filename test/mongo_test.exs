@@ -16,15 +16,15 @@ defmodule Mongo.Test do
   end
 
   test "command", c do
-    assert {:ok, %{"ok" => 1.0}} = Mongo.command(c.pid, %{ping: true})
+    assert {:ok, %{"ok" => 1.0}} = Mongo.command(c.pid, [ping: true])
     assert {:error, %Mongo.Error{}} =
-      Mongo.command(c.pid, %{ drop: "unexisting-database" })
+      Mongo.command(c.pid, [drop: "unexisting-database"])
   end
 
   test "command!", c do
-    assert %{"ok" => 1.0} = Mongo.command!(c.pid, %{ping: true})
+    assert %{"ok" => 1.0} = Mongo.command!(c.pid, [ping: true])
     assert_raise Mongo.Error, fn ->
-      Mongo.command!(c.pid, %{ drop: "unexisting-database" })
+      Mongo.command!(c.pid, [drop: "unexisting-database"])
     end
   end
 
@@ -557,10 +557,7 @@ defmodule Mongo.Test do
   test "correctly query NumberDecimal", c do
     coll = "number_decimal_test"
     Mongo.command(c.pid,
-      %{
-        eval:
-          "db.#{coll}.insert({number: NumberDecimal('123.456')})"
-      }
+      [eval: "db.#{coll}.insert({number: NumberDecimal('123.456')})"]
     )
 
     assert %{"number" => %Decimal{coef: 123456, exp: -3}} = Mongo.find(c.pid, coll, %{}, limit: 1) |> Enum.to_list |> List.first()

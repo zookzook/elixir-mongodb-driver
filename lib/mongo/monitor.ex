@@ -104,7 +104,7 @@ defmodule Mongo.Monitor do
   defp call_is_master(conn_pid, opts) do
     start_time = System.monotonic_time
     result = try do
-      Mongo.direct_command(conn_pid, %{isMaster: 1}, opts)
+      Mongo.direct_command(conn_pid, [isMaster: 1], opts)
     rescue
       e -> {:error, e}
     end
