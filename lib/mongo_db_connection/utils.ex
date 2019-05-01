@@ -59,11 +59,9 @@ defmodule Mongo.MongoDBConnection.Utils do
 
   def get_doc(op_reply() = response) do
     case response do
-      op_reply(flags: flags, docs: [%{"$err" => reason, "code" => code}]) when (@reply_query_failure &&& flags) != 0 -> {:error, Mongo.Error.exception(message: reason, code: code)}
-      op_reply(flags: flags) when (@reply_cursor_not_found &&& flags) != 0 -> {:error, Mongo.Error.exception(message: "cursor not found")}
-      op_reply(docs: [%{"ok" => 0.0, "errmsg" => reason} = error])         -> {:error, %Mongo.Error{message: "command failed: #{reason}", code: error["code"]}}
-      op_reply(docs: [%{"ok" => ok} = doc]) when ok == 1                   -> {:ok, doc}
-      op_reply(docs: [])                                                   -> {:ok, nil}
+      op_reply(docs: [])    -> {:ok, nil}
+      op_reply(docs: [doc]) -> {:ok, doc}
+      op_reply(docs: docs)  -> {:ok, docs}
     end
   end
   def get_doc(op_msg(flags: _flags, sections: sections)) do

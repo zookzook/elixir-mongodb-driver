@@ -576,7 +576,7 @@ defmodule Mongo do
   defp check_for_error(%{"ok" => ok} = response) when ok == 1 do
     {:ok, response}
   end
-  defp check_for_error(%{"code" => code, "codeName" => _name, "errmsg" => msg}) do
+  defp check_for_error(%{"code" => code, "errmsg" => msg}) do
     {:error, Mongo.Error.exception(message: msg, code: code)}
   end
 
@@ -945,11 +945,12 @@ defmodule Mongo do
     # from the specs
     # https://github.com/mongodb/specifications/blob/f4bb783627e7ed5c4095c5554d35287956ef8970/source/enumerate-collections.rst#post-mongodb-280-rc3-versions
     #
-    # In versions 2.8.0-rc3 and later, the listCollections command returns a cursor!
-    #
     cmd = [listCollections: 1]
     cursor(topology_pid, cmd, opts)
-    |> Stream.filter(fn coll -> coll["type"] == "collection" end)
+    |> Stream.filter(fn
+      %{"type" => name} -> name == "collection"
+      _                 -> true
+    end)
     |> Stream.map(fn coll -> coll["name"] end)
   end
 

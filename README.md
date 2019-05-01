@@ -25,7 +25,7 @@ to implement the current requirements for the driver.
   * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
   * [x] Support for SCRAM-SHA-256 (MongoDB 4.x)
   * [x] Support for change streaming api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
-  * [ ] Add `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
+  * [x] Add `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
   * [ ] driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
   * [ ] driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst)) 
   * [ ] Because the driver is used in production environments, quick adjustments are necessary.

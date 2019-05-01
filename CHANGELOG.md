@@ -1,11 +1,16 @@
+## v0.5.2
+
+* Enhancements
+  * Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
+  
 ## v0.5.1
 
 * Enhancements
-  * upgraded to DBConnection 2.0.6
-  * refactored code, simplified code and api
-  * replaced deprecated op_code by database commands
-  * update_one, update_many, replace_one, replace_many return upserted ids
-  * support for all find options
+  * Upgraded to DBConnection 2.0.6
+  * Refactored code, simplified code and api
+  * Replaced deprecated op_code by database commands
+  * Update_one, update_many, replace_one, replace_many return upserted ids
+  * Support for all find options
   * Support for MongoDB 3.6 collection [Change Streams](https://docs.mongodb.com/manual/changeStreams/)
   * Support for SCRAM-SHA-256 (MongoDB 4.x)
 

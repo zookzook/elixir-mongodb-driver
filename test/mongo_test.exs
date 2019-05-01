@@ -17,15 +17,12 @@ defmodule Mongo.Test do
 
   test "command", c do
     assert {:ok, %{"ok" => 1.0}} = Mongo.command(c.pid, [ping: true])
-    assert {:error, %Mongo.Error{}} =
-      Mongo.command(c.pid, [drop: "unexisting-database"])
+    assert {:error, %Mongo.Error{}} = Mongo.command(c.pid, [drop: "unexisting-database"])
   end
 
   test "command!", c do
     assert %{"ok" => 1.0} = Mongo.command!(c.pid, [ping: true])
-    assert_raise Mongo.Error, fn ->
-      Mongo.command!(c.pid, [drop: "unexisting-database"])
-    end
+    assert_raise Mongo.Error, fn -> Mongo.command!(c.pid, [drop: "unexisting-database"]) end
   end
 
   test "show_collections", c do
