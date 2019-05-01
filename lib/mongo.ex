@@ -573,12 +573,8 @@ defmodule Mongo do
     end
   end
 
-  defp check_for_error(%{"ok" => ok} = response) when ok == 1 do
-    {:ok, response}
-  end
-  defp check_for_error(%{"code" => code, "errmsg" => msg}) do
-    {:error, Mongo.Error.exception(message: msg, code: code)}
-  end
+  defp check_for_error(%{"ok" => ok} = response) when ok == 1, do: {:ok, response}
+  defp check_for_error(%{"code" => code, "errmsg" => msg} = err), do: {:error, Mongo.Error.exception(message: msg, code: code)}
 
   @doc """
   Returns the current wire version.

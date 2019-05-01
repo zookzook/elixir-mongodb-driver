@@ -155,6 +155,8 @@ defmodule Mongo.Cursor do
                    maxTimeMS: opts[:max_time]
                  ] |> filter_nils()
 
+      kill_cursors(conn, coll, [cursor_id], opts)
+
       with {:ok, %{"operationTime" => op_time,
                    "cursor" => %{"id" => new_cursor_id,
                      "nextBatch" => docs} = cursor,
@@ -172,8 +174,9 @@ defmodule Mongo.Cursor do
         {:ok, %{cursor_id: new_cursor_id, docs: docs, change_stream: change_stream}}
 
       else
+        {:error, %Mongo.Error{code: code} = not_resumable} when code == 11601 or code == 136 or code == 237 -> {:error, not_resumable}
         {:error, _error} ->
-          # todo: examing the error details
+
           with {:ok, wire_version} <- Mongo.wire_version(conn, opts) do
 
             [%{"$changeStream" => stream_opts} | pipeline] = Keyword.get(aggregate_cmd, :pipeline) # extract the change stream options
