@@ -25,6 +25,7 @@ defmodule Mongo.MongoDBConnection do
       database: Keyword.fetch!(opts, :database),
       write_concern: Map.new(write_concern),
       wire_version: nil,
+      limits: nil,
       auth_mechanism: opts[:auth_mechanism] || nil,
       connection_type: Keyword.fetch!(opts, :connection_type),
       topology_pid: Keyword.fetch!(opts, :topology_pid),
@@ -55,7 +56,9 @@ defmodule Mongo.MongoDBConnection do
       end
 
     case result do
-      {:ok, state} -> {:ok, state}
+      {:ok, state} ->
+        # IO.puts inspect state
+        {:ok, state}
 
       {:disconnect, reason, state} ->
         reason = case reason do
@@ -118,13 +121,38 @@ defmodule Mongo.MongoDBConnection do
     # wire version
     # https://github.com/mongodb/mongo/blob/master/src/mongo/db/wire_version.h
     case Utils.command(-1, [ismaster: 1], state) do
-      {:ok, %{"ok" => ok, "maxWireVersion" => version}} when ok == 1 ->  {:ok, %{state | wire_version: version}}
+      {:ok, %{"ok" => ok, "maxWireVersion" => version} = response}  when ok == 1 -> {:ok, %{update_limits(state, response) | wire_version: version}}
       {:ok, %{"ok" => ok}} when ok == 1 ->  {:ok, %{state | wire_version: 0}}
       {:ok, %{"ok" => ok, "errmsg" => msg, "code" => code}} when ok == 0 ->
         err = Mongo.Error.exception(message: msg, code: code)
         {:disconnect, err, state}
       {:disconnect, _, _} = error ->   error
     end
+
+
+  end
+
+  ##
+  #
+  # Updates the limits from the isMaster response:
+  #
+  # isMaster.maxBsonObjectSize / 16 * 1024 * 1024
+  # isMaster.maxMessageSizeBytes / 48000000
+  # isMaster.maxWriteBatchSize /  100,000
+  # isMaster.localTime
+  # isMaster.compression
+  # isMaster.readOnly
+  # isMaster.logicalSessionTimeoutMinutes
+  #
+  defp update_limits(state, result) do
+    limits = %{max_bson_object_size: (result["maxBsonObjectSize"] || 16_777_216),
+      max_message_size_bytes: (result["maxMessageSizeBytes"] || 48_000_000),
+      max_write_batch_size: (result["maxWriteBatchSize"] || 100_000),
+      compression: result["compression"],
+      read_only: (result["readOnly"] || false),
+      logical_session_timeout_minutes: result["logicalSessionTimeoutMinutes"]}
+
+    %{state | limits: limits}
   end
 
   @impl true
