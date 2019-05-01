@@ -2,6 +2,8 @@
 
 * Enhancements
   * Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
+  * Fixed change streams in case of error codes: 11601, 136 and 237 from resuming
+  * Reorganized error handling   
   
 ## v0.5.1
 
@@ -10,9 +12,9 @@
   * Refactored code, simplified code and api
   * Replaced deprecated op_code by database commands
   * Update_one, update_many, replace_one, replace_many return upserted ids
-  * Support for all find options
-  * Support for MongoDB 3.6 collection [Change Streams](https://docs.mongodb.com/manual/changeStreams/)
-  * Support for SCRAM-SHA-256 (MongoDB 4.x)
+  * Add support for all find options
+  * Add support for MongoDB 3.6 collection [Change Streams](https://docs.mongodb.com/manual/changeStreams/)
+  * Ass support for SCRAM-SHA-256 (MongoDB 4.x)
 
 ## v0.4.8-dev
 
