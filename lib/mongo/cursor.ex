@@ -117,8 +117,6 @@ defmodule Mongo.Cursor do
           resume_token = stream_opts["startAfter"] || stream_opts["resumeAfter"]
           resume_token = update_resume_token(resume_token, response["postBatchResumeToken"], List.last(docs))
 
-          IO.puts "Token is #{inspect resume_token}"
-
           fun.(resume_token)
 
           change_stream = change_stream(resume_token: resume_token, op_time: op_time, cmd: cmd, on_resume_token: fun, topology_pid: topology_pid)
