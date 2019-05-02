@@ -89,6 +89,8 @@ defmodule Mongo.Cursor do
 
     def aggregate(topology_pid, cmd, fun, opts) do
 
+      IO.puts inspect cmd
+
       with {:ok, conn, opts} <- select_server(topology_pid, opts),
            {:ok, %{"ok" => ok,
              "operationTime" => op_time,

@@ -2,10 +2,10 @@ sudo: required
 language: elixir
 
 elixir:
-  - 1.4
-  - 1.5
-  - 1.6
-  - 1.7
+#  - 1.4
+#  - 1.5
+#  - 1.6
+#  - 1.7
   - 1.8
 
 cache:
@@ -36,7 +36,7 @@ script:
 
 env:
   matrix:
-    - MONGOVERSION=3.2.22 TRAVIS_NODE_VERSION=4
-    - MONGOVERSION=3.4.18 TRAVIS_NODE_VERSION=4
-    - MONGOVERSION=3.6.9 TRAVIS_NODE_VERSION=4
+#    - MONGOVERSION=3.2.22 TRAVIS_NODE_VERSION=4
+#    - MONGOVERSION=3.4.18 TRAVIS_NODE_VERSION=4
+#    - MONGOVERSION=3.6.9 TRAVIS_NODE_VERSION=4
     - MONGOVERSION=4.0.8 TRAVIS_NODE_VERSION=4
