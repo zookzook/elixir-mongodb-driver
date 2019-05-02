@@ -19,26 +19,17 @@ cache:
     - ~/.mongodb
     - ./plt_core_path
 
-before_install:
+before_script:
+  - bash ./start_mongo.bash
   - mkdir ${PWD}/mongodb-linux-x86_64-${MONGODB}/data
   - ${PWD}/mongodb-linux-x86_64-${MONGODB}/bin/mongod --dbpath ${PWD}/mongodb-linux-x86_64-${MONGODB}/data --logpath ${PWD}/mongodb-linux-x86_64-${MONGODB}/mongodb.log --fork
-  - bash ./start_mongo.bash
-  - mkdir db
-
-before_script:
-  - export PATH=$(m path):$PATH
-  - echo $PATH
-  - mongod --fork --logpath mongo.log --dbpath db
 
 script:
   - mix test
 
 env:
   matrix:
-    - MONGODB=2.6.12
-    - MONGODB=3.0.15
-    - MONGODB=3.2.20
-    - MONGODB=3.4.16
-    - MONGODB=3.6.6
-    - MONGODB=4.0.0
-    - MONGODB=4.1.1
+#    - MONGODB=3.2.20
+#    - MONGODB=3.4.16
+#    - MONGODB=3.6.6
+    - MONGODB=4.0.9
