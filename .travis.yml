@@ -2,22 +2,16 @@ sudo: required
 language: elixir
 
 elixir:
-#  - 1.4
-#  - 1.5
-#  - 1.6
-#  - 1.7
+  - 1.4
+  - 1.5
+  - 1.6
+  - 1.7
   - 1.8
 
 install:
   - wget http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-${MONGODB}.tgz
   - tar xzf mongodb-linux-x86_64-${MONGODB}.tgz
   - ${PWD}/mongodb-linux-x86_64-${MONGODB}/bin/mongod --version
-
-cache:
-  - apt
-  - directories:
-    - ~/.mongodb
-    - ./plt_core_path
 
 before_script:
   - export PATH=${PWD}/mongodb-linux-x86_64-${MONGODB}/bin/:$PATH
