@@ -188,7 +188,12 @@ defmodule Mongo do
             readConcern: opts[:read_concern]
           ] |> filter_nils()
 
-    opts = Keyword.drop(opts, ~w(full_document resume_after start_at_operation_time start_after explain allow_disk_use collation bypass_document_validation hint comment read_concern)a)
+    case opts[:debug] do
+      true -> IO.puts inspect cmd
+      _ -> nil
+    end
+
+    opts = Keyword.drop(opts, ~w(full_document resume_after start_at_operation_time start_after explain allow_disk_use collation bypass_document_validation hint comment read_concern debug)a)
 
     on_resume_token = on_resume_token || (fn _token -> nil end)
     change_stream_cursor(topology_pid, cmd, on_resume_token, opts)

@@ -8,7 +8,7 @@ defmodule Mongo.ChangeStreamTest do
   end
 
   def consumer_1(top, monitor) do
-    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, max_time: 1_000 )
+    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, max_time: 1_000, debug: true )
     result = cursor |> Enum.take(2) |> Enum.at(0)
     send(monitor, {:insert, result})
   end
