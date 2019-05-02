@@ -8,26 +8,26 @@ defmodule Mongo.ChangeStreamTest do
   end
 
   def consumer_1(top, monitor) do
-    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, max_time: 1_000, debug: true )
+    cursor = Mongo.watch_collection(top, "users", [], fn doc -> IO.puts("Token #{inspect doc}"); send(monitor, {:token, doc}) end, max_time: 1_000, debug: true )
     result = cursor |> Enum.take(2) |> Enum.at(0)
     send(monitor, {:insert, result})
   end
 
   def consumer_2(top, monitor, token) do
-    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, resume_after: token, max_time: 1_000 )
+    cursor = Mongo.watch_collection(top, "users", [], fn doc -> IO.puts("Token #{inspect doc}"); send(monitor, {:token, doc}) end, resume_after: token, max_time: 1_000 )
     result = cursor |> Enum.take(1) |> Enum.at(0)
     send(monitor, {:insert, result})
   end
 
   def consumer_3(top, monitor, token) do
-    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, resume_after: token, max_time: 1_000 )
+    cursor = Mongo.watch_collection(top, "users", [], fn doc -> IO.puts("Token #{inspect doc}"); send(monitor, {:token, doc}) end, resume_after: token, max_time: 1_000 )
     result = cursor |> Enum.take(4) |> Enum.map(fn %{"fullDocument" => %{"name" => name}} -> name end)
     send(monitor, {:insert, result})
 
   end
 
   def producer(top) do
-    Process.sleep(100)
+    Process.sleep(300)
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Greta"})
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Gustav"})
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Tom"})
