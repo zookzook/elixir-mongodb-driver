@@ -20,11 +20,13 @@ cache:
     - ./plt_core_path
 
 before_script:
+  - export PATH=${PWD}/mongodb-linux-x86_64-${MONGODB}/bin/:$PATH
   - bash ./start_mongo.bash
   - mkdir ${PWD}/mongodb-linux-x86_64-${MONGODB}/data
   - ${PWD}/mongodb-linux-x86_64-${MONGODB}/bin/mongod --dbpath ${PWD}/mongodb-linux-x86_64-${MONGODB}/data --logpath ${PWD}/mongodb-linux-x86_64-${MONGODB}/mongodb.log --fork
 
 script:
+  - mix local.hex --force
   - mix test
 
 env:
