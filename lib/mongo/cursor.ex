@@ -155,20 +155,18 @@ defmodule Mongo.Cursor do
                    maxTimeMS: opts[:max_time]
                  ] |> filter_nils()
 
-      kill_cursors(conn, coll, [cursor_id], opts)
-
       with {:ok, %{"operationTime" => op_time,
                    "cursor" => %{"id" => new_cursor_id,
-                     "nextBatch" => docs} = cursor,
-                   "ok" => ok}} when ok == 1 <- Mongo.direct_command(conn, get_more, opts) do
+                                 "nextBatch" => docs} = cursor,
+                                 "ok" => ok}} when ok == 1 <- Mongo.direct_command(conn, get_more, opts) do
 
         old_token = change_stream(change_stream, :resume_token)
         change_stream = update_change_stream(change_stream, cursor["postBatchResumeToken"], op_time, List.last(docs))
         new_token = change_stream(change_stream, :resume_token)
 
-        case Map.equal?(old_token, new_token) do
-          false -> fun.(new_token)
-          true  -> nil
+        case token_changes(old_token, new_token) do
+          true  -> fun.(new_token)
+          false -> nil
         end
 
         {:ok, %{cursor_id: new_cursor_id, docs: docs, change_stream: change_stream}}
@@ -194,6 +192,11 @@ defmodule Mongo.Cursor do
 
       end
     end
+
+    defp token_changes(nil, nil), do: false
+    defp token_changes(nil, _new_token), do: true
+    defp token_changes(_old_token, nil), do: true
+    defp token_changes(old_token, new_token), do: not(Map.equal?(old_token, new_token))
 
     ##
     # we are updating the resume token by matching different cases
