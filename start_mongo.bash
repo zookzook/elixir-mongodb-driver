@@ -24,6 +24,8 @@ for i in $(seq 1 3); do
   fi
 done
 
+mongod --version
+
 sleep 1
 
 # initiate the replica set
