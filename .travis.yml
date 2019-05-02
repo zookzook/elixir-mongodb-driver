@@ -34,5 +34,5 @@ env:
   matrix:
 #    - MONGODB=3.2.20
 #    - MONGODB=3.4.16
-#    - MONGODB=3.6.6
-    - MONGODB=4.0.9
+    - MONGODB=3.6.6
+#    - MONGODB=4.0.9
