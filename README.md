@@ -8,26 +8,22 @@
 This is an alternative development from the [original](https://github.com/ankhers/mongodb), which was the starting point
 and already contained very nice code.
 
-I have made a number of changes to understand how the driver works. For example, I reduced cursor modules to just one cursor and
-replaced some op code calls with command calls.
-
-This is currently under development and there is no version management yet. The main goal is to simplify the API and
-to implement the current requirements for the driver.
-
-[Documentation](https://hexdocs.pm/mongodb_driver/readme.html)
+The [Documentation](https://hexdocs.pm/mongodb_driver/readme.html) is online, but currently not up to date. 
+This will be done as soon as possible. In the meantime, look in the source code. Especially 
+for the individual options.  
 
 ## Motivation
 
-  * [ ] Refactoring old code into new
+  * [x] I have made a number of changes to understand how the driver works. For example, I reduced cursor modules to just one cursor and
+        replaced some op code calls with command calls.
   * [x] Simplify code: remove raw_find (raw_find called from cursors, raw_find called with "$cmd"), so raw_find is more calling a command than a find query.
   * [x] Better support for new MongoDB version, for example the ability to use views
-  * [x] Upgrade to ([DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
+  * [x] Upgraded to ([DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
-  * [x] Support for SCRAM-SHA-256 (MongoDB 4.x)
-  * [x] Support for change streaming api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
-  * [x] Add `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
-  * [ ] driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
-  * [ ] driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst)) 
+  * [x] Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
+  * [ ] Add support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
+  * [ ] Add support driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
+  * [ ] Add support for `op_compressed` ([See](https://github.com/mongodb/specifications/blob/master/source/compression/OP_COMPRESSED.rst))
   * [ ] Because the driver is used in production environments, quick adjustments are necessary.
 
 ## Features
@@ -40,6 +36,8 @@ to implement the current requirements for the driver.
   * Safe (by default) and unsafe writes
   * Aggregation pipeline
   * Replica sets
+  * Support for SCRAM-SHA-256 (MongoDB 4.x)
+  * Support for change streams api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
 
 
 ## Data representation
@@ -77,7 +75,7 @@ def application do
 end
 
 defp deps do
-  [{:mongodb_driver, "~> 0.5.0"}]
+  [{:mongodb_driver, "~> 0.5.3"}]
 end
 ```
 
@@ -166,7 +164,32 @@ you'll want to add this cipher to your `ssl_opts`:
       ]
 )
 ```
+### Change streams
 
+Change streams exist in replica set and cluster systems and tell you about changes to collections. 
+They work like endless cursors.
+The special thing about the change streams is that they are resumable. In the case of a resumable error, 
+no exception is made, but the cursor is re-scheduled at the last successful location. 
+The following example will never stop, 
+so it is a good idea to use a process for change streams. 
+
+```
+seeds = ["hostname1.net:27017", "hostname2.net:27017", "hostname3.net:27017"]
+{:ok, top} = Mongo.start_link(database: "my-db", seeds: seeds, appname: "getting rich")
+cursor =  Mongo.watch_collection(top, "accounts", [], fn doc -> IO.puts "New Token #{inspect doc}" end, max_time: 2_000 )  
+cursor |> Enum.each(fn doc -> IO.puts inspect doc end)
+```
+
+An example with a spawned process that sends message to the monitor process: 
+
+```  
+def for_ever(top, monitor) do
+    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end)
+    cursor |> Enum.each(fn doc -> send(monitor, {:change, doc}) end)
+end
+
+spawn(fn -> for_ever(top, self()) end)
+```
 ### Examples
 
 Using `$and`

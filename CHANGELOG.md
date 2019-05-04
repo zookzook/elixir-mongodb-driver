@@ -1,3 +1,8 @@
+## v0.5.4
+
+* Enhancements
+   * The driver provides now client metadata 
+
 ## v0.5.3
 
 * Enhancements

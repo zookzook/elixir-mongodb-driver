@@ -134,7 +134,7 @@ defmodule Mongo.MongoDBConnection do
   end
 
   defp hand_shake(opts, state) do
-    wire_version(state, driver(opts[:appname] || "My killer app"))
+    wire_version(state, driver(opts[:appyname] || "My killer app"))
   end
 
   defp driver(appname) do
