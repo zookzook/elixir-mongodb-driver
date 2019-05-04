@@ -2,6 +2,8 @@ defmodule Mongo.ConnectionTest do
   use MongoTest.Case, async: true
   alias Mongo
 
+  import ExUnit.CaptureLog
+
   defp connect do
     assert {:ok, pid} =
            Mongo.start_link(hostname: "localhost", database: "mongodb_test")
@@ -89,7 +91,7 @@ defmodule Mongo.ConnectionTest do
     assert capture_log(fn ->
        {:ok, pid} = Mongo.start_link(opts)
        assert_receive {:EXIT, ^pid, :killed}, 5000
-     end)
+     end) =~ "(Mongo.Error) auth failed for user mongodb_admin_user"
   end
 
   test "insert_one flags" do
@@ -176,15 +178,17 @@ defmodule Mongo.ConnectionTest do
   end
 
   test "auth connection leak" do
-    # sometimes the function tcp_count() returns 1, so the test fails.
-    # maybe it is a good idea to wait a second before counting
-    :timer.sleep(1000)
-    assert tcp_count() == 0
-    Enum.each(1..10, fn _ ->
-      connect_auth_invalid()
+    assert capture_log(fn ->
+      # sometimes the function tcp_count() returns 1, so the test fails.
+      # maybe it is a good idea to wait a second before counting
+      :timer.sleep(1000)
+      assert tcp_count() == 0
+      Enum.each(1..10, fn _ ->
+        connect_auth_invalid()
+      end)
+      :timer.sleep(1000)
+      # there should be 10 connections with connection_type: :monitor
+      assert tcp_count() == 10
     end)
-    :timer.sleep(1000)
-    # there should be 10 connections with connection_type: :monitor
-    assert tcp_count() == 10
   end
 end
