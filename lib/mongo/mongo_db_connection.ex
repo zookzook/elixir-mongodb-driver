@@ -50,7 +50,7 @@ defmodule Mongo.MongoDBConnection do
     result =
       with {:ok, state} <- tcp_connect(opts, state),
            {:ok, state} <- maybe_ssl(opts, state),
-           {:ok, state} <- wire_version(state),
+           {:ok, state} <- hand_shake(opts, state),
            {:ok, state} <- maybe_auth(opts, state) do
         {:ok, state}
       end
@@ -117,10 +117,13 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp wire_version(state) do
+  defp wire_version(state, client \\ nil) do
     # wire version
     # https://github.com/mongodb/mongo/blob/master/src/mongo/db/wire_version.h
-    case Utils.command(-1, [ismaster: 1], state) do
+
+    cmd = [ismaster: 1, client: client] |> filter_nils()
+
+    case Utils.command(-1, cmd, state) do
       {:ok, %{"ok" => ok, "maxWireVersion" => version} = response}  when ok == 1 -> {:ok, %{update_limits(state, response) | wire_version: version}}
       {:ok, %{"ok" => ok}} when ok == 1 ->  {:ok, %{state | wire_version: 0}}
       {:ok, %{"ok" => ok, "errmsg" => msg, "code" => code}} when ok == 0 ->
@@ -128,9 +131,49 @@ defmodule Mongo.MongoDBConnection do
         {:disconnect, err, state}
       {:disconnect, _, _} = error ->   error
     end
-
-
   end
+
+  defp hand_shake(opts, state) do
+    wire_version(state, driver(opts[:appname] || "My killer app"))
+  end
+
+  defp driver(appname) do
+
+    driver_version = case :application.get_key(:mongodb_driver, :vsn) do
+      {:ok, version} -> to_string(version)
+      _              -> "??"
+    end
+
+    [architecture, name | _rest] = String.split(to_string(:erlang.system_info(:system_architecture)), "-")
+
+    version = case :os.version() do
+      {one, two, tree} -> to_string(one) <> "." <> to_string(two) <> "." <> to_string(tree)
+      s                -> s
+    end
+
+    plattform = "Elixir (" <> System.version() <> "), Erlang/OTP (" <> to_string(:erlang.system_info(:otp_release)) <> "), ERTS (" <> to_string(:erlang.system_info(:version)) <> ")"
+
+    type = elem(:os.type(), 1)
+    %{
+      client: %{
+        application: %{name: appname}
+      },
+      driver: %{
+        name: "mongodb_driver",
+        version: driver_version
+      },
+      os: %{
+        type: type,
+        name: pretty_name(name),
+        architecture: architecture,
+        version: version
+      },
+      platform: plattform
+    }
+  end
+
+  defp pretty_name("apple"), do: "Mac OS X"
+  defp pretty_name(name), do: name
 
   ##
   #
@@ -239,5 +282,8 @@ defmodule Mongo.MongoDBConnection do
     end)
   end
 
+  defp filter_nils(keyword) when is_list(keyword) do
+    Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
+  end
 
 end

@@ -92,6 +92,7 @@ defmodule Mongo do
     * `:auth` - List of additional users to authenticate as a keyword list with
       `:username` and `:password` keys (optional)
     * `:auth_source` - The database to authenticate against
+    * `:appname` - The name of the application used the driver for the MongoDB-Handshake
     * `:set_name` - The name of the replica set to connect to (required if
     connecting to a replica set)
     * `:type` - a hint of the topology type. See `t:initial_type/0` for
