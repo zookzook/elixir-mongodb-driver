@@ -137,11 +137,17 @@ defmodule Mongo.GridFs.UploadStream do
     #
     defp insert_one_file_document(topology_pid, collection, file_id, length, chunk_size, filename, metadata, opts) do
       doc = %{_id: file_id, length: length, filename: filename, chunkSize: chunk_size, uploadDate: now(), metadata: metadata}
+            |> filter_nils()
+
       {:ok, _} = Mongo.insert_one(topology_pid, collection, doc, opts)
     end
 
     defp now(), do: DateTime.from_unix!(:os.system_time(), :native)
 
+    defp filter_nils(map) when is_map(map) do
+      Enum.reject(map, fn {_key, value} -> is_nil(value) end)
+      |> Enum.into(%{})
+    end
   end
 
 end

@@ -125,32 +125,36 @@ defmodule Mongo.Messages do
     <<length::int32, request_id::int32, response_to::int32, op_code::int32>>
   end
 
+  defp encode_op(op_query(flags: flags, coll: coll, num_skip: num_skip,
+    num_return: num_return, query: query, select: select)) do
+    [<<blit_flags(:query, flags)::int32>>,
+      coll,
+      <<0x00, num_skip::int32, num_return::int32>>,
+      BSON.Encoder.document(query),
+      select]
+  end
   defp encode_op(op_msg(flags: flags, sections: sections)) do
     # todo: flags encoding
-    [<<0::int32>>, encode_sections(sections)]
+    [<<0::int32>> | encode_sections(sections)]
   end
+
   defp encode_sections(sections) do
     Enum.map(sections, fn section -> encode_section(section) end)
   end
 
   defp encode_section(section(payload_type: t, payload: payload)) do
-    [<<t::int8>>, encode_payload(payload)]
+    [<<t::int8>> | encode_payload(payload)]
   end
   defp encode_payload(payload(doc: doc, sequence: nil)) do
     BSON.Encoder.document(doc)
   end
-  defp encode_payload(payload(doc: nil, sequence: sequence(size: size, identifier: identifier, docs: docs))) do
-    [<<size::int32>>, identifier, <<0x00>>, BSON.Encoder.encode(docs)]
+  defp encode_payload(payload(doc: nil, sequence: sequence(identifier: identifier, docs: docs))) do
+    iodata = [identifier, <<0x00>> | Enum.map(docs, fn doc -> BSON.Encoder.encode(doc) end)]
+    size   = IO.iodata_length(iodata) + 4
+    [<<size::int32>> | iodata]
   end
 
-  defp encode_op(op_query(flags: flags, coll: coll, num_skip: num_skip,
-                          num_return: num_return, query: query, select: select)) do
-    [<<blit_flags(:query, flags)::int32>>,
-     coll,
-     <<0x00, num_skip::int32, num_return::int32>>,
-     BSON.Encoder.document(query),
-     select]
-  end
+
 
   defp blit_flags(op, flags) when is_list(flags) do
     import Bitwise

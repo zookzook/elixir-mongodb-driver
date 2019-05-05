@@ -624,7 +624,7 @@ defmodule Mongo do
       wtimeout: Keyword.get(opts, :wtimeout)
     } |> filter_nils()
 
-    query = [
+    cmd = [
       insert: coll,
       documents: [doc],
       ordered: Keyword.get(opts, :ordered),
@@ -633,7 +633,7 @@ defmodule Mongo do
     ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts) do
+         {:ok, doc} <- direct_command(conn, cmd, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -869,7 +869,7 @@ defmodule Mongo do
                arrayFilters: Keyword.get(opts, :filters)
              } |> filter_nils()
 
-    query = [
+    cmd = [
               update: coll,
               updates: [update],
               ordered: Keyword.get(opts, :ordered),
@@ -878,7 +878,7 @@ defmodule Mongo do
             ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc}        <- direct_command(conn, query, opts) do
+         {:ok, doc}        <- direct_command(conn, cmd, opts) do
 
       case doc do
 

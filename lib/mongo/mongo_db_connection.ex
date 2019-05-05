@@ -248,7 +248,12 @@ defmodule Mongo.MongoDBConnection do
                   "$readPreference": [mode: update_read_preferences(opts[:slave_ok])]]
 
     timeout = Keyword.get(opts, :max_time, 0)
-    op      = op_msg(flags: 0, sections: [section(payload_type: 0, payload: payload(doc: cmd))])
+
+    # MongoDB 3.6 only allows certain command arguments to be provided this way. These are:
+    op = case pulling_out?(cmd, :documents) || pulling_out?(cmd, :updates) || pulling_out?(cmd, :deletes) do
+      nil -> op_msg(flags: 0, sections: [section(payload_type: 0, payload: payload(doc: cmd))])
+      key -> pulling_out(cmd, key)
+    end
 
     with {:ok, doc} <- Utils.post_request(op, state.request_id, state, timeout),
          state = %{state | request_id: state.request_id + 1} do
@@ -269,6 +274,24 @@ defmodule Mongo.MongoDBConnection do
   defp execute_action(:error, _query, _opts, state) do
     exception = Mongo.Error.exception("Test-case")
     {:disconnect, exception, state}
+  end
+
+  defp pulling_out?(cmd, key) do
+    case Keyword.has_key?(cmd, key) do
+      true  -> key
+      false -> nil
+    end
+  end
+
+  defp pulling_out(cmd, key) when is_atom(key) do
+
+    docs = Keyword.get(cmd, key)
+    cmd  = Keyword.delete(cmd, key)
+
+    payload_0 = section(payload_type: 0, payload: payload(doc: cmd))
+    payload_1 = section(payload_type: 1, payload: payload(sequence: sequence(identifier: to_string(key), docs: docs)))
+
+    op_msg(flags: 0, sections: [payload_0, payload_1])
   end
 
   def update_read_preferences(true), do: "primaryPreferred"
