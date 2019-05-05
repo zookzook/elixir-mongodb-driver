@@ -266,7 +266,7 @@ defmodule Mongo do
   @spec find_one_and_update(GenServer.server, collection, BSON.document, BSON.document, Keyword.t) :: result(BSON.document) | {:ok, nil}
   def find_one_and_update(topology_pid, coll, filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
-    query = [
+    cmd = [
       findAndModify:            coll,
       query:                    filter,
       update:                   update,
@@ -282,7 +282,7 @@ defmodule Mongo do
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts) do
+         {:ok, doc} <- direct_command(conn, cmd, opts) do
         {:ok, doc["value"]}
     end
 
@@ -310,7 +310,7 @@ defmodule Mongo do
   @spec find_one_and_replace(GenServer.server, collection, BSON.document, BSON.document, Keyword.t) :: result(BSON.document)
   def find_one_and_replace(topology_pid, coll, filter, replacement, opts \\ []) do
     _ = modifier_docs(replacement, :replace)
-    query = [
+    cmd = [
       findAndModify:            coll,
       query:                    filter,
       update:                   replacement,
@@ -326,7 +326,7 @@ defmodule Mongo do
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts), do: {:ok, doc["value"]}
+         {:ok, doc} <- direct_command(conn, cmd, opts), do: {:ok, doc["value"]}
   end
 
   defp should_return_new(:after), do: true
@@ -345,7 +345,7 @@ defmodule Mongo do
   """
   @spec find_one_and_delete(GenServer.server, collection, BSON.document, Keyword.t) :: result(BSON.document)
   def find_one_and_delete(topology_pid, coll, filter, opts \\ []) do
-    query = [
+    cmd = [
       findAndModify: coll,
       query:         filter,
       remove:        true,
@@ -357,13 +357,13 @@ defmodule Mongo do
     opts = Keyword.drop(opts, ~w(max_time projection sort collation)a)
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts), do: {:ok, doc["value"]}
+         {:ok, doc} <- direct_command(conn, cmd, opts), do: {:ok, doc["value"]}
   end
 
   @doc false
   @spec count(GenServer.server, collection, BSON.document, Keyword.t) :: result(non_neg_integer)
   def count(topology_pid, coll, filter, opts \\ []) do
-    query = [
+    cmd = [
       count: coll,
       query: filter,
       limit: opts[:limit],
@@ -375,7 +375,7 @@ defmodule Mongo do
     opts = Keyword.drop(opts, ~w(limit skip hint collation)a)
 
     # Mongo 2.4 and 2.6 returns a float
-    with {:ok, doc} <- command(topology_pid, query, opts),
+    with {:ok, doc} <- command(topology_pid, cmd, opts),
          do: {:ok, trunc(doc["n"])}
   end
 
@@ -449,7 +449,7 @@ defmodule Mongo do
   """
   @spec distinct(GenServer.server, collection, String.t | atom, BSON.document, Keyword.t) :: result([BSON.t])
   def distinct(topology_pid, coll, field, filter, opts \\ []) do
-    query = [
+    cmd = [
       distinct: coll,
       key: field,
       query: filter,
@@ -461,7 +461,7 @@ defmodule Mongo do
 
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
-         {:ok, doc} <- direct_command(conn, query, opts),
+         {:ok, doc} <- direct_command(conn, cmd, opts),
          do: {:ok, doc["values"]}
   end
 
@@ -555,12 +555,12 @@ defmodule Mongo do
   in the document.
   """
   @spec command(GenServer.server, BSON.document, Keyword.t) :: result(BSON.document)
-  def command(topology_pid, query, opts \\ []) do
+  def command(topology_pid, cmd, opts \\ []) do
     rp = ReadPreference.defaults(%{mode: :primary})
     rp_opts = [read_preference: Keyword.get(opts, :read_preference, rp)]
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, rp_opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
-         do: direct_command(conn, query, opts)
+         do: direct_command(conn, cmd, opts)
   end
 
   @doc false
@@ -568,7 +568,7 @@ defmodule Mongo do
   def direct_command(conn, cmd, opts \\ []) do
     action = %Query{action: :command}
 
-    with {:ok, _query, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
+    with {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc) do
       {:ok, doc}
     end
@@ -582,7 +582,7 @@ defmodule Mongo do
   """
   def wire_version(conn, opts \\ []) do
     cmd = %Query{action: :wire_version}
-    with {:ok, _query, version} <- DBConnection.execute(conn, cmd, %{}, defaults(opts)) do
+    with {:ok, _cmd, version} <- DBConnection.execute(conn, cmd, %{}, defaults(opts)) do
       {:ok, version}
     end
   end
@@ -591,8 +591,8 @@ defmodule Mongo do
   Similar to `command/3` but unwraps the result and raises on error.
   """
   @spec command!(GenServer.server, BSON.document, Keyword.t) :: result!(BSON.document)
-  def command!(topology_pid, query, opts \\ []) do
-    bangify(command(topology_pid, query, opts))
+  def command!(topology_pid, cmd, opts \\ []) do
+    bangify(command(topology_pid, cmd, opts))
   end
 
   @doc """
@@ -678,7 +678,7 @@ defmodule Mongo do
       wtimeout: Keyword.get(opts, :wtimeout)
     } |> filter_nils()
 
-    query = [
+    cmd = [
       insert: coll,
       documents: docs,
       ordered: Keyword.get(opts, :ordered),
@@ -687,7 +687,7 @@ defmodule Mongo do
     ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts) do
+         {:ok, doc} <- direct_command(conn, cmd, opts) do
       case doc do
         %{"writeErrors" => _} ->  {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -750,7 +750,7 @@ defmodule Mongo do
                collation: Keyword.get(opts, :collation)
              } |> filter_nils()
 
-    query = [
+    cmd = [
               delete: coll,
               deletes: [filter],
               ordered: Keyword.get(opts, :ordered),
@@ -758,7 +758,7 @@ defmodule Mongo do
             ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, query, opts) do
+         {:ok, doc} <- direct_command(conn, cmd, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         %{ "ok" => _ok, "n" => n } ->
