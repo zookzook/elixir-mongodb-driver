@@ -2,6 +2,7 @@
 
 * Enhancements
    * The driver provides now client metadata 
+   * Added support for connecting via UNIX sockets (`:socket` and `:socket_dir`)
 
 ## v0.5.3
 

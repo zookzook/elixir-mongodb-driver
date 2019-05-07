@@ -136,4 +136,16 @@ defmodule Mongo.MongoDBConnection.Utils do
   def digest_password(_username, password, :sha256) do
     password
   end
+
+  def hostname_port(opts) do
+    port = opts[:port] || 27017
+    case Keyword.fetch(opts, :socket) do
+      {:ok, socket} -> {{:local, socket}, 0}
+      :error ->
+        case Keyword.fetch(opts, :socket_dir) do
+          {:ok, dir} -> {{:local, "#{dir}/mongodb-#{port}.sock"}, 0}
+          :error     -> {(opts[:hostname] || "localhost") |> to_charlist, port}
+        end
+    end
+  end
 end
