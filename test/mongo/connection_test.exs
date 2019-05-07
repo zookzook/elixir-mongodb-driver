@@ -47,9 +47,31 @@ defmodule Mongo.ConnectionTest do
     end)
   end
 
+  defp connect_socket_dir do
+    assert {:ok, pid} = Mongo.start_link(socket_dir: "/tmp", database: "mongodb_test")
+    pid
+  end
+
+  defp connect_socket do
+    assert {:ok, pid} = Mongo.start_link(socket: "/tmp/mongodb-27017.sock", database: "mongodb_test")
+    pid
+  end
+
+  @tag :socket
+  test "connect socket_dir" do
+    pid = connect_socket_dir()
+    assert {:ok, %{"ok" => 1.0}} = Mongo.ping(pid)
+  end
+
+  @tag :socket
+  test "connect socket" do
+    pid = connect_socket()
+    assert {:ok, %{"ok" => 1.0}} = Mongo.ping(pid)
+  end
+
   test "connect and ping" do
     pid = connect()
-    assert {:ok, %{"ok" => 1.0}} =  Mongo.ping(pid)
+    assert {:ok, %{"ok" => 1.0}} = Mongo.ping(pid)
   end
 
   @tag :ssl
