@@ -154,8 +154,6 @@ defmodule Mongo.Messages do
     [<<size::int32>> | iodata]
   end
 
-
-
   defp blit_flags(op, flags) when is_list(flags) do
     import Bitwise
     Enum.reduce(flags, 0x0, &(flag_to_bit(op, &1) ||| &2))
