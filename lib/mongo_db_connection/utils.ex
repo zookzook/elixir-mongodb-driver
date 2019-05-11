@@ -111,14 +111,14 @@ defmodule Mongo.MongoDBConnection.Utils do
     end
   end
 
-  defp send_error(reason, s) do
-    error = Mongo.Error.exception(tag: :tcp, action: "send", reason: reason)
-    {:disconnect, error, s}
+  defp send_error(reason, state) do
+    error = Mongo.Error.exception(tag: :tcp, action: "send", reason: reason, host: state.host)
+    {:disconnect, error, state}
   end
 
-  defp recv_error(reason, s) do
-    error = Mongo.Error.exception(tag: :tcp, action: "recv", reason: reason)
-    {:disconnect, error, s}
+  defp recv_error(reason, state) do
+    error = Mongo.Error.exception(tag: :tcp, action: "recv", reason: reason, host: state.host)
+    {:disconnect, error, state}
   end
 
   def namespace(coll, state, nil), do: [state.database, ?. | coll]
