@@ -95,17 +95,15 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp tcp_connect(opts, state) do
+  defp tcp_connect(opts, s) do
+    host      = (opts[:hostname] || "localhost") |> to_charlist
+    port      = opts[:port] || 27017
+    sock_opts = [:binary, active: false, packet: :raw, nodelay: true]
+    ++ (opts[:socket_options] || [])
 
-    {host, port} = Utils.hostname_port(opts)
-    sock_opts   = [:binary, active: false, packet: :raw, nodelay: true] ++ (opts[:socket_options] || [])
+    s = Map.put(s, :host, "#{host}:#{port}")
 
-    s = case host do
-      {:local, socket} -> Map.put(state, :host, socket)
-      hostname         -> Map.put(state, :host, "#{hostname}:#{port}")
-    end
-
-    case :gen_tcp.connect(host, port, sock_opts, state.connect_timeout) do
+    case :gen_tcp.connect(host, port, sock_opts, s.connect_timeout) do
       {:ok, socket} ->
         # A suitable :buffer is only set if :recbuf is included in
         # :socket_options.
@@ -115,7 +113,7 @@ defmodule Mongo.MongoDBConnection do
 
         {:ok, %{s | connection: {:gen_tcp, socket}}}
 
-      {:error, reason} -> {:error, Mongo.Error.exception(tag: :tcp, action: "connect", reason: reason, host: state.host)}
+      {:error, reason} -> {:error, Mongo.Error.exception(tag: :tcp, action: "connect", reason: reason, host: s.host)}
     end
   end
 
@@ -244,31 +242,24 @@ defmodule Mongo.MongoDBConnection do
   defp execute_action(:wire_version, _, _, state) do
     {:ok, state.wire_version, state}
   end
-  defp execute_action(:command, cmds, opts, %{wire_version: version} = state) when version >= 6 do
+  defp execute_action(:command, [cmd], opts, %{wire_version: version} = state) when version >= 6 do
 
-    mode    = update_read_preferences(opts[:slave_ok])
+    cmd = cmd ++ ["$db": opts[:database] || state.database,
+      "$readPreference": [mode: update_read_preferences(opts[:slave_ok])]]
+
     timeout = Keyword.get(opts, :max_time, 0)
 
-    sections = cmds
-    |> Enum.map(fn cmd -> cmd ++ ["$db": opts[:database] || state.database, "$readPreference": [mode: mode]] end)
-    |> Enum.recude([], fn cmd, acc ->
-          # MongoDB 3.6 only allows certain command arguments to be provided this way. These are:
-          case pulling_out?(cmd, :documents) || pulling_out?(cmd, :updates) || pulling_out?(cmd, :deletes) do
-          nil -> [section(payload_type: 0, payload: payload(doc: cmd)) | acc]
-          key ->
-                 {payload_0, payload_1} = pulling_out(cmd, key)
-                 [payload_0 | [payload_1 | acc]]
-        end
-      end)
-    op = op_msg(flags: 0, sections: sections)
+    # MongoDB 3.6 only allows certain command arguments to be provided this way. These are:
+    op = case pulling_out?(cmd, :documents) || pulling_out?(cmd, :updates) || pulling_out?(cmd, :deletes) do
+      nil -> op_msg(flags: 0, sections: [section(payload_type: 0, payload: payload(doc: cmd))])
+      key -> pulling_out(cmd, key)
+    end
 
     with {:ok, doc} <- Utils.post_request(op, state.request_id, state, timeout),
          state = %{state | request_id: state.request_id + 1} do
       {:ok, doc, state}
-
     end
   end
-
   defp execute_action(:command, [cmd], opts, state) do
 
     timeout = Keyword.get(opts, :max_time, 0)
@@ -300,7 +291,7 @@ defmodule Mongo.MongoDBConnection do
     payload_0 = section(payload_type: 0, payload: payload(doc: cmd))
     payload_1 = section(payload_type: 1, payload: payload(sequence: sequence(identifier: to_string(key), docs: docs)))
 
-    {payload_0, payload_1}
+    op_msg(flags: 0, sections: [payload_0, payload_1])
   end
 
   def update_read_preferences(true), do: "primaryPreferred"

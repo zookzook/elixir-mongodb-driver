@@ -296,7 +296,7 @@ defmodule Mongo do
 
   end
 
-  def bulk_write(topology_pid, coll, %UnorderedBulk{inserts: inserts, updates: updates, deletes: deletes}, opts) do
+  def bulk_write(topology_pid, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, opts \\ []) do
 
     {_ids, inserts} = assign_ids(inserts)
 
@@ -307,47 +307,57 @@ defmodule Mongo do
                     } |> filter_nils()
 
     insert_cmd = [
-            insert: coll, ## todo
+            insert: coll,
             documents: inserts,
-            ordered: Keyword.get(opts, :ordered),
-            writeConcern: write_concern,
-            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
+            writeConcern: write_concern
           ] |> filter_nils()
 
-    deletes = Enum.map(deletes, fn filter -> %{
-                               q: filter,
-                               limit: 1,
-                               collation: Keyword.get(opts, :collation)
-                             } |> filter_nils() end)
+    deletes = Enum.map(deletes,
+                       fn {filter, collaction, many} ->
+                          limit = case many do
+                            true  -> 0
+                            false -> 1
+                          end
+                          %{
+                             q: filter,
+                             limit: limit,
+                             collation: collaction
+                           } |> filter_nils()
+                       end)
 
     delete_cmd = [
-            delete: coll,   ## todo
+            delete: coll,
             deletes: deletes,
             ordered: Keyword.get(opts, :ordered),
             writeConcern: write_concern
           ] |> filter_nils()
 
-    updates = Enum.map(updates, fn {filter, update} -> %{
+    updates = Enum.map(updates, fn {filter, update, update_opts} -> %{
                q: filter,
                u: update,
-               upsert: Keyword.get(opts, :upsert),
-               multi: false,
-               collation: Keyword.get(opts, :collation),
-               arrayFilters: Keyword.get(opts, :filters)
+               upsert: Keyword.get(update_opts, :upsert),
+               multi: Keyword.get(update_opts, :multi) || false,
+               collation: Keyword.get(update_opts, :collation),
+               arrayFilters: Keyword.get(update_opts, :filters)
              } |> filter_nils() end)
-
 
     update_cmd = [
             update: coll,
             updates: updates,
-            ordered: Keyword.get(opts, :ordered),
+            # ordered: Keyword.get(opts, :ordered),
             writeConcern: write_concern,
-            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
+            # bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
           ] |> filter_nils()
 
-    cmds = [insert_cmd, delete_cmd, update_cmd]
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, cmds, opts), do: {:ok, doc["value"]}
+    cmds = [insert_cmd, update_cmd, delete_cmd]
+
+    IO.puts inspect cmds
+
+    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts) do
+      cmds
+      |> Enum.map(fn cmd -> direct_command(conn, cmd, opts) end)
+      |> Enum.map(fn {:ok, doc} -> {:ok, doc} end)
+    end
   end
 
   @doc """
@@ -626,15 +636,14 @@ defmodule Mongo do
 
   @doc false
   @spec direct_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
-  def direct_command(conn, cmds, opts \\ []) when is_list(cmds) do
+  def direct_command(conn, cmd, opts) do
     action = %Query{action: :command}
 
-    with {:ok, _cmd, doc} <- DBConnection.execute(conn, action, cmds, defaults(opts)),
+    with {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc) do
       {:ok, doc}
     end
   end
-  def direct_command(conn, cmd, opts), do: direct_command(conn, [cmd], opts)
 
   defp check_for_error(%{"ok" => ok} = response) when ok == 1, do: {:ok, response}
   defp check_for_error(%{"code" => code, "errmsg" => msg}), do: {:error, Mongo.Error.exception(message: msg, code: code)}

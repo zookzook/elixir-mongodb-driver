@@ -5,26 +5,48 @@ defmodule Mongo.UnorderedBulk do
 
   Ist immer für eine Collections
 
+   The maxWriteBatchSize limit of a database, which indicates the maximum number of write operations permitted in a write batch, raises from 1,000 to 100,000.
+
   """
 
   alias Mongo.UnorderedBulk
 
-  defstruct inserts: [], updates: [], deletes: [], opts: []
+  defstruct coll: nil, inserts: [], updates: [], deletes: [], opts: []
 
-  def new() do
-    %UnorderedBulk{}
+  def new(coll) do
+    %UnorderedBulk{coll: coll}
   end
 
-  def insert_one(%UnorderedBulk{inserts: rest} = b, doc) do
-    %UnorderedBulk{b | inserts: [doc | rest] }
+  def insert_one(%UnorderedBulk{inserts: rest} = bulk, doc) do
+    %UnorderedBulk{bulk | inserts: [doc | rest] }
   end
 
-  def delete_one(%UnorderedBulk{deletes: rest} = b, doc) do
-    %UnorderedBulk{b | deletes: [doc | rest] }
+  def delete_one(%UnorderedBulk{deletes: rest} = bulk, doc, collaction \\ nil) do
+    %UnorderedBulk{bulk | deletes: [{doc, collaction, false} | rest] }
   end
 
-  def update_one(%UnorderedBulk{updates: rest} = b, filter, update) do
-    %UnorderedBulk{b | updates: [{filter, update} | rest] }
+  def delete_many(%UnorderedBulk{deletes: rest} = bulk, doc, collaction \\ nil) do
+    %UnorderedBulk{bulk | deletes: [{doc, collaction, true} | rest] }
   end
 
+  def update_one(%UnorderedBulk{updates: rest} = bulk, filter, update, opts \\ []) do
+    %UnorderedBulk{bulk | updates: [{filter, update, opts} | rest] }
+  end
+
+  def test() do
+
+    "bulk"
+    |> new()
+    |> insert_one(%{name: "Greta"})
+    |> insert_one(%{name: "Tom"})
+    |> insert_one(%{name: "Waldo"})
+    |> update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
+    |> update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
+    |> update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
+    |> delete_one(%{kind: "dog"})
+    |> delete_one(%{kind: "dog"})
+    |> delete_one(%{kind: "dog"})
+
+
+  end
 end
