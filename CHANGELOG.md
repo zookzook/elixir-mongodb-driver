@@ -3,6 +3,9 @@
 * Enhancements
    * The driver provides now client metadata 
    * Added support for connecting via UNIX sockets (`:socket` and `:socket_dir`)
+   * Merged code from https://github.com/ankhers/mongodb/commit/63c20ff7e427744a5df915751adfaf6e5e39ae62
+   * Merged changes from https://github.com/ankhers/mongodb/pull/283
+   * Merged changes from https://github.com/ankhers/mongodb/pull/281
 
 ## v0.5.3
 
