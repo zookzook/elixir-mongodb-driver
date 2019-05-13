@@ -1,17 +1,13 @@
 defmodule Mongo.UnorderedBulk do
   @moduledoc """
 
-  todo
-
-  Ist immer für eine Collections
-
    The maxWriteBatchSize limit of a database, which indicates the maximum number of write operations permitted in a write batch, raises from 1,000 to 100,000.
 
   """
 
   alias Mongo.UnorderedBulk
 
-  defstruct coll: nil, inserts: [], updates: [], deletes: [], opts: []
+  defstruct coll: nil, inserts: [], updates: [], deletes: []
 
   def new(coll) do
     %UnorderedBulk{coll: coll}
@@ -22,20 +18,20 @@ defmodule Mongo.UnorderedBulk do
   end
 
   def delete_one(%UnorderedBulk{deletes: rest} = bulk, doc, collaction \\ nil) do
-    %UnorderedBulk{bulk | deletes: [{doc, collaction, false} | rest] }
+    %UnorderedBulk{bulk | deletes: [{doc, collaction, 1} | rest] }
   end
 
   def delete_many(%UnorderedBulk{deletes: rest} = bulk, doc, collaction \\ nil) do
-    %UnorderedBulk{bulk | deletes: [{doc, collaction, true} | rest] }
+    %UnorderedBulk{bulk | deletes: [{doc, collaction, 0} | rest] }
   end
 
   def update_one(%UnorderedBulk{updates: rest} = bulk, filter, update, opts \\ []) do
     %UnorderedBulk{bulk | updates: [{filter, update, opts} | rest] }
   end
 
-  def test() do
+  def test(top) do
 
-    "bulk"
+    bulk = "bulk"
     |> new()
     |> insert_one(%{name: "Greta"})
     |> insert_one(%{name: "Tom"})
@@ -47,6 +43,8 @@ defmodule Mongo.UnorderedBulk do
     |> delete_one(%{kind: "dog"})
     |> delete_one(%{kind: "dog"})
 
+    result = Mongo.BulkWrite.bulk_write(top, bulk)
 
+    IO.puts inspect result
   end
 end
