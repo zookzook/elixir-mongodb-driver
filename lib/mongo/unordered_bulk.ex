@@ -6,6 +6,7 @@ defmodule Mongo.UnorderedBulk do
   """
 
   alias Mongo.UnorderedBulk
+  import Mongo.BulkUtils
 
   defstruct coll: nil, inserts: [], updates: [], deletes: []
 
@@ -13,34 +14,42 @@ defmodule Mongo.UnorderedBulk do
     %UnorderedBulk{coll: coll}
   end
 
-
-  def insert_one(%UnorderedBulk{inserts: rest} = bulk, doc) do
+  def push({:insert, doc}, %UnorderedBulk{inserts: rest} = bulk) do
     %UnorderedBulk{bulk | inserts: [doc | rest] }
   end
-
-  def delete_one(%UnorderedBulk{deletes: rest} = bulk, doc, opts \\ []) do
-    %UnorderedBulk{bulk | deletes: [{doc, Keyword.put(opts, :limit, 1)} | rest] }
+  def push({:update, doc}, %UnorderedBulk{updates: rest} = bulk) do
+    %UnorderedBulk{bulk | updates: [doc | rest] }
+  end
+  def push({:delete, doc}, %UnorderedBulk{deletes: rest} = bulk) do
+    %UnorderedBulk{bulk | deletes: [doc | rest] }
   end
 
-  def delete_many(%UnorderedBulk{deletes: rest} = bulk, doc, opts \\ []) do
-    %UnorderedBulk{bulk | deletes: [{doc, Keyword.put(opts, :limit, 0)} | rest] }
+  def insert_one(%UnorderedBulk{} = bulk, doc) do
+    get_insert_one(doc) |> push(bulk)
   end
 
-  def replace_one(%UnorderedBulk{updates: rest} = bulk, filter, replacement, opts \\ []) do
+  def delete_one(%UnorderedBulk{} = bulk, doc, opts \\ []) do
+    get_delete_one(doc, opts) |> push(bulk)
+  end
+
+  def delete_many(%UnorderedBulk{} = bulk, doc, opts \\ []) do
+    get_delete_many(doc, opts) |> push(bulk)
+  end
+
+  def replace_one(%UnorderedBulk{} = bulk, filter, replacement, opts \\ []) do
     _ = modifier_docs(replacement, :replace)
-    %UnorderedBulk{bulk | updates: [{filter, replacement, Keyword.put(opts, :multi, false)} | rest] }
+    get_replace_one(filter, replacement, opts) |> push(bulk)
   end
 
-  def update_one(%UnorderedBulk{updates: rest} = bulk, filter, update, opts \\ []) do
+  def update_one(%UnorderedBulk{} = bulk, filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
-    %UnorderedBulk{bulk | updates: [{filter, update, Keyword.put(opts, :multi, false)} | rest] }
+    get_update_one(filter, update, opts) |> push(bulk)
   end
 
-  def update_many(%UnorderedBulk{updates: rest} = bulk, filter, replacement, opts \\ []) do
-    _ = modifier_docs(replacement, :update)
-    %UnorderedBulk{bulk | updates: [{filter, replacement, Keyword.put(opts, :multi, true)} | rest] }
+  def update_many(%UnorderedBulk{updates: rest} = bulk, filter, update, opts \\ []) do
+    _ = modifier_docs(update, :update)
+    get_update_many(filter, update, opts) |> push(bulk)
   end
-
 
   defp modifier_docs([{key, _}|_], type), do: key |> key_to_string |> modifier_key(type)
   defp modifier_docs(map, _type) when is_map(map) and map_size(map) == 0,  do: :ok
@@ -54,6 +63,20 @@ defmodule Mongo.UnorderedBulk do
 
   defp key_to_string(key) when is_atom(key), do: Atom.to_string(key)
   defp key_to_string(key) when is_binary(key), do: key
+
+  def stream(enum, top, coll, limit \\ 1000, opts \\ []) when limit > 1 do
+    Stream.chunk_while(enum,
+      {new(coll), limit - 1},
+      fn
+        op, {bulk, 0} -> {:cont, Mongo.BulkWrite.bulk_write(top, push(op, bulk), opts), {new(coll), limit - 1}}
+        op, {bulk, l} -> {:cont, {push(op, bulk), l - 1}}
+      end,
+      fn
+        {bulk, 0} -> {:cont, bulk}
+        {bulk, _} -> {:cont, Mongo.BulkWrite.bulk_write(top, bulk, opts), {new(coll), limit - 1}}
+    end)
+    # todo reduce to one
+  end
 
   def test(top) do
 
@@ -106,5 +129,6 @@ defmodule Mongo.UnorderedBulk do
 
     IO.puts inspect result
   end
+
 
 end

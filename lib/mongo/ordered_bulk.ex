@@ -65,22 +65,6 @@ defmodule Mongo.OrderedBulk do
     IO.puts inspect result
   end
 
-  def test2() do
-
-    # create a streaming bulk write with max 1024 operations
-    bulk_stream = "bulk" |> new_stream(:mongo, 1024, w: 1)
-
-    # now streaming a long text file with small memory usage
-    File.stream!(file)
-    |> Stream.with_index
-    #|> Stream.map(fn {name, i} -> insert_one(%{line: i, name: name}) end) # {:insert, %{line: i, name: name}}
-    # |> Stream.into(bulk_stream, (fn {name, i} -> insert_one(%{line: i, name: name}) end))
-    |> Stream.map(fn {name, i} -> bulk_stream.insert_one(%{line: i, name: name}) end)
-    |> Stream.reduce()
-
-    File.stream!(src_filename, [], 512) |> Stream.into(bulk_stream) |> Stream.run()
-
-  end
 
 
 end

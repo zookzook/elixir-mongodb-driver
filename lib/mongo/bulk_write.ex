@@ -13,6 +13,8 @@ defmodule Mongo.BulkWrite do
   alias Mongo.UnorderedBulk
   alias Mongo.OrderedBulk
 
+  @max_batch_size 100_000
+
   @doc """
   Unordered bulk write operations:
   Executes first insert commands, then updates commands and after that all delete commands are executed. If a group (inserts, updates or deletes) exceeds the limit
@@ -174,7 +176,7 @@ defmodule Mongo.BulkWrite do
 
   defp run_commands(conn, cmds, opts) do
 
-    IO.puts "Running cmds #{inspect cmds}"
+    # IO.puts "Running cmds #{inspect cmds}"
 
     cmds
     |> Enum.map(fn cmd -> Mongo.direct_command(conn, cmd, opts) end)
@@ -183,12 +185,10 @@ defmodule Mongo.BulkWrite do
 
   def get_insert_cmds(coll, docs, write_concern, _opts) do
 
-    max_batch_size = 10 ## only for test maxWriteBatchSize
-
     {_ids, docs} = assign_ids(docs)
 
     docs
-    |> Enum.chunk_every(max_batch_size)
+    |> Enum.chunk_every(@max_batch_size)
     |> Enum.map(fn inserts -> get_insert_cmd(coll, inserts, write_concern) end)
 
   end
@@ -201,9 +201,8 @@ defmodule Mongo.BulkWrite do
 
   defp get_delete_cmds(coll, docs, write_concern, opts) do
 
-    max_batch_size = 10 ## only for test maxWriteBatchSize
     docs
-    |> Enum.chunk_every(max_batch_size)
+    |> Enum.chunk_every(@max_batch_size)
     |> Enum.map(fn deletes -> get_delete_cmd(coll, deletes, write_concern, opts) end)
 
   end
@@ -222,9 +221,8 @@ defmodule Mongo.BulkWrite do
 
   defp get_update_cmds(coll, docs, write_concern, opts) do
 
-    max_batch_size = 10 ## only for test maxWriteBatchSize
     docs
-    |> Enum.chunk_every(max_batch_size)
+    |> Enum.chunk_every(@max_batch_size)
     |> Enum.map(fn updates -> get_update_cmd(coll, updates, write_concern, opts) end)
 
   end

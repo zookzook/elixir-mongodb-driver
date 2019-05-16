@@ -217,22 +217,36 @@ unordered bulk writes.
 
 ```elixir
 
-    bulk = "bulk"
-           |> new()
-           |> insert_one(%{name: "Greta"})
-           |> insert_one(%{name: "Tom"})
-           |> insert_one(%{name: "Waldo"})
-           |> update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
-           |> update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
-           |> update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
-           |> update_many(%{kind: "dog"}, %{"$set": %{kind: "cat"}})
-           |> delete_one(%{kind: "cat"})
-           |> delete_one(%{kind: "cat"})
-           |> delete_one(%{kind: "cat"})
+bulk = "bulk"
+       |> new()
+       |> insert_one(%{name: "Greta"})
+       |> insert_one(%{name: "Tom"})
+       |> insert_one(%{name: "Waldo"})
+       |> update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
+       |> update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
+       |> update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
+       |> update_many(%{kind: "dog"}, %{"$set": %{kind: "cat"}})
+       |> delete_one(%{kind: "cat"})
+       |> delete_one(%{kind: "cat"})
+       |> delete_one(%{kind: "cat"})
 
-    result = Mongo.BulkWrite.bulk_write(:mongo, bulk, w: 1)
+result = Mongo.BulkWrite.bulk_write(:mongo, bulk, w: 1)
 ```
 
+In the following example we import 1.000.000 integers into the MongoDB using the stream api:
+
+We need to create an insert operation for each number. Then we call the `ongo.UnorderedBulk.stream`
+function to import it. This function returns a stream function which accumulate 
+all inserts operations until the limit `1000` is reached. In this case the operation group is send to
+MongoDB. So using the stream api you can reduce the memory using while 
+importing big volume of data.
+
+```elixir
+stream = 1..1_000_000 
+    |> Stream.map(fn i -> Mongo.BulkUtils.get_insert_one(%{number: i}) end) 
+    |> Mongo.UnorderedBulk.stream(top, "bulk", 1_000)
+    |> Stream.run()
+```
 ### Examples
 
 Using `$and`
