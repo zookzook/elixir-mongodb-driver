@@ -190,6 +190,49 @@ end
 
 spawn(fn -> for_ever(top, self()) end)
 ```
+
+
+### Bulk writes
+
+Die Motivation für bulk writes liegt in der Optimierungsmöglichkeit, gleiche Operationen 
+zu gruppieren. Dabei wird zwischen ungeordneten und geordneten Bulk writes unterschieden.
+Bei ungeordneten werden Inserts, Updates und Deletes gruppiert und als einzelne Befehle 
+zur Datenbank geschickt. Dabei gibt es keinen Einfluss auf die Reihenfolge 
+der Ausführungen. Ein guter Anwendungsfall ist der Import von Datensätzen aus einer
+CSV-Datei. Die Reihenfolge der Inserts spielt keine Rolle.
+
+Bei geordneten Bulk writes ist die Einhaltung der Reihenfolge wichtig, damit aus 
+Ausführungen korrekt sind. In diesem Fall werden nur die gleiche aufeinander folgenden Operationen
+gruppiert.
+
+Aktuell werden alle Bulk writes im Speicher optimiert. Dies ist für große Bulk writes ungünstig.
+In diesem Fall kann man streaming bulk writes verwenden, die nur einen gewissen Satz von
+Operation im Speicher gruppieren und sofern die maximale Anzahl von Operationen
+erreicht wurde, die Schreiboperationen zur Datenbank schicken. Die Anzahl 
+kann vorgegeben werden.
+
+Using ordered bulk writes. In this example we first insert some dog's name, add an attribute `kind` 
+and change all dogs to cats. After that we delete three cats. This example would not work with 
+unordered bulk writes. 
+
+```elixir
+
+    bulk = "bulk"
+           |> new()
+           |> insert_one(%{name: "Greta"})
+           |> insert_one(%{name: "Tom"})
+           |> insert_one(%{name: "Waldo"})
+           |> update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
+           |> update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
+           |> update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
+           |> update_many(%{kind: "dog"}, %{"$set": %{kind: "cat"}})
+           |> delete_one(%{kind: "cat"})
+           |> delete_one(%{kind: "cat"})
+           |> delete_one(%{kind: "cat"})
+
+    result = Mongo.BulkWrite.bulk_write(:mongo, bulk, w: 1)
+```
+
 ### Examples
 
 Using `$and`
