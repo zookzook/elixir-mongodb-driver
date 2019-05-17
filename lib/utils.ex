@@ -1,6 +1,5 @@
 defmodule Mongo.Utils do
 
-
   def filter_nils(keyword) when is_list(keyword) do
     Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
   end
@@ -9,7 +8,6 @@ defmodule Mongo.Utils do
     Enum.reject(map, fn {_key, value} -> is_nil(value) end)
     |> Enum.into(%{})
   end
-
 
   def assign_ids(list) when is_list(list) do
     Enum.map(list, &assign_id/1)
@@ -26,7 +24,7 @@ defmodule Mongo.Utils do
   end
 
   defp assign_id(map) when is_map(map) do
-    map |> Map.to_list |> add_id
+    map |> Map.to_list() |> add_id()
   end
 
   ##
@@ -40,4 +38,16 @@ defmodule Mongo.Utils do
   defp add_id([{key, _}|_] = list, id) when is_binary(key), do: [{"_id", id}|list]
   defp add_id([], id), do: [{"_id", id}]
 
+  def modifier_docs([{key, _}|_], type), do: key |> key_to_string |> modifier_key(type)
+  def modifier_docs(map, _type) when is_map(map) and map_size(map) == 0,  do: :ok
+  def modifier_docs(map, type) when is_map(map), do: Enum.at(map, 0) |> elem(0) |> key_to_string |> modifier_key(type)
+  def modifier_docs(list, type) when is_list(list),  do: Enum.map(list, &modifier_docs(&1, type))
+
+  defp modifier_key(<<?$, _::binary>> = other, :replace),  do: raise(ArgumentError, "replace does not allow atomic modifiers, got: #{other}")
+  defp modifier_key(<<?$, _::binary>>, :update),  do: :ok
+  defp modifier_key(<<_, _::binary>> = other, :update),  do: raise(ArgumentError, "update only allows atomic modifiers, got: #{other}")
+  defp modifier_key(_, _),  do: :ok
+
+  defp key_to_string(key) when is_atom(key), do: Atom.to_string(key)
+  defp key_to_string(key) when is_binary(key), do: key
 end

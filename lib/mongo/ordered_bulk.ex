@@ -6,6 +6,9 @@ defmodule Mongo.OrderedBulk do
   """
 
   alias Mongo.OrderedBulk
+  alias Mongo.BulkWrite
+
+  import Mongo.BulkOps
 
   defstruct coll: nil, ops: []
 
@@ -13,31 +16,46 @@ defmodule Mongo.OrderedBulk do
     %OrderedBulk{coll: coll}
   end
 
-  def insert_one(%OrderedBulk{ops: rest} = bulk, doc) do
-    %OrderedBulk{bulk | ops: [{:insert, doc} | rest] }
+  def push(op, %OrderedBulk{ops: rest} = bulk) do
+    %OrderedBulk{bulk | ops: [op | rest] }
   end
 
-  def delete_one(%OrderedBulk{ops: rest} = bulk, doc, opts \\ []) do
-    %OrderedBulk{bulk | ops: [{:delete, {doc, Keyword.put(opts, :limit, 1)}} | rest] }
+  def insert_one(%OrderedBulk{} = bulk, doc) do
+    get_insert_one(doc) |> push(bulk)
   end
 
-  def delete_many(%OrderedBulk{ops: rest} = bulk, doc, opts \\ []) do
-    %OrderedBulk{bulk | ops: [{:delete, {doc, Keyword.put(opts, :limit, 0)}} | rest] }
+  def delete_one(%OrderedBulk{} = bulk, doc, opts \\ []) do
+    get_delete_one(doc, opts) |> push(bulk)
   end
 
-  def update_one(%OrderedBulk{ops: rest} = bulk, filter, update, opts \\ []) do
-    ## _ = modifier_docs(update, :update)
-    %OrderedBulk{bulk | ops: [{:update, {filter, update, Keyword.put(opts, :multi, false)}} | rest] }
+  def delete_many(%OrderedBulk{} = bulk, doc, opts \\ []) do
+    get_delete_many(doc, opts) |> push(bulk)
   end
 
-  def update_many(%OrderedBulk{ops: rest} = bulk, filter, update, opts \\ []) do
-    ## _ = modifier_docs(update, :update)
-    %OrderedBulk{bulk | ops: [{:update, {filter, update, Keyword.put(opts, :multi, true)}} | rest] }
+  def replace_one(%OrderedBulk{} = bulk, filter, replacement, opts \\ []) do
+    get_replace_one(filter, replacement, opts) |> push(bulk)
   end
 
-  def replace_one(%OrderedBulk{ops: rest} = bulk, filter, replacement, opts \\ []) do
-    ## _ = modifier_docs(replacement, :replace)
-    %OrderedBulk{bulk | ops: [{:update, {filter, replacement, Keyword.put(opts, :multi, false)}} | rest] }
+  def update_one(%OrderedBulk{} = bulk, filter, update, opts \\ []) do
+    get_update_one(filter, update, opts) |> push(bulk)
+  end
+
+  def update_many(%OrderedBulk{} = bulk, filter, update, opts \\ []) do
+    get_update_many(filter, update, opts) |> push(bulk)
+  end
+
+  def write(enum, top, coll, limit \\ 1000, opts \\ []) when limit > 1 do
+    Stream.chunk_while(enum,
+      {new(coll), limit - 1},
+      fn
+        op, {bulk, 0} -> {:cont, BulkWrite.write(top, push(op, bulk), opts), {new(coll), limit - 1}}
+        op, {bulk, l} -> {:cont, {push(op, bulk), l - 1}}
+      end,
+      fn
+        {bulk, 0} -> {:cont, bulk}
+        {bulk, _} -> {:cont, BulkWrite.write(top, bulk, opts), {new(coll), limit - 1}}
+      end)
+    # todo reduce to one
   end
 
   def test() do
@@ -60,7 +78,7 @@ defmodule Mongo.OrderedBulk do
 
     IO.puts inspect bulk
 
-    result = Mongo.BulkWrite.bulk_write(top, bulk, w: 1)
+    result = Mongo.BulkWrite.write(top, bulk, w: 1)
 
     IO.puts inspect result
   end
