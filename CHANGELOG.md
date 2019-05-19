@@ -1,8 +1,8 @@
-## v0.5.4
+## v0.5.5
 
 * Enhancements
-   * Added support for bulk writes (ordered/unordered)
-   * Added support for op_msg with payload type 1 
+   * Added support for bulk writes (ordered/unordered, in-memory/stream)
+   * Added support for `op_msg` with payload type 1 
 
 ## v0.5.4
 
