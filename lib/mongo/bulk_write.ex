@@ -29,15 +29,15 @@ defmodule Mongo.BulkWrite do
 
   bulk = "bulk"
       |> UnorderedBulk.new()
-      |> insert_one(%{name: "Greta"})
-      |> insert_one(%{name: "Tom"})
-      |> insert_one(%{name: "Waldo"})
-      |> update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
-      |> update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
-      |> update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
-      |> delete_one(%{kind: "dog"})
-      |> delete_one(%{kind: "dog"})
-      |> delete_one(%{kind: "dog"})
+      |> UnorderedBulk.insert_one(%{name: "Greta"})
+      |> UnorderedBulk.insert_one(%{name: "Tom"})
+      |> UnorderedBulk.insert_one(%{name: "Waldo"})
+      |> UnorderedBulk.update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
+      |> UnorderedBulk.update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
+      |> UnorderedBulk.update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
+      |> UnorderedBulk.delete_one(%{kind: "dog"})
+      |> UnorderedBulk.delete_one(%{kind: "dog"})
+      |> UnorderedBulk.delete_one(%{kind: "dog"})
 
   result = BulkWrite.write(:mongo, bulk, w: 1)
   ```
@@ -51,17 +51,17 @@ defmodule Mongo.BulkWrite do
 
   ```
   bulk = "bulk"
-       |> new()
-       |> insert_one(%{name: "Greta"})
-       |> insert_one(%{name: "Tom"})
-       |> insert_one(%{name: "Waldo"})
-       |> update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
-       |> update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
-       |> update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
-       |> update_many(%{kind: "dog"}, %{"$set": %{kind: "cat"}})
-       |> delete_one(%{kind: "cat"})
-       |> delete_one(%{kind: "cat"})
-       |> delete_one(%{kind: "cat"})
+       |> OrderedBulk.new()
+       |> OrderedBulk.insert_one(%{name: "Greta"})
+       |> OrderedBulk.insert_one(%{name: "Tom"})
+       |> OrderedBulk.insert_one(%{name: "Waldo"})
+       |> OrderedBulk.update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
+       |> OrderedBulk.update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
+       |> OrderedBulk.update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
+       |> OrderedBulk.update_many(%{kind: "dog"}, %{"$set": %{kind: "cat"}})
+       |> OrderedBulk.delete_one(%{kind: "cat"})
+       |> OrderedBulk.delete_one(%{kind: "cat"})
+       |> OrderedBulk.delete_one(%{kind: "cat"})
 
   result = BulkWrite.write(:mongo, bulk, w: 1)
   ```

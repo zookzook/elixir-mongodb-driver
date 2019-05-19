@@ -14,16 +14,16 @@ defmodule Mongo.UnorderedBulk do
 
   ```
   bulk = "bulk"
-  |> new()
-  |> insert_one(%{name: "Greta"})
-  |> insert_one(%{name: "Tom"})
-  |> insert_one(%{name: "Waldo"})
-  |> update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
-  |> update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
-  |> update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
-  |> delete_one(%{kind: "dog"})
-  |> delete_one(%{kind: "dog"})
-  |> delete_one(%{kind: "dog"})
+  |> UnorderedBulk.new()
+  |> UnorderedBulk.insert_one(%{name: "Greta"})
+  |> UnorderedBulk.insert_one(%{name: "Tom"})
+  |> UnorderedBulk.insert_one(%{name: "Waldo"})
+  |> UnorderedBulk.update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
+  |> UnorderedBulk.update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
+  |> UnorderedBulk.update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
+  |> UnorderedBulk.delete_one(%{kind: "dog"})
+  |> UnorderedBulk.delete_one(%{kind: "dog"})
+  |> UnorderedBulk.delete_one(%{kind: "dog"})
 
   result = BulkWrite.write(:mongo, bulk, w: 1)
   ```
