@@ -31,9 +31,9 @@ defmodule Mongo.BulkOps do
   @doc """
   Returns an `insert_one` operation tupel for appending to a bulk. Used to perform stream bulk writes.
 
-  ## Example
+    Example
   ```
-  BulkOps.get_insert_one(%{name: "Waldo"})
+  Mongo.BulkOps.get_insert_one(%{name: "Waldo"})
 
   {:insert, %{name: "Waldo"}}
   ```
@@ -44,26 +44,43 @@ defmodule Mongo.BulkOps do
   @doc """
   Returns an `delete_one` operation tupel for appending to a bulk. Used to perform stream bulk writes.
 
-  ## Example
+    Example
 
   ```
-  BulkOps.get_delete_one(%{name: "Waldo"})
+  Mongo.BulkOps.get_delete_one(%{name: "Waldo"})
 
   {:delete, {%{name: "Waldo"}, [limit: 1]}}
   ```
   """
-  @spec get_delete_one(BSON.document, Keyword.t) :: bulk_op
-  def get_delete_one(doc, opts \\ []), do: {:delete, {doc, Keyword.put(opts, :limit, 1)}}
+  @spec get_delete_one(BSON.document) :: bulk_op
+  def get_delete_one(doc), do: {:delete, {doc, [limit: 1]}}
 
 
   @doc """
   Returns an `delete_many` operation for appending to a bulk. Used to perform stream bulk writes.
+
+    Example
+
+  ```
+  Mongo.BulkOps.get_delete_many(%{name: "Waldo"})
+
+  {:delete, {%{name: "Waldo"}, [limit: 0]}}
+  ```
   """
-  @spec get_delete_many(BSON.document, Keyword.t) :: bulk_op
-  def get_delete_many(doc, opts \\ []), do: {:delete, {doc, Keyword.put(opts, :limit, 0)}}
+  @spec get_delete_many(BSON.document) :: bulk_op
+  def get_delete_many(doc), do: {:delete, {doc, [limit: 0]}}
 
   @doc """
   Returns an `update_one` operation for appending to a bulk. Used to perform stream bulk writes.
+
+      Example
+
+  ```
+  Mongo.BulkOps.get_update_one(%{name: "Waldo"}, %{"$set" : %{name: "Greta", kind: "dog"}})
+
+  {:update,
+    {%{name: "Waldo"}, %{"$set": %{kind: "dog", name: "Greta"}}, [multi: false]}}
+  ```
   """
   @spec get_update_one(BSON.document, BSON.document, Keyword.t) :: bulk_op
   def get_update_one(filter, update, opts \\ []) do
@@ -73,6 +90,15 @@ defmodule Mongo.BulkOps do
 
   @doc """
   Returns an `update_many` operation for appending to a bulk. Used to perform stream bulk writes.
+
+    Example
+
+  ```
+  Mongo.BulkOps.get_update_many(%{name: "Waldo"}, %{"$set" : %{name: "Greta", kind: "dog"}})
+
+  {:update,
+    {%{name: "Waldo"}, %{"$set": %{kind: "dog", name: "Greta"}}, [multi: true]}}
+  ```
   """
   @spec get_update_many(BSON.document, BSON.document, Keyword.t) :: bulk_op
   def get_update_many(filter, update, opts \\ []) do
@@ -82,6 +108,14 @@ defmodule Mongo.BulkOps do
 
   @doc """
   Returns an `replace_one` operation for appending to a bulk. Used to perform stream bulk writes.
+
+    Example
+
+  ```
+  Mongo.BulkOps.get_replace_one(%{name: "Waldo"}, %{name: "Greta", kind: "dog"})
+
+  {:update, {%{name: "Waldo"}, %{kind: "dog", name: "Greta"}, [multi: false]}}
+  ```
   """
   @spec get_replace_one(BSON.document, BSON.document, Keyword.t) :: bulk_op
   def get_replace_one(filter, replacement, opts \\ []) do

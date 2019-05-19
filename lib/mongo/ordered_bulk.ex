@@ -10,6 +10,11 @@ defmodule Mongo.OrderedBulk do
 
   import Mongo.BulkOps
 
+  @type t :: %__MODULE__{
+               coll: String.t,
+               ops: [BulkOps.bulk_op]
+             }
+
   defstruct coll: nil, ops: []
 
   def new(coll) do
@@ -24,12 +29,12 @@ defmodule Mongo.OrderedBulk do
     get_insert_one(doc) |> push(bulk)
   end
 
-  def delete_one(%OrderedBulk{} = bulk, doc, opts \\ []) do
-    get_delete_one(doc, opts) |> push(bulk)
+  def delete_one(%OrderedBulk{} = bulk, doc) do
+    get_delete_one(doc) |> push(bulk)
   end
 
-  def delete_many(%OrderedBulk{} = bulk, doc, opts \\ []) do
-    get_delete_many(doc, opts) |> push(bulk)
+  def delete_many(%OrderedBulk{} = bulk, doc) do
+    get_delete_many(doc) |> push(bulk)
   end
 
   def replace_one(%OrderedBulk{} = bulk, filter, replacement, opts \\ []) do
