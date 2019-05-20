@@ -571,6 +571,7 @@ defmodule Mongo do
   end
 
   @doc false
+  ## refactor: exec_command
   @spec direct_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def direct_command(conn, cmd, opts) do
     action = %Query{action: :command}

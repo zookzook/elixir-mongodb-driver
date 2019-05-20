@@ -191,25 +191,27 @@ end
 spawn(fn -> for_ever(top, self()) end)
 ```
 
+For more information see
+
+* [Mongo.watch](https://hexdocs.pm/mongodb_driver/Mongo.Cursor.html#content) 
+
 
 ### Bulk writes
 
-Die Motivation für bulk writes liegt in der Optimierungsmöglichkeit, gleiche Operationen 
-zu gruppieren. Dabei wird zwischen ungeordneten und geordneten Bulk writes unterschieden.
-Bei ungeordneten werden Inserts, Updates und Deletes gruppiert und als einzelne Befehle 
-zur Datenbank geschickt. Dabei gibt es keinen Einfluss auf die Reihenfolge 
-der Ausführungen. Ein guter Anwendungsfall ist der Import von Datensätzen aus einer
-CSV-Datei. Die Reihenfolge der Inserts spielt keine Rolle.
+The motivation for bulk writes lies in the possibility of optimization, the same operations
+to group. Here, a distinction is made between disordered and ordered bulk writes.
+In disordered, inserts, updates, and deletes are grouped as individual commands
+sent to the database. There is no influence on the order of the execution. 
+A good use case is the import of records from one CSV file. 
+The order of the inserts does not matter.
 
-Bei geordneten Bulk writes ist die Einhaltung der Reihenfolge wichtig, damit aus 
-Ausführungen korrekt sind. In diesem Fall werden nur die gleiche aufeinander folgenden Operationen
-gruppiert.
+For ordered bulk writers, order compliance is important to keep. 
+In this case, only the same consecutive operations are grouped.
 
-Aktuell werden alle Bulk writes im Speicher optimiert. Dies ist für große Bulk writes ungünstig.
-In diesem Fall kann man streaming bulk writes verwenden, die nur einen gewissen Satz von
-Operation im Speicher gruppieren und sofern die maximale Anzahl von Operationen
-erreicht wurde, die Schreiboperationen zur Datenbank schicken. Die Anzahl 
-kann vorgegeben werden.
+Currently, all bulk writes are optimized in memory. This is unfavorable for large bulk writes.
+In this case, one can use streaming bulk writes that only have a certain set of
+group operation in memory and when the maximum number of operations
+has been reached, operations are written to the database. The size can be specified.
 
 Using ordered bulk writes. In this example we first insert some dog's name, add an attribute `kind` 
 and change all dogs to cats. After that we delete three cats. This example would not work with 
@@ -218,19 +220,19 @@ unordered bulk writes.
 ```elixir
 
 bulk = "bulk"
-       |> new()
-       |> insert_one(%{name: "Greta"})
-       |> insert_one(%{name: "Tom"})
-       |> insert_one(%{name: "Waldo"})
-       |> update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
-       |> update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
-       |> update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
-       |> update_many(%{kind: "dog"}, %{"$set": %{kind: "cat"}})
-       |> delete_one(%{kind: "cat"})
-       |> delete_one(%{kind: "cat"})
-       |> delete_one(%{kind: "cat"})
+       |> OrderedBulk.new()
+       |> OrderedBulk.insert_one(%{name: "Greta"})
+       |> OrderedBulk.insert_one(%{name: "Tom"})
+       |> OrderedBulk.insert_one(%{name: "Waldo"})
+       |> OrderedBulk.update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
+       |> OrderedBulk.update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
+       |> OrderedBulk.update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
+       |> OrderedBulk.update_many(%{kind: "dog"}, %{"$set": %{kind: "cat"}})
+       |> OrderedBulk.delete_one(%{kind: "cat"})
+       |> OrderedBulk.delete_one(%{kind: "cat"})
+       |> OrderedBulk.delete_one(%{kind: "cat"})
 
-result = Mongo.BulkWrite.bulk_write(:mongo, bulk, w: 1)
+result = Mongo.BulkWrite.write(:mongo, bulk, w: 1)
 ```
 
 In the following example we import 1.000.000 integers into the MongoDB using the stream api:
@@ -247,6 +249,13 @@ importing big volume of data.
 |> Mongo.UnorderedBulk.write(:mongo, "bulk", 1_000)
 |> Stream.run()
 ```
+
+For more information see and check the test units for examples.
+* [Mongo.UnorderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.Cursor.html#content) 
+* [Mongo.OrderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.Cursor.html#content) 
+* [Mongo.BulkWrites](https://hexdocs.pm/mongodb_driver/Mongo.Cursor.html#content) 
+* [Mongo.BulkOps](https://hexdocs.pm/mongodb_driver/Mongo.Cursor.html#content) 
+
 ### Examples
 
 Using `$and`

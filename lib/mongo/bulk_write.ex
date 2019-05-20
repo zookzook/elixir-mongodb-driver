@@ -187,15 +187,51 @@ defmodule Mongo.BulkWrite do
       one_bulk_write(conn, bulk, write_concern, opts)
     end
   end
-  def write(topology_pid, %OrderedBulk{coll: coll, ops: ops} = bulk, opts) do
+  def write(topology_pid, %OrderedBulk{coll: coll, ops: ops}, opts) do
 
     write_concern = write_concern(opts)
+
+    empty = %{
+      acknowledged: acknowledged(write_concern),
+      insertedCount: 0,
+      matchedCount: 0,
+      deletedCount: 0,
+      upsertedCount: 0,
+      modifiedCount: 0,
+      upsertedIds: [],
+      insertedIds: [],
+    }
+
     with {:ok, conn, _, _} <- Mongo.select_server(topology_pid, :write, opts) do
+
       get_op_sequence(coll, ops)
       |> Enum.map(fn {cmd, docs} -> one_bulk_write_operation(conn, cmd, coll, docs, write_concern, opts) end)
-      |> Enum.each(fn {cmd, count} -> IO.puts "#{cmd} : #{count}" end) # todo collect results
+      |> Enum.reduce(empty, fn
+        {cmd, {count, ids}}, acc         -> merge(cmd, count, ids, acc)
+        {cmd, {mat, mod, ups, ids}}, acc -> merge(cmd, mat, mod, ups, ids, acc)
+        {cmd, count}, acc                -> merge(cmd, count, acc)
+
+      end)
     end
   end
+
+  defp merge(:insert, count, ids, %{:insertedCount => value, :insertedIds => current_ids} = result) do
+    %{result | insertedCount: value + count, insertedIds: current_ids ++ ids}
+  end
+  defp merge(:update, matched, modified, upserts, ids,
+                      %{:matchedCount => matched_count,
+                       :modifiedCount => modified_count,
+                       :upsertedCount => upserted_count,
+                       :upsertedIds => current_ids} = result) do
+    %{result | matchedCount: matched_count + matched,
+               modifiedCount: modified_count + modified,
+               upsertedCount: upserted_count + upserts,
+               upsertedIds: current_ids ++ ids}
+  end
+  defp merge(:delete, count, %{:deletedCount => value} = result) do
+    %{result | deletedCount: value + count}
+  end
+  defp merge(_other, _count, result), do: result
 
   ##
   # returns the current write concerns from `opts`
@@ -208,30 +244,32 @@ defmodule Mongo.BulkWrite do
     } |> filter_nils()
   end
 
-  @doc"""
-  Executues one unordered bulk write. The execution order of operation groups is
+  ##
+  # Executes one unordered bulk write. The execution order of operation groups is
+  #
+  # * inserts
+  # * updates
+  # * deletes
+  #
+  # The function returns a keyword list with the results of each operation group:
+  # For the details see https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#results
+  defp one_bulk_write(conn, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, write_concern, opts) do
 
-  * inserts
-  * updates
-  * deletes
+    with {_, {inserts, ids}}                           <- one_bulk_write_operation(conn, :insert, coll, inserts, write_concern, opts),
+         {_, {matched, modified, upserts, upsert_ids}} <- one_bulk_write_operation(conn, :update, coll, updates, write_concern, opts),
+         {_, deletes}                                  <- one_bulk_write_operation(conn, :delete, coll, deletes, write_concern, opts) do
 
-  The function returns a keyword list with the results of each operation group:
-  For the details see https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#results
-  """
-  defp one_bulk_write(conn, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes} = bulk, write_concern, opts) do
 
-    with {_, inserts} <- one_bulk_write_operation(conn, :insert, coll, inserts, write_concern, opts),
-         {_, updates} <- one_bulk_write_operation(conn, :update, coll, updates, write_concern, opts),
-         {_, deletes} <- one_bulk_write_operation(conn, :delete, coll, deletes, write_concern, opts) do
-      [
+      %{
         acknowledged: acknowledged(write_concern),
         insertedCount: inserts,
-        matchedCount: updates,
+        insertedIds: ids,
+        matchedCount: matched,
         deletedCount: deletes,
-        upsertedCount: 0,
-        upsertedIds: [],
-        insertedIds: [],
-      ]
+        modifiedCount: modified,
+        upsertedCount: upserts,
+        upsertedIds: upsert_ids
+      }
     end
   end
 
@@ -262,7 +300,7 @@ defmodule Mongo.BulkWrite do
   defp get_op_sequence(coll, ops) do
     get_op_sequence(coll, ops, [])
   end
-  defp get_op_sequence(coll, [], acc), do: acc
+  defp get_op_sequence(_coll, [], acc), do: acc
   defp get_op_sequence(coll, ops, acc) do
     [{kind, _doc} | _rest] = ops
     {docs, rest} = find_max_sequence(kind, ops)
@@ -287,71 +325,72 @@ defmodule Mongo.BulkWrite do
     {acc, rest}
   end
 
-#  {
-#"acknowledged" : true,
-#"deletedCount" : 1,
-#"insertedCount" : 2,
-#              "matchedCount" : 2,
-#"upsertedCount" : 0,
-#"insertedIds" : {
-# "0" : 4,
-#"1" : 5
-#},
-#"upsertedIds" : {
-#
-# }
-# }
+  defp filter_upsert_ids(nil), do: []
+  defp filter_upsert_ids(upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
 
-  defp collect(docs, :insert) do
-    docs
-    |> Enum.map(fn
-      {:ok, %{"n" => n}} -> n
-      {:ok, _other}      -> 0
-    end)
-    |> Enum.reduce(0, fn x, acc -> x + acc end)
+  ##
+  # collects the returns values for each operation
+  #
+  # the update operation is more complex than insert or delete operation
+  #
+  defp collect({docs, ids}, :insert) do
+
+    {docs
+     |> Enum.map(fn
+       {:ok, %{"n" => n}} -> n
+       {:ok, _other}      -> 0
+     end)
+     |> Enum.reduce(0, fn x, acc -> x + acc end), ids}
+
   end
-
   defp collect(docs, :update) do
+
     docs
     |> Enum.map(fn
-      {:ok, %{"n" => n}} -> n
-      {:ok, _other}      -> 0
+      {:ok, %{"n" => n, "nModified" => modified, "upserted" => ids}} -> l = length(ids); {n - l, modified, l, filter_upsert_ids(ids)}
+      {:ok, %{"n" => matched, "nModified" => modified}}              -> {matched, modified, 0, []}
+      {:ok, _other}                                                  -> {0, 0, 0, []}
     end)
-    |> Enum.reduce(0, fn x, acc -> x + acc end)
-  end
+    |> Enum.reduce({0, 0, 0, []}, fn
+      {mat, mod, ups, ids}, {s_mat, s_mod, s_ups, all} -> {s_mat + mat, s_mod + mod, s_ups + ups, all ++ ids}
+    end)
 
+  end
   defp collect(docs, :delete) do
+
     docs
     |> Enum.map(fn
       {:ok, %{"n" => n}} -> n
       {:ok, _other}      -> 0
     end)
     |> Enum.reduce(0, fn x, acc -> x + acc end)
+
   end
 
+  defp run_commands(conn, {cmds, ids}, opts) do
+    {Enum.map(cmds, fn cmd -> Mongo.direct_command(conn, cmd, opts) end), ids}
+  end
   defp run_commands(conn, cmds, opts) do
-
-    # IO.puts "Running cmds #{inspect cmds}"
-
-    cmds
-    |> Enum.map(fn cmd -> Mongo.direct_command(conn, cmd, opts) end)
-    |> Enum.map(fn {:ok, doc} -> {:ok, doc} end)
+    Enum.map(cmds, fn cmd -> Mongo.direct_command(conn, cmd, opts) end)
   end
 
   defp get_insert_cmds(coll, docs, write_concern, _opts) do
 
-    {_ids, docs} = assign_ids(docs)
+    {ids, docs} = assign_ids(docs)
 
-    docs
-    |> Enum.chunk_every(@max_batch_size)
-    |> Enum.map(fn inserts -> get_insert_cmd(coll, inserts, write_concern) end)
+    cmds = docs
+           |> Enum.chunk_every(@max_batch_size)
+           |> Enum.map(fn inserts -> get_insert_cmd(coll, inserts, write_concern) end)
+    {cmds, ids}
 
   end
 
   defp get_insert_cmd(coll, inserts, write_concern) do
+
     [insert: coll,
      documents: inserts,
      writeConcern: write_concern] |> filter_nils()
+
   end
 
   defp get_delete_cmds(coll, docs, write_concern, opts) do
@@ -363,15 +402,20 @@ defmodule Mongo.BulkWrite do
   end
 
   defp get_delete_cmd(coll, deletes, write_concern, opts ) do
+
     [delete: coll,
      deletes: Enum.map(deletes, fn delete -> get_delete_doc(delete) end),
      ordered: Keyword.get(opts, :ordered),
      writeConcern: write_concern] |> filter_nils()
+
   end
+
   defp get_delete_doc({filter, opts}) do
+
     [q: filter,
      limit: Keyword.get(opts, :limit),
      collation: Keyword.get(opts, :collaction)] |> filter_nils()
+
   end
 
   defp get_update_cmds(coll, docs, write_concern, opts) do
@@ -383,15 +427,18 @@ defmodule Mongo.BulkWrite do
   end
 
   defp get_update_cmd(coll, updates, write_concern, opts) do
+
     [ update: coll,
       updates: Enum.map(updates, fn update -> get_update_doc(update) end),
       ordered: Keyword.get(opts, :ordered),
       writeConcern: write_concern,
       bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
     ] |> filter_nils()
+
   end
 
   defp get_update_doc({filter, update, update_opts}) do
+
     [ q: filter,
       u: update,
       upsert: Keyword.get(update_opts, :upsert),
@@ -399,9 +446,8 @@ defmodule Mongo.BulkWrite do
       collation: Keyword.get(update_opts, :collation),
       arrayFilters: Keyword.get(update_opts, :filters)
     ] |> filter_nils()
+
   end
-  defp get_update_doc(_other) do
-    []
-  end
+
 
 end

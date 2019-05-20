@@ -1,14 +1,10 @@
-## v0.5.5
-
-* Enhancements
-   * Added support for bulk writes (ordered/unordered, in-memory/stream)
-   * Added support for `op_msg` with payload type 1 
-
 ## v0.5.4
 
 * Enhancements
    * The driver provides now client metadata 
    * Added support for connecting via UNIX sockets (`:socket` and `:socket_dir`)
+   * Added support for bulk writes (ordered/unordered, in-memory/stream)
+   * Added support for `op_msg` with payload type 1 
 
 ## v0.5.3
 
