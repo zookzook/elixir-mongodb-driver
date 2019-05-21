@@ -23,7 +23,7 @@ defmodule Mongo.MongoDBConnection.Utils do
 
   @doc """
     Invoking a command using connection stored in state, that means within a DBConnection call. Therefore
-    we cannot call DBConnect.execute() to reuse the command function in Monto.direct_command()
+    we cannot call DBConnect.execute() to reuse the command function in Monto.exec_command()
 
     Using op_query structure to invoke the command
   """

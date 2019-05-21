@@ -3,6 +3,8 @@
 * Enhancements
    * The driver provides now client metadata 
    * Added support for connecting via UNIX sockets (`:socket` and `:socket_dir`)
+   * Added support for bulk writes (ordered/unordered, in-memory/stream)
+   * Added support for `op_msg` with payload type 1 
    * Merged code from https://github.com/ankhers/mongodb/commit/63c20ff7e427744a5df915751adfaf6e5e39ae62
    * Merged changes from https://github.com/ankhers/mongodb/pull/283
    * Merged changes from https://github.com/ankhers/mongodb/pull/281
@@ -13,8 +15,8 @@
    * Travis now using the right MongoDB version
    
 * Bug Fixes
-   * added test unit for change streams
-   * removed debug code from change streams
+   * Added test unit for change streams
+   * Removed debug code from change streams
 
 ## v0.5.2
 

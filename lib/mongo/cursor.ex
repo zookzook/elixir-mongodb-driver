@@ -44,7 +44,7 @@ defmodule Mongo.Cursor do
                      "cursor" => %{
                      "id" => cursor_id,
                      "ns" => coll,
-                     "firstBatch" => docs}}} when ok == 1 <- Mongo.direct_command(conn, cmd, opts) do
+                     "firstBatch" => docs}}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts) do
             state(conn: conn, cursor: cursor_id, coll: coll, docs: docs)
         end
       end
@@ -95,8 +95,8 @@ defmodule Mongo.Cursor do
              "cursor" => %{
                "id" => cursor_id,
                "ns" => coll,
-               "firstBatch" => docs} = response}} when ok == 1 <- Mongo.direct_command(conn, cmd, opts),
-           {:ok, wire_version} <- Mongo.wire_version(conn, opts) do
+               "firstBatch" => docs} = response}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts),
+           {:ok, wire_version} <- Mongo.wire_version(conn) do
 
           [%{"$changeStream" => stream_opts} | _pipeline] = Keyword.get(cmd, :pipeline) # extract the change stream options
 
@@ -138,7 +138,7 @@ defmodule Mongo.Cursor do
         maxTimeMS: opts[:max_time]
       ] |> filter_nils()
 
-      with {:ok, %{"cursor" => %{ "id" => cursor_id, "nextBatch" => docs}, "ok" => ok}} when ok == 1 <- Mongo.direct_command(conn, cmd, opts) do
+      with {:ok, %{"cursor" => %{ "id" => cursor_id, "nextBatch" => docs}, "ok" => ok}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts) do
         {:ok, %{cursor_id: cursor_id, docs: docs}}
       end
 
@@ -158,7 +158,7 @@ defmodule Mongo.Cursor do
       with {:ok, %{"operationTime" => op_time,
                    "cursor" => %{"id" => new_cursor_id,
                                  "nextBatch" => docs} = cursor,
-                                 "ok" => ok}} when ok == 1 <- Mongo.direct_command(conn, get_more, opts) do
+                                 "ok" => ok}} when ok == 1 <- Mongo.exec_command(conn, get_more, opts) do
 
         old_token = change_stream(change_stream, :resume_token)
         change_stream = update_change_stream(change_stream, cursor["postBatchResumeToken"], op_time, List.last(docs))
@@ -175,7 +175,7 @@ defmodule Mongo.Cursor do
         {:error, %Mongo.Error{code: code} = not_resumable} when code == 11601 or code == 136 or code == 237 -> {:error, not_resumable}
         {:error, _error} ->
 
-          with {:ok, wire_version} <- Mongo.wire_version(conn, opts) do
+          with {:ok, wire_version} <- Mongo.wire_version(conn) do
 
             [%{"$changeStream" => stream_opts} | pipeline] = Keyword.get(aggregate_cmd, :pipeline) # extract the change stream options
 
@@ -281,7 +281,7 @@ defmodule Mongo.Cursor do
       with {:ok, %{"cursorsAlive" => [],
                    "cursorsNotFound" => [],
                    "cursorsUnknown" => [],
-                   "ok" => ok}} when ok == 1 <- Mongo.direct_command(conn, cmd, opts) do
+                   "ok" => ok}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts) do
         :ok
       end
     end

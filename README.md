@@ -21,6 +21,7 @@ for the individual options.
   * [x] Upgraded to ([DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
   * [x] Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
+  * [x] Added bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
   * [ ] Add support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
   * [ ] Add support driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
   * [ ] Add support for `op_compressed` ([See](https://github.com/mongodb/specifications/blob/master/source/compression/OP_COMPRESSED.rst))
@@ -32,13 +33,11 @@ for the individual options.
   * Connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * Streaming cursors
   * Performant ObjectID generation
-  * Follows driver specification set by 10gen
-  * Safe (by default) and unsafe writes
   * Aggregation pipeline
   * Replica sets
   * Support for SCRAM-SHA-256 (MongoDB 4.x)
   * Support for change streams api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
-
+  * Support for bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
 
 ## Data representation
 
@@ -190,6 +189,72 @@ end
 
 spawn(fn -> for_ever(top, self()) end)
 ```
+
+For more information see
+
+* [Mongo.watch_collection](https://hexdocs.pm/mongodb_driver/Mongo.html#watch_collection/5) 
+
+
+### Bulk writes
+
+The motivation for bulk writes lies in the possibility of optimization, the same operations
+to group. Here, a distinction is made between disordered and ordered bulk writes.
+In disordered, inserts, updates, and deletes are grouped as individual commands
+sent to the database. There is no influence on the order of the execution. 
+A good use case is the import of records from one CSV file. 
+The order of the inserts does not matter.
+
+For ordered bulk writers, order compliance is important to keep. 
+In this case, only the same consecutive operations are grouped.
+
+Currently, all bulk writes are optimized in memory. This is unfavorable for large bulk writes.
+In this case, one can use streaming bulk writes that only have a certain set of
+group operation in memory and when the maximum number of operations
+has been reached, operations are written to the database. The size can be specified.
+
+Using ordered bulk writes. In this example we first insert some dog's name, add an attribute `kind` 
+and change all dogs to cats. After that we delete three cats. This example would not work with 
+unordered bulk writes. 
+
+```elixir
+
+bulk = "bulk"
+       |> OrderedBulk.new()
+       |> OrderedBulk.insert_one(%{name: "Greta"})
+       |> OrderedBulk.insert_one(%{name: "Tom"})
+       |> OrderedBulk.insert_one(%{name: "Waldo"})
+       |> OrderedBulk.update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
+       |> OrderedBulk.update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
+       |> OrderedBulk.update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
+       |> OrderedBulk.update_many(%{kind: "dog"}, %{"$set": %{kind: "cat"}})
+       |> OrderedBulk.delete_one(%{kind: "cat"})
+       |> OrderedBulk.delete_one(%{kind: "cat"})
+       |> OrderedBulk.delete_one(%{kind: "cat"})
+
+result = Mongo.BulkWrite.write(:mongo, bulk, w: 1)
+```
+
+In the following example we import 1.000.000 integers into the MongoDB using the stream api:
+
+We need to create an insert operation for each number. Then we call the `Mongo.UnorderedBulk.stream`
+function to import it. This function returns a stream function which accumulate 
+all inserts operations until the limit `1000` is reached. In this case the operation group is send to
+MongoDB. So using the stream api you can reduce the memory using while 
+importing big volume of data.
+
+```elixir
+1..1_000_000 
+|> Stream.map(fn i -> Mongo.BulkOps.get_insert_one(%{number: i}) end) 
+|> Mongo.UnorderedBulk.write(:mongo, "bulk", 1_000)
+|> Stream.run()
+```
+
+For more information see and check the test units for examples.
+* [Mongo.UnorderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.UnorderedBulk.html#content) 
+* [Mongo.OrderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.OrderedBulk.html#content) 
+* [Mongo.BulkWrites](https://hexdocs.pm/mongodb_driver/Mongo.BulkWrites.html#content) 
+* [Mongo.BulkOps](https://hexdocs.pm/mongodb_driver/Mongo.BulkOps.html#content) 
+
 ### Examples
 
 Using `$and`

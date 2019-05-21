@@ -95,17 +95,15 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp tcp_connect(opts, state) do
+  defp tcp_connect(opts, s) do
+    host      = (opts[:hostname] || "localhost") |> to_charlist
+    port      = opts[:port] || 27017
+    sock_opts = [:binary, active: false, packet: :raw, nodelay: true]
+    ++ (opts[:socket_options] || [])
 
-    {host, port} = Utils.hostname_port(opts)
-    sock_opts   = [:binary, active: false, packet: :raw, nodelay: true] ++ (opts[:socket_options] || [])
+    s = Map.put(s, :host, "#{host}:#{port}")
 
-    s = case host do
-      {:local, socket} -> Map.put(state, :host, socket)
-      hostname         -> Map.put(state, :host, "#{hostname}:#{port}")
-    end
-
-    case :gen_tcp.connect(host, port, sock_opts, state.connect_timeout) do
+    case :gen_tcp.connect(host, port, sock_opts, s.connect_timeout) do
       {:ok, socket} ->
         # A suitable :buffer is only set if :recbuf is included in
         # :socket_options.
@@ -115,7 +113,7 @@ defmodule Mongo.MongoDBConnection do
 
         {:ok, %{s | connection: {:gen_tcp, socket}}}
 
-      {:error, reason} -> {:error, Mongo.Error.exception(tag: :tcp, action: "connect", reason: reason, host: state.host)}
+      {:error, reason} -> {:error, Mongo.Error.exception(tag: :tcp, action: "connect", reason: reason, host: s.host)}
     end
   end
 
@@ -241,13 +239,16 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
+  defp execute_action(:limits, _, _, state) do
+    {:ok, state.limits, state}
+  end
   defp execute_action(:wire_version, _, _, state) do
     {:ok, state.wire_version, state}
   end
   defp execute_action(:command, [cmd], opts, %{wire_version: version} = state) when version >= 6 do
 
     cmd = cmd ++ ["$db": opts[:database] || state.database,
-                  "$readPreference": [mode: update_read_preferences(opts[:slave_ok])]]
+      "$readPreference": [mode: update_read_preferences(opts[:slave_ok])]]
 
     timeout = Keyword.get(opts, :max_time, 0)
 
