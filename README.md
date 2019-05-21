@@ -21,6 +21,7 @@ for the individual options.
   * [x] Upgraded to ([DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
   * [x] Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
+  * [x] Added bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
   * [ ] Add support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
   * [ ] Add support driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
   * [ ] Add support for `op_compressed` ([See](https://github.com/mongodb/specifications/blob/master/source/compression/OP_COMPRESSED.rst))
@@ -32,13 +33,11 @@ for the individual options.
   * Connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * Streaming cursors
   * Performant ObjectID generation
-  * Follows driver specification set by 10gen
-  * Safe (by default) and unsafe writes
   * Aggregation pipeline
   * Replica sets
   * Support for SCRAM-SHA-256 (MongoDB 4.x)
   * Support for change streams api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
-
+  * Support for bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
 
 ## Data representation
 
@@ -193,7 +192,7 @@ spawn(fn -> for_ever(top, self()) end)
 
 For more information see
 
-* [Mongo.watch](https://hexdocs.pm/mongodb_driver/Mongo.Cursor.html#content) 
+* [Mongo.watch_collection](https://hexdocs.pm/mongodb_driver/Mongo.html#watch_collection/5) 
 
 
 ### Bulk writes
@@ -251,10 +250,10 @@ importing big volume of data.
 ```
 
 For more information see and check the test units for examples.
-* [Mongo.UnorderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.Cursor.html#content) 
-* [Mongo.OrderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.Cursor.html#content) 
-* [Mongo.BulkWrites](https://hexdocs.pm/mongodb_driver/Mongo.Cursor.html#content) 
-* [Mongo.BulkOps](https://hexdocs.pm/mongodb_driver/Mongo.Cursor.html#content) 
+* [Mongo.UnorderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.UnorderedBulk.html#content) 
+* [Mongo.OrderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.OrderedBulk.html#content) 
+* [Mongo.BulkWrites](https://hexdocs.pm/mongodb_driver/Mongo.BulkWrites.html#content) 
+* [Mongo.BulkOps](https://hexdocs.pm/mongodb_driver/Mongo.BulkOps.html#content) 
 
 ### Examples
 
