@@ -65,7 +65,6 @@ defmodule Mongo.BulkWritesTest do
       1000 -> BulkOps.get_delete_one(%{count: 999})
       i    -> BulkOps.get_update_one(%{count: i - 1}, %{"$set": %{count: i}})
     end)
-    |> Stream.map(fn doc -> doc end)
     |> OrderedBulk.write(top.pid, coll, 25)
     |> Stream.run()
 

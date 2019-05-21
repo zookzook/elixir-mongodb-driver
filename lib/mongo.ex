@@ -967,7 +967,7 @@ defmodule Mongo do
     def select_server(topology_pid, type, opts \\ []) do
     with {:ok, servers, slave_ok, mongos?} <- select_servers(topology_pid, type, opts) do
       if Enum.empty? servers do
-        {:ok, nil, slave_ok, mongos?}  # todo: warum wird [] zurückgeliefert?, nil wäre besser?
+        {:ok, nil, slave_ok, mongos?}
       else
         with {:ok, connection} <- servers |> Enum.take_random(1) |> Enum.at(0)
                                           |> get_connection(topology_pid) do

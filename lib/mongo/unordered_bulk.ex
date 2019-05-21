@@ -1,8 +1,8 @@
 defmodule Mongo.UnorderedBulk do
   @moduledoc"""
 
-  An unordered bulk is filled in the store with the bulk operations. These are divided into three lists (inserts, updates, deletes)
-  added. If the unordered bulk is sent to the database, the groups are written in the following order:
+  An **unordered** bulk is filled in the memeory with the bulk operations. These are divided into three lists (inserts, updates, deletes)
+  added. If the unordered bulk is written to the database, the groups are written in the following order:
 
   1. inserts
   2. updates
@@ -13,6 +13,9 @@ defmodule Mongo.UnorderedBulk do
   ## Example
 
   ```
+  alias Mongo.UnorderedBulk
+  alias Mongo.BulkWrite
+
   bulk = "bulk"
   |> UnorderedBulk.new()
   |> UnorderedBulk.insert_one(%{name: "Greta"})
@@ -39,7 +42,7 @@ defmodule Mongo.UnorderedBulk do
   |> Stream.run()
   ```
 
-  This example first generates the bulk operation by calling `get_insert_one\1`. The operation is used as a parameter in the `write\3` function.
+  This example first generates the bulk operation by calling `Mongo.BulkOps.get_insert_one\\1`. The operation is used as a parameter in the `Mongo.UnorderedBulk.write\\3` function.
   The unordered bulk was created with a buffer of 1000 operations. After 1000 operations, the
   unordered bulk is written to the database. Depending on the selected size you can control the speed and memory consumption. The higher the
   value, the faster the processing and the greater the memory consumption.
@@ -222,7 +225,8 @@ defmodule Mongo.UnorderedBulk do
   The inputs of the stream should be `Mongo.BulkOps.bulk_op`. See `Mongo.BulkOps`
   """
   @spec write(Enumerable.t(), GenServer.server, String.t, non_neg_integer, Keyword.t ) :: Enumerable.t()
-  def write(enum, top, coll, limit \\ 1000, opts \\ []) when limit > 1 do
+  def write(enum, top, coll, limit \\ 1000, opts \\ [])
+  def write(enum, top, coll, limit, opts) when limit > 1 do
     Stream.chunk_while(enum,
       {new(coll), limit - 1},
       fn
@@ -233,9 +237,9 @@ defmodule Mongo.UnorderedBulk do
         {bulk, 0} -> {:cont, bulk}
         {bulk, _} -> {:cont, BulkWrite.write(top, bulk, opts), {new(coll), limit - 1}}
     end)
-    # todo reduce to one
   end
-  ## todo limit == 0 => write direct
-  ## Stream.map(fn op -> BulkWrite.write(conn, op, opts)
+  def write(_enum, _top, _coll, limit, _opts) when limit < 1 do
+    raise(ArgumentError, "limit must be greater then 1, got: #{limit}")
+  end
 
 end

@@ -12,8 +12,8 @@
    * Travis now using the right MongoDB version
    
 * Bug Fixes
-   * added test unit for change streams
-   * removed debug code from change streams
+   * Added test unit for change streams
+   * Removed debug code from change streams
 
 ## v0.5.2
 

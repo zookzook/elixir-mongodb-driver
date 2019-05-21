@@ -11,13 +11,16 @@ defmodule Mongo.BulkOps do
   ## Example
 
   ```
-    Filestream!("large.csv")
-    |> Stream.map(&String.trim(&1))
-    |> Stream.map(&String.split(&1,","))
-    |> Stream.map(fn [firstname | [lastname | _]] -> %{firstname: firstname, lastname: lastname} end)
-    |> Stream.map(fn doc -> BulkOps.get_insert_one(doc) end)
-    |> UnorderedBulk.write(:mongo, "bulk", 1_000)
-    |> Stream.run()
+  alias Mongo.UnorderedBulk
+  alias Mongo.BulkOps
+
+  Filestream!("large.csv")
+  |> Stream.map(&String.trim(&1))
+  |> Stream.map(&String.split(&1,","))
+  |> Stream.map(fn [firstname | [lastname | _]] -> %{firstname: firstname, lastname: lastname} end)
+  |> Stream.map(fn doc -> BulkOps.get_insert_one(doc) end)
+  |> UnorderedBulk.write(:mongo, "bulk", 1_000)
+  |> Stream.run()
   ```
 
   """

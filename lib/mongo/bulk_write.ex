@@ -20,7 +20,6 @@ defmodule Mongo.BulkWrite do
   2. updates
   3. deletes
 
-
   ## Example:
 
   ```
@@ -68,11 +67,11 @@ defmodule Mongo.BulkWrite do
 
   ## Stream bulk writes
 
-  The examples shown initially filled the bulk with a few operations and then the bulk was written to the database.
+  The examples shown initially filled the bulk with a few operations and then the bulk is written to the database.
   This is all done in memory. For larger amounts of operations or imports of very long files, the main memory would
   be unnecessarily burdened. It could come to some resource problems.
 
-  For such cases you could use streams. Unordered and ordered bulk writes can also be combined with Stream.
+  For such cases you could use streams. Unordered and ordered bulk writes can also be combined with Streams.
   You set the maximum size of the bulk. Once the number of bulk operations has been reached,
   it will be sent to the database. While streaming you can limit the memory consumption regarding the current task.
 
@@ -80,7 +79,7 @@ defmodule Mongo.BulkWrite do
 
   We need to create an insert operation (`BulkOps.get_insert_one()`) for each number. Then we call the `UnorderedBulk.stream`
   function to import it. This function returns a stream function which accumulate
-  all inserts operations until the limit `1000` is reached. In this case the operation group is send to
+  all inserts operations until the limit `1000` is reached. In this case the operation group is written to
   MongoDB.
 
   ## Example
@@ -94,7 +93,7 @@ defmodule Mongo.BulkWrite do
 
   ## Benchmark
 
-  The following benchmark compares single `Mongo.insert_one()` calls with stream unordered bulk writes.
+  The following benchmark compares multiple `Mongo.insert_one()` calls with a stream using unordered bulk writes.
   Both tests inserts documents into a replica set with `w: 1`.
 
   ```
@@ -159,7 +158,8 @@ defmodule Mongo.BulkWrite do
   alias Mongo.UnorderedBulk
   alias Mongo.OrderedBulk
 
-  @max_batch_size 100_000
+  @max_batch_size 100_000   ## todo    The maxWriteBatchSize limit of a database, which indicates the maximum number of write operations permitted in a write batch, raises from 1,000 to 100,000.
+
 
   @doc """
   Executes unordered and ordered bulk writes.
@@ -179,14 +179,16 @@ defmodule Mongo.BulkWrite do
   If a group (inserts, updates or deletes) exceeds the limit `maxWriteBatchSize` it will be split into chunks.
   Everything is done in memory, so this use case is limited by memory. A better approach seems to use streaming bulk writes.
   """
-  @spec write(GenServer.server, UnorderedBulk.t, Keyword.t) :: Keyword.t
+  @spec write(GenServer.server, (UnorderedBulk.t | OrderedBulk.t), Keyword.t) :: Keyword.t
   def write(topology_pid, %UnorderedBulk{} = bulk, opts) do
 
     write_concern = write_concern(opts)
     with {:ok, conn, _, _} <- Mongo.select_server(topology_pid, :write, opts) do
       one_bulk_write(conn, bulk, write_concern, opts)
     end
+
   end
+
   def write(topology_pid, %OrderedBulk{coll: coll, ops: ops}, opts) do
 
     write_concern = write_concern(opts)
@@ -253,12 +255,12 @@ defmodule Mongo.BulkWrite do
   #
   # The function returns a keyword list with the results of each operation group:
   # For the details see https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#results
+  #
   defp one_bulk_write(conn, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, write_concern, opts) do
 
     with {_, {inserts, ids}}                           <- one_bulk_write_operation(conn, :insert, coll, inserts, write_concern, opts),
          {_, {matched, modified, upserts, upsert_ids}} <- one_bulk_write_operation(conn, :update, coll, updates, write_concern, opts),
          {_, deletes}                                  <- one_bulk_write_operation(conn, :delete, coll, deletes, write_concern, opts) do
-
 
       %{
         acknowledged: acknowledged(write_concern),
@@ -302,9 +304,11 @@ defmodule Mongo.BulkWrite do
   end
   defp get_op_sequence(_coll, [], acc), do: acc
   defp get_op_sequence(coll, ops, acc) do
+
     [{kind, _doc} | _rest] = ops
     {docs, rest} = find_max_sequence(kind, ops)
     get_op_sequence(coll, rest, [{kind, docs} | acc])
+
   end
 
   ###
@@ -324,9 +328,6 @@ defmodule Mongo.BulkWrite do
   defp find_max_sequence(_kind, rest, acc) do
     {acc, rest}
   end
-
-  defp filter_upsert_ids(nil), do: []
-  defp filter_upsert_ids(upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
 
   ##
   # collects the returns values for each operation
@@ -366,6 +367,10 @@ defmodule Mongo.BulkWrite do
     |> Enum.reduce(0, fn x, acc -> x + acc end)
 
   end
+
+  defp filter_upsert_ids(nil), do: []
+  defp filter_upsert_ids(upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
+
 
   defp run_commands(conn, {cmds, ids}, opts) do
     {Enum.map(cmds, fn cmd -> Mongo.direct_command(conn, cmd, opts) end), ids}
@@ -448,6 +453,5 @@ defmodule Mongo.BulkWrite do
     ] |> filter_nils()
 
   end
-
 
 end
