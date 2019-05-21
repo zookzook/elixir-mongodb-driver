@@ -53,7 +53,6 @@ defmodule Mongo do
   alias Mongo.TopologyDescription
   alias Mongo.Topology
   alias Mongo.UrlParser
-  alias Mongo.UnorderedBulk
 
   @timeout 15000 # 5000
 
@@ -290,7 +289,7 @@ defmodule Mongo do
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, cmd, opts) do
+         {:ok, doc} <- exec_command(conn, cmd, opts) do
         {:ok, doc["value"]}
     end
 
@@ -333,7 +332,7 @@ defmodule Mongo do
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, cmd, opts), do: {:ok, doc["value"]}
+         {:ok, doc} <- exec_command(conn, cmd, opts), do: {:ok, doc["value"]}
   end
 
   defp should_return_new(:after), do: true
@@ -364,7 +363,7 @@ defmodule Mongo do
     opts = Keyword.drop(opts, ~w(max_time projection sort collation)a)
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, cmd, opts), do: {:ok, doc["value"]}
+         {:ok, doc} <- exec_command(conn, cmd, opts), do: {:ok, doc["value"]}
   end
 
   @doc false
@@ -468,7 +467,7 @@ defmodule Mongo do
 
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
-         {:ok, doc} <- direct_command(conn, cmd, opts),
+         {:ok, doc} <- exec_command(conn, cmd, opts),
          do: {:ok, doc["values"]}
   end
 
@@ -567,13 +566,13 @@ defmodule Mongo do
     rp_opts = [read_preference: Keyword.get(opts, :read_preference, rp)]
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, rp_opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
-         do: direct_command(conn, cmd, opts)
+         do: exec_command(conn, cmd, opts)
   end
 
   @doc false
   ## refactor: exec_command
-  @spec direct_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
-  def direct_command(conn, cmd, opts) do
+  @spec exec_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
+  def exec_command(conn, cmd, opts) do
     action = %Query{action: :command}
 
     with {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
@@ -588,10 +587,22 @@ defmodule Mongo do
   @doc """
   Returns the current wire version.
   """
-  def wire_version(conn, opts \\ []) do
+  @spec wire_version(pid) :: {:ok, integer} | {:error, Mongo.Error.t}
+  def wire_version(conn) do
     cmd = %Query{action: :wire_version}
-    with {:ok, _cmd, version} <- DBConnection.execute(conn, cmd, %{}, defaults(opts)) do
+    with {:ok, _cmd, version} <- DBConnection.execute(conn, cmd, %{}, defaults([])) do
       {:ok, version}
+    end
+  end
+
+  @doc """
+  Returns the limits of the database.
+  """
+  @spec limits(pid) :: {:ok, BSON.document} | {:error, Mongo.Error.t}
+  def limits(conn) do
+    cmd = %Query{action: :limits}
+    with {:ok, _cmd, limits} <- DBConnection.execute(conn, cmd, %{}, defaults([])) do
+      {:ok, limits}
     end
   end
 
@@ -641,7 +652,7 @@ defmodule Mongo do
     ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, cmd, opts) do
+         {:ok, doc} <- exec_command(conn, cmd, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -695,7 +706,7 @@ defmodule Mongo do
     ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, cmd, opts) do
+         {:ok, doc} <- exec_command(conn, cmd, opts) do
       case doc do
         %{"writeErrors" => _} ->  {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -766,7 +777,7 @@ defmodule Mongo do
             ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- direct_command(conn, cmd, opts) do
+         {:ok, doc} <- exec_command(conn, cmd, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         %{ "ok" => _ok, "n" => n } ->
@@ -886,7 +897,7 @@ defmodule Mongo do
             ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc}        <- direct_command(conn, cmd, opts) do
+         {:ok, doc}        <- exec_command(conn, cmd, opts) do
 
       case doc do
 

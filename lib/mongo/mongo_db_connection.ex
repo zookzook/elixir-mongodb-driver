@@ -239,6 +239,9 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
+  defp execute_action(:limits, _, _, state) do
+    {:ok, state.limits, state}
+  end
   defp execute_action(:wire_version, _, _, state) do
     {:ok, state.wire_version, state}
   end

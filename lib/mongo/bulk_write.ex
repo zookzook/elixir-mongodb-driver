@@ -158,9 +158,6 @@ defmodule Mongo.BulkWrite do
   alias Mongo.UnorderedBulk
   alias Mongo.OrderedBulk
 
-  @max_batch_size 100_000   ## todo    The maxWriteBatchSize limit of a database, which indicates the maximum number of write operations permitted in a write batch, raises from 1,000 to 100,000.
-
-
   @doc """
   Executes unordered and ordered bulk writes.
 
@@ -204,10 +201,13 @@ defmodule Mongo.BulkWrite do
       insertedIds: [],
     }
 
-    with {:ok, conn, _, _} <- Mongo.select_server(topology_pid, :write, opts) do
+    with {:ok, conn, _, _} <- Mongo.select_server(topology_pid, :write, opts),
+         {:ok, limits} <- Mongo.limits(conn),
+         max_batch_size <- limits.max_write_batch_size do
 
-      get_op_sequence(coll, ops)
-      |> Enum.map(fn {cmd, docs} -> one_bulk_write_operation(conn, cmd, coll, docs, write_concern, opts) end)
+      ops
+      |> get_op_sequence()
+      |> Enum.map(fn {cmd, docs} -> one_bulk_write_operation(conn, cmd, coll, docs, write_concern, max_batch_size, opts) end)
       |> Enum.reduce(empty, fn
         {cmd, {count, ids}}, acc         -> merge(cmd, count, ids, acc)
         {cmd, {mat, mod, ups, ids}}, acc -> merge(cmd, mat, mod, ups, ids, acc)
@@ -258,9 +258,11 @@ defmodule Mongo.BulkWrite do
   #
   defp one_bulk_write(conn, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, write_concern, opts) do
 
-    with {_, {inserts, ids}}                           <- one_bulk_write_operation(conn, :insert, coll, inserts, write_concern, opts),
-         {_, {matched, modified, upserts, upsert_ids}} <- one_bulk_write_operation(conn, :update, coll, updates, write_concern, opts),
-         {_, deletes}                                  <- one_bulk_write_operation(conn, :delete, coll, deletes, write_concern, opts) do
+    with {:ok, limits} <- Mongo.limits(conn),
+         max_batch_size <- limits.max_write_batch_size,
+         {_, {inserts, ids}}                           <- one_bulk_write_operation(conn, :insert, coll, inserts, write_concern, max_batch_size, opts),
+         {_, {matched, modified, upserts, upsert_ids}} <- one_bulk_write_operation(conn, :update, coll, updates, write_concern, max_batch_size, opts),
+         {_, deletes}                                  <- one_bulk_write_operation(conn, :delete, coll, deletes, write_concern, max_batch_size, opts) do
 
       %{
         acknowledged: acknowledged(write_concern),
@@ -278,8 +280,8 @@ defmodule Mongo.BulkWrite do
   ###
   # Executes the command `cmd` and collects the result.
   #
-  defp one_bulk_write_operation(conn, cmd, coll, docs, write_concern, opts) do
-    with result <- conn |> run_commands(get_cmds(cmd, coll, docs, write_concern, opts), opts) |> collect(cmd) do
+  defp one_bulk_write_operation(conn, cmd, coll, docs, write_concern, max_batch_size, opts) do
+    with result <- conn |> run_commands(get_cmds(cmd, coll, docs, write_concern, max_batch_size, opts), opts) |> collect(cmd) do
       {cmd, result}
     end
   end
@@ -287,9 +289,9 @@ defmodule Mongo.BulkWrite do
   ##
   # Converts the list of operations into insert/update/delete commands
   #
-  defp get_cmds(:insert, coll, docs, write_concern, opts), do: get_insert_cmds(coll, docs, write_concern, opts)
-  defp get_cmds(:update, coll, docs, write_concern, opts), do: get_update_cmds(coll, docs, write_concern, opts)
-  defp get_cmds(:delete, coll, docs, write_concern, opts), do: get_delete_cmds(coll, docs, write_concern, opts)
+  defp get_cmds(:insert, coll, docs, write_concern, max_batch_size, opts), do: get_insert_cmds(coll, docs, write_concern, max_batch_size, opts)
+  defp get_cmds(:update, coll, docs, write_concern, max_batch_size, opts), do: get_update_cmds(coll, docs, write_concern, max_batch_size, opts)
+  defp get_cmds(:delete, coll, docs, write_concern, max_batch_size, opts), do: get_delete_cmds(coll, docs, write_concern, max_batch_size, opts)
 
   defp acknowledged(%{w: w}) when w > 0, do: true
   defp acknowledged(%{}), do: false
@@ -299,15 +301,15 @@ defmodule Mongo.BulkWrite do
   #
   # [inserts, inserts, updates] -> [[inserts, inserts],[updates]]
   #
-  defp get_op_sequence(coll, ops) do
-    get_op_sequence(coll, ops, [])
+  defp get_op_sequence(ops) do
+    get_op_sequence(ops, [])
   end
-  defp get_op_sequence(_coll, [], acc), do: acc
-  defp get_op_sequence(coll, ops, acc) do
+  defp get_op_sequence([], acc), do: acc
+  defp get_op_sequence(ops, acc) do
 
     [{kind, _doc} | _rest] = ops
-    {docs, rest} = find_max_sequence(kind, ops)
-    get_op_sequence(coll, rest, [{kind, docs} | acc])
+    {docs, rest}           = find_max_sequence(kind, ops)
+    get_op_sequence(rest, [{kind, docs} | acc])
 
   end
 
@@ -371,20 +373,19 @@ defmodule Mongo.BulkWrite do
   defp filter_upsert_ids(nil), do: []
   defp filter_upsert_ids(upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
 
-
   defp run_commands(conn, {cmds, ids}, opts) do
-    {Enum.map(cmds, fn cmd -> Mongo.direct_command(conn, cmd, opts) end), ids}
+    {Enum.map(cmds, fn cmd -> Mongo.exec_command(conn, cmd, opts) end), ids}
   end
   defp run_commands(conn, cmds, opts) do
-    Enum.map(cmds, fn cmd -> Mongo.direct_command(conn, cmd, opts) end)
+    Enum.map(cmds, fn cmd -> Mongo.exec_command(conn, cmd, opts) end)
   end
 
-  defp get_insert_cmds(coll, docs, write_concern, _opts) do
+  defp get_insert_cmds(coll, docs, write_concern, max_batch_size, _opts) do
 
     {ids, docs} = assign_ids(docs)
 
     cmds = docs
-           |> Enum.chunk_every(@max_batch_size)
+           |> Enum.chunk_every(max_batch_size)
            |> Enum.map(fn inserts -> get_insert_cmd(coll, inserts, write_concern) end)
     {cmds, ids}
 
@@ -398,10 +399,10 @@ defmodule Mongo.BulkWrite do
 
   end
 
-  defp get_delete_cmds(coll, docs, write_concern, opts) do
+  defp get_delete_cmds(coll, docs, write_concern, max_batch_size, opts) do
 
     docs
-    |> Enum.chunk_every(@max_batch_size)
+    |> Enum.chunk_every(max_batch_size)
     |> Enum.map(fn deletes -> get_delete_cmd(coll, deletes, write_concern, opts) end)
 
   end
@@ -423,10 +424,10 @@ defmodule Mongo.BulkWrite do
 
   end
 
-  defp get_update_cmds(coll, docs, write_concern, opts) do
+  defp get_update_cmds(coll, docs, write_concern, max_batch_size, opts) do
 
     docs
-    |> Enum.chunk_every(@max_batch_size)
+    |> Enum.chunk_every(max_batch_size)
     |> Enum.map(fn updates -> get_update_cmd(coll, updates, write_concern, opts) end)
 
   end
