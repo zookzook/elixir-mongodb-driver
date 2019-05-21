@@ -52,7 +52,6 @@ defmodule Mongo.UnorderedBulk do
   alias Mongo.BulkWrite
 
   import Mongo.BulkOps
-  import Mongo.Utils
 
   @type t :: %__MODULE__{
                coll: String.t,

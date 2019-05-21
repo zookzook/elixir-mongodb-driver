@@ -15,7 +15,7 @@ end
 defimpl DBConnection.Query, for: Mongo.Query do
   def parse(query, _opts), do: query
   def describe(query, _opts), do: query
-  def encode(query, params, _opts), do: params
+  def encode(_query, params, _opts), do: params
   def decode(_query, :ok, _opts), do: :ok
   def decode(_query, wire_version, _opts) when is_integer(wire_version), do: wire_version
   def decode(_query, reply, _opts), do: reply

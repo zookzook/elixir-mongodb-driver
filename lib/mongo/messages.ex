@@ -133,7 +133,7 @@ defmodule Mongo.Messages do
       BSON.Encoder.document(query),
       select]
   end
-  defp encode_op(op_msg(flags: flags, sections: sections)) do
+  defp encode_op(op_msg(flags: _flags, sections: sections)) do
     # todo: flags encoding
     [<<0::int32>> | encode_sections(sections)]
   end
