@@ -252,7 +252,7 @@ importing big volume of data.
 For more information see and check the test units for examples.
 * [Mongo.UnorderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.UnorderedBulk.html#content) 
 * [Mongo.OrderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.OrderedBulk.html#content) 
-* [Mongo.BulkWrites](https://hexdocs.pm/mongodb_driver/Mongo.BulkWrites.html#content) 
+* [Mongo.BulkWrite](https://hexdocs.pm/mongodb_driver/Mongo.BulkWrite.html#content) 
 * [Mongo.BulkOps](https://hexdocs.pm/mongodb_driver/Mongo.BulkOps.html#content) 
 
 ### Examples
