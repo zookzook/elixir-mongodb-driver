@@ -144,7 +144,7 @@ defmodule Mongo.MongoDBConnection do
       _              -> "??"
     end
 
-    [architecture, name | _rest] = String.split(to_string(:erlang.system_info(:system_architecture)), "-")
+    {architecture, name} = get_architecture()
 
     version = case :os.version() do
       {one, two, tree} -> to_string(one) <> "." <> to_string(two) <> "." <> to_string(tree)
@@ -170,6 +170,15 @@ defmodule Mongo.MongoDBConnection do
       },
       platform: plattform
     }
+  end
+
+  defp get_architecture() do
+    case String.split(to_string(:erlang.system_info(:system_architecture)), "-") do
+      [architecture, name | _rest] -> {architecture, name}
+      ["win32"]                    -> {"win32", "Windows"}
+      [one]                        -> {"??", one}
+      []                           -> {"??", "??"}
+    end
   end
 
   defp pretty_name("apple"), do: "Mac OS X"

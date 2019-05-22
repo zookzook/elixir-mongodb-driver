@@ -1,4 +1,9 @@
-## v0.5.4
+## 0.5.5
+
+* Bug Fixes
+    * Fixed a match error when using Windows OS
+    
+## 0.5.4
 
 * Enhancements
    * The driver provides now client metadata 
@@ -9,7 +14,7 @@
    * Merged changes from https://github.com/ankhers/mongodb/pull/283
    * Merged changes from https://github.com/ankhers/mongodb/pull/281
 
-## v0.5.3
+## 0.5.3
 
 * Enhancements
    * Travis now using the right MongoDB version
@@ -18,14 +23,14 @@
    * Added test unit for change streams
    * Removed debug code from change streams
 
-## v0.5.2
+## 0.5.2
 
 * Enhancements
   * Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
   * Fixed change streams in case of error codes: 11601, 136 and 237 from resuming
   * Reorganized error handling   
   
-## v0.5.1
+## 0.5.1
 
 * Enhancements
   * Upgraded to DBConnection 2.0.6
@@ -36,7 +41,7 @@
   * Add support for MongoDB 3.6 collection [Change Streams](https://docs.mongodb.com/manual/changeStreams/)
   * Ass support for SCRAM-SHA-256 (MongoDB 4.x)
 
-## v0.4.8-dev
+## 0.4.8-dev
 
 * Enhancements
   * Added hostname and port to exceptions
@@ -49,20 +54,20 @@
   * Properly parse write concern for URL
   * Properly follow read preference for `secondary_preferred`
 
-## v0.4.7
+## 0.4.7
 
 * Enhancements
   * Added 4.0 to supported versions
   * Initial support for mongodb+srv URLs
   * Support for Decimal128
 
-## v0.4.6
+## 0.4.6
 
 * Enhancements
   * Added `:connect_timout_ms` to `Mongo.start_link/1`
   * Reorganized documentation
 
-## v0.4.5 (2018-04-08)
+## 0.4.5 (2018-04-08)
 
 * Enhancements
   * Should now be able to send a query to your server before the connection
@@ -71,7 +76,7 @@
 * Bug Fixes
   * Should actually be able to query for longer than 5 seconds
 
-## v0.4.4 (2018-02-09)
+## 0.4.4 (2018-02-09)
 
 * Enhancements
   * Added support for using a mongo url via the `:url` key
@@ -86,7 +91,7 @@
   * Fixed an issue where our monitors would become empty, preventing the driver
     from reconnecting to a downed database
 
-## v0.4.3 (2017-09-16)
+## 0.4.3 (2017-09-16)
 
 * Enhancements
   * Send TLS server name indication (SNI) if none is set in the `:ssl_opts`
@@ -98,29 +103,29 @@
   * No longer attempting to authenticate against arbiter nodes
   * Prevent monitor errors if you have stopped the mongo process
 
-## v0.4.2 (2017-08-28)
+## 0.4.2 (2017-08-28)
 
 * Bug fixes
   * Fix application crash when a replica set member goes offline
   * Fix application crash on start when a replica set member is offline
 
-## v0.4.1 (2017-08-09)
+## 0.4.1 (2017-08-09)
 
 * Bug fixes
   * Monitors no longer use a pool
   * Can now connect to a Mongo instance using a CNAME
   * Pass options through Mongo.aggregate/4
 
-## v0.4.0 (2017-06-07)
+## 0.4.0 (2017-06-07)
 
 * Replica Set Support
 
-## v0.3.0 (2017-05-11)
+## 0.3.0 (2017-05-11)
 
 * Breaking changes
   * Remove `BSON.DateTime` and replace it with native Elixir `DateTime`
 
-## v0.2.1 (2017-05-08)
+## 0.2.1 (2017-05-08)
 
 * Enhancements
   * SSL support
@@ -129,7 +134,7 @@
 * Changes
   * Requires Elixir ~> 1.3
 
-## v0.2.0 (2016-11-11)
+## 0.2.0 (2016-11-11)
 
 * Enhancements
   * Add `BSON.ObjectID.encode!/1` and `BSON.ObjectID.decode!/1`
@@ -149,7 +154,7 @@
 * Breaking changes
   * Switched to using `db_connection` library, see the current docs for changes
 
-## v0.1.1 (2015-12-17)
+## 0.1.1 (2015-12-17)
 
 * Enhancements
   * Add `BSON.DateTime.from_datetime/1`
@@ -158,6 +163,6 @@
   * Fix timestamp epoch in generated object ids
   * Fix `Mongo.run_command/3` to accept errors without code
 
-## v0.1.0 (2015-08-25)
+## 0.1.0 (2015-08-25)
 
 Initial release
