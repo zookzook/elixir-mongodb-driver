@@ -50,7 +50,7 @@ defmodule Mongodb.Mixfile do
   defp docs() do
     [main: "readme",
      extras: ["README.md"],
-     source_ref: "v#{@version}",
+     source_ref: "#{@version}",
      source_url: "https://github.com/zookzook/elixir-mongodb-driver"]
   end
 
