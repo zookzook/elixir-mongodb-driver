@@ -62,3 +62,33 @@ defmodule Mongo.UpdateResult do
 
   defstruct [acknowledged: true, matched_count: 0, modified_count: 0, upserted_ids: []]
 end
+
+defmodule Mongo.BulkWriteResult do
+
+  @moduledoc """
+  The successful result struct of `Mongo.BulkWrite.write`. Its fields are:
+
+    * `:acknowledged` - Write-concern
+    * `:matched_count` - Number of matched documents
+    * `:modified_count` - Number of modified documents
+    * `:inserted_count` - Number of inserted documents
+    * `:deleted_count` - Number of deleted documents
+    * `:upserted_count` - Number of upserted documents
+    * `:upserted_ids` - If the operation was an upsert, the upserted ids
+    * `:inserted_ids` - If the operation was an insert, the inserted ids
+  """
+
+  @type t :: %__MODULE__{
+               acknowledged: boolean,
+               matched_count: non_neg_integer,
+               modified_count: non_neg_integer,
+               inserted_count: non_neg_integer,
+               deleted_count: non_neg_integer,
+               upserted_count: non_neg_integer,
+               upserted_ids: list(BSON.ObjectId.t),
+               inserted_ids: list(BSON.ObjectId.t)
+             }
+
+  defstruct [acknowledged: true, matched_count: 0, modified_count: 0, inserted_count: 0, deleted_count: 0, upserted_count: 0, inserted_ids: [], upserted_ids: []]
+
+end
