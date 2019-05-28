@@ -5,6 +5,7 @@ defmodule Mongo.BulkWritesTest do
   alias Mongo.OrderedBulk
   alias Mongo.BulkWrite
   alias Mongo.BulkOps
+  alias Mongo.BulkWriteResult
 
   setup_all do
     assert {:ok, pid} = Mongo.TestConnection.connect
@@ -26,9 +27,9 @@ defmodule Mongo.BulkWritesTest do
            |> UnorderedBulk.delete_one(%{kind: "dog"})
            |> UnorderedBulk.delete_one(%{kind: "dog"})
 
-    result = BulkWrite.write(top.pid, bulk, w: 1)
+    %BulkWriteResult{} = result = BulkWrite.write(top.pid, bulk, w: 1)
 
-    assert %{:insertedCount => 3, :matchedCount => 3, :deletedCount => 3 } ==  Map.take(result, [:insertedCount, :matchedCount, :deletedCount])
+    assert %{:inserted_count => 3, :matched_count => 3, :deleted_count => 3 } ==  Map.take(result, [:inserted_count, :matched_count, :deleted_count])
     assert {:ok, 0} == Mongo.count(top.pid, coll, %{})
 
   end
@@ -49,9 +50,9 @@ defmodule Mongo.BulkWritesTest do
            |> OrderedBulk.delete_one(%{kind: "cat"})
            |> OrderedBulk.delete_one(%{kind: "cat"})
 
-    result = BulkWrite.write(top.pid, bulk, w: 1)
+    %BulkWriteResult{} = result = BulkWrite.write(top.pid, bulk, w: 1)
 
-    assert %{:insertedCount => 3, :matchedCount => 6, :deletedCount => 3 } ==  Map.take(result, [:insertedCount, :matchedCount, :deletedCount])
+    assert %{:inserted_count => 3, :matched_count => 6, :deleted_count => 3 } ==  Map.take(result, [:inserted_count, :matched_count, :deleted_count])
     assert {:ok, 0} == Mongo.count(top.pid, coll, %{})
 
   end
@@ -85,9 +86,9 @@ defmodule Mongo.BulkWritesTest do
            |> UnorderedBulk.delete_one(%{kind: "dog"})
            |> UnorderedBulk.delete_one(%{kind: "dog"})
 
-    result = BulkWrite.write(top.pid, bulk, w: 1)
+    %BulkWriteResult{} = result = BulkWrite.write(top.pid, bulk, w: 1)
 
-    assert %{:upsertedCount => 3, :matchedCount => 1, :deletedCount => 3} ==  Map.take(result, [:upsertedCount, :matchedCount, :deletedCount])
+    assert %{:upserted_count => 3, :matched_count => 1, :deleted_count => 3} ==  Map.take(result, [:upserted_count, :matched_count, :deleted_count])
     assert {:ok, 0} == Mongo.count(top.pid, coll, %{})
 
   end
@@ -106,9 +107,9 @@ defmodule Mongo.BulkWritesTest do
            |> OrderedBulk.delete_one(%{kind: "dog"})
            |> OrderedBulk.delete_one(%{kind: "dog"})
 
-    result = BulkWrite.write(top.pid, bulk, w: 1)
+    %BulkWriteResult{} = result = BulkWrite.write(top.pid, bulk, w: 1)
 
-    assert %{:upsertedCount => 3, :matchedCount => 2, :deletedCount => 3, :modifiedCount => 1} ==  Map.take(result, [:upsertedCount, :matchedCount, :deletedCount, :modifiedCount])
+    assert %{:upserted_count => 3, :matched_count => 2, :deleted_count => 3, :modified_count => 1} ==  Map.take(result, [:upserted_count, :matched_count, :deleted_count, :modified_count])
     assert {:ok, 0} == Mongo.count(top.pid, coll, %{})
 
   end

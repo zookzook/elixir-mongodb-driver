@@ -157,6 +157,7 @@ defmodule Mongo.BulkWrite do
   import Mongo.Utils
   alias Mongo.UnorderedBulk
   alias Mongo.OrderedBulk
+  alias Mongo.BulkWriteResult
 
   @doc """
   Executes unordered and ordered bulk writes.
@@ -176,7 +177,7 @@ defmodule Mongo.BulkWrite do
   If a group (inserts, updates or deletes) exceeds the limit `maxWriteBatchSize` it will be split into chunks.
   Everything is done in memory, so this use case is limited by memory. A better approach seems to use streaming bulk writes.
   """
-  @spec write(GenServer.server, (UnorderedBulk.t | OrderedBulk.t), Keyword.t) :: Keyword.t
+  @spec write(GenServer.server, (UnorderedBulk.t | OrderedBulk.t), Keyword.t) :: Mongo.BulkWriteResult.t
   def write(topology_pid, %UnorderedBulk{} = bulk, opts) do
 
     write_concern = write_concern(opts)
@@ -190,16 +191,7 @@ defmodule Mongo.BulkWrite do
 
     write_concern = write_concern(opts)
 
-    empty = %{
-      acknowledged: acknowledged(write_concern),
-      insertedCount: 0,
-      matchedCount: 0,
-      deletedCount: 0,
-      upsertedCount: 0,
-      modifiedCount: 0,
-      upsertedIds: [],
-      insertedIds: [],
-    }
+    empty = %BulkWriteResult{acknowledged: acknowledged(write_concern)}
 
     with {:ok, conn, _, _} <- Mongo.select_server(topology_pid, :write, opts),
          {:ok, limits} <- Mongo.limits(conn),
@@ -217,21 +209,21 @@ defmodule Mongo.BulkWrite do
     end
   end
 
-  defp merge(:insert, count, ids, %{:insertedCount => value, :insertedIds => current_ids} = result) do
-    %{result | insertedCount: value + count, insertedIds: current_ids ++ ids}
+  defp merge(:insert, count, ids, %BulkWriteResult{:inserted_count => value, :inserted_ids => current_ids} = result) do
+    %BulkWriteResult{result | inserted_count: value + count, inserted_ids: current_ids ++ ids}
   end
   defp merge(:update, matched, modified, upserts, ids,
-                      %{:matchedCount => matched_count,
-                       :modifiedCount => modified_count,
-                       :upsertedCount => upserted_count,
-                       :upsertedIds => current_ids} = result) do
-    %{result | matchedCount: matched_count + matched,
-               modifiedCount: modified_count + modified,
-               upsertedCount: upserted_count + upserts,
-               upsertedIds: current_ids ++ ids}
+                      %BulkWriteResult{:matched_count => matched_count,
+                       :modified_count => modified_count,
+                       :upserted_count => upserted_count,
+                       :upserted_ids => current_ids} = result) do
+    %BulkWriteResult{result | matched_count: matched_count + matched,
+               modified_count: modified_count + modified,
+               upserted_count: upserted_count + upserts,
+               upserted_ids: current_ids ++ ids}
   end
-  defp merge(:delete, count, %{:deletedCount => value} = result) do
-    %{result | deletedCount: value + count}
+  defp merge(:delete, count, %BulkWriteResult{:deleted_count => value} = result) do
+    %BulkWriteResult{result | deleted_count: value + count}
   end
   defp merge(_other, _count, result), do: result
 
@@ -264,15 +256,15 @@ defmodule Mongo.BulkWrite do
          {_, {matched, modified, upserts, upsert_ids}} <- one_bulk_write_operation(conn, :update, coll, updates, write_concern, max_batch_size, opts),
          {_, deletes}                                  <- one_bulk_write_operation(conn, :delete, coll, deletes, write_concern, max_batch_size, opts) do
 
-      %{
+      %BulkWriteResult{
         acknowledged: acknowledged(write_concern),
-        insertedCount: inserts,
-        insertedIds: ids,
-        matchedCount: matched,
-        deletedCount: deletes,
-        modifiedCount: modified,
-        upsertedCount: upserts,
-        upsertedIds: upsert_ids
+        inserted_count: inserts,
+        inserted_ids: ids,
+        matched_count: matched,
+        deleted_count: deletes,
+        modified_count: modified,
+        upserted_count: upserts,
+        upserted_ids: upsert_ids
       }
     end
   end
