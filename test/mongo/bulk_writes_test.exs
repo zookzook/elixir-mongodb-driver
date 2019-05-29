@@ -114,4 +114,34 @@ defmodule Mongo.BulkWritesTest do
 
   end
 
+  test "create one small document and one large 16mb document", top do
+    coll = unique_name()
+    max_n = (16*1024*1024) - 44 # 44 bytes for 'key: "big" and v:'
+
+
+    a_line_1k = Enum.reduce(1..1_024, "", fn _, acc -> acc <> "A" end)
+    a_line_1m = Enum.reduce(1..1_024, "", fn _, acc -> acc <> a_line_1k end)
+    a_line_16m = String.slice(Enum.reduce(1..16, "", fn _, acc -> acc <> a_line_1m end), 0..max_n)
+
+    b_line_1k = Enum.reduce(1..1_024, "", fn _, acc -> acc <> "B" end)
+    b_line_1m = Enum.reduce(1..1_024, "", fn _, acc -> acc <> b_line_1k end)
+    b_line_16m = String.slice(Enum.reduce(1..15, "", fn _, acc -> acc <> b_line_1m end), 0..max_n)
+
+    bulk = coll
+           |> OrderedBulk.new()
+           |> OrderedBulk.insert_one(%{v: a_line_1k, key: "small"})
+           |> OrderedBulk.insert_one(%{v: a_line_16m, key: "big"})
+           |> OrderedBulk.update_one(%{key: "small"}, %{"$set": %{v: b_line_1k}})
+           |> OrderedBulk.update_one(%{key: "big"}, %{"$set": %{v: b_line_16m}})
+           |> OrderedBulk.delete_one(%{key: "small"})
+           |> OrderedBulk.delete_one(%{key: "big"})
+
+    %BulkWriteResult{} = result = BulkWrite.write(top.pid, bulk, w: 1)
+
+    assert %{:matched_count => 2, :deleted_count => 2, :modified_count => 2} ==  Map.take(result, [:matched_count, :deleted_count, :modified_count])
+    assert {:ok, 0} == Mongo.count(top.pid, coll, %{})
+
+  end
+
+
 end
