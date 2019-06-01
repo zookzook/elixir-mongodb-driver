@@ -200,32 +200,9 @@ defmodule Mongo.BulkWrite do
       ops
       |> get_op_sequence()
       |> Enum.map(fn {cmd, docs} -> one_bulk_write_operation(conn, cmd, coll, docs, write_concern, max_batch_size, opts) end)
-      |> Enum.reduce(empty, fn
-        {cmd, {count, ids}}, acc         -> merge(cmd, count, ids, acc)
-        {cmd, {mat, mod, ups, ids}}, acc -> merge(cmd, mat, mod, ups, ids, acc)
-        {cmd, count}, acc                -> merge(cmd, count, acc)
-
-      end)
+      |> BulkWriteResult.reduce(empty)
     end
   end
-
-  defp merge(:insert, count, ids, %BulkWriteResult{:inserted_count => value, :inserted_ids => current_ids} = result) do
-    %BulkWriteResult{result | inserted_count: value + count, inserted_ids: current_ids ++ ids}
-  end
-  defp merge(:update, matched, modified, upserts, ids,
-                      %BulkWriteResult{:matched_count => matched_count,
-                       :modified_count => modified_count,
-                       :upserted_count => upserted_count,
-                       :upserted_ids => current_ids} = result) do
-    %BulkWriteResult{result | matched_count: matched_count + matched,
-               modified_count: modified_count + modified,
-               upserted_count: upserted_count + upserts,
-               upserted_ids: current_ids ++ ids}
-  end
-  defp merge(:delete, count, %BulkWriteResult{:deleted_count => value} = result) do
-    %BulkWriteResult{result | deleted_count: value + count}
-  end
-  defp merge(_other, _count, result), do: result
 
   ##
   # returns the current write concerns from `opts`
@@ -252,20 +229,12 @@ defmodule Mongo.BulkWrite do
 
     with {:ok, limits} <- Mongo.limits(conn),
          max_batch_size <- limits.max_write_batch_size,
-         {_, {inserts, ids}}                           <- one_bulk_write_operation(conn, :insert, coll, inserts, write_concern, max_batch_size, opts),
-         {_, {matched, modified, upserts, upsert_ids}} <- one_bulk_write_operation(conn, :update, coll, updates, write_concern, max_batch_size, opts),
-         {_, deletes}                                  <- one_bulk_write_operation(conn, :delete, coll, deletes, write_concern, max_batch_size, opts) do
+         insert_result <- one_bulk_write_operation(conn, :insert, coll, inserts, write_concern, max_batch_size, opts),
+         update_result <- one_bulk_write_operation(conn, :update, coll, updates, write_concern, max_batch_size, opts),
+         delete_result <- one_bulk_write_operation(conn, :delete, coll, deletes, write_concern, max_batch_size, opts) do
 
-      %BulkWriteResult{
-        acknowledged: acknowledged(write_concern),
-        inserted_count: inserts,
-        inserted_ids: ids,
-        matched_count: matched,
-        deleted_count: deletes,
-        modified_count: modified,
-        upserted_count: upserts,
-        upserted_ids: upsert_ids
-      }
+      [insert_result, update_result, delete_result]
+      |> BulkWriteResult.reduce(%BulkWriteResult{acknowledged: acknowledged(write_concern)})
     end
   end
 
@@ -274,7 +243,7 @@ defmodule Mongo.BulkWrite do
   #
   defp one_bulk_write_operation(conn, cmd, coll, docs, write_concern, max_batch_size, opts) do
     with result <- conn |> run_commands(get_cmds(cmd, coll, docs, write_concern, max_batch_size, opts), opts) |> collect(cmd) do
-      {cmd, result}
+      result
     end
   end
 
@@ -330,35 +299,34 @@ defmodule Mongo.BulkWrite do
   #
   defp collect({docs, ids}, :insert) do
 
-    {docs
-     |> Enum.map(fn
-       {:ok, %{"n" => n}} -> n
-       {:ok, _other}      -> 0
-     end)
-     |> Enum.reduce(0, fn x, acc -> x + acc end), ids}
-
+    docs
+    |> Enum.map(fn
+      {:ok, %{"n" => n} = doc} -> BulkWriteResult.insert_result(n, ids, doc["writeErrors"] || [])
+      {:ok, _other}            -> BulkWriteResult.empty()
+    end)
+    |> BulkWriteResult.reduce()
   end
+
   defp collect(docs, :update) do
 
     docs
     |> Enum.map(fn
-      {:ok, %{"n" => n, "nModified" => modified, "upserted" => ids}} -> l = length(ids); {n - l, modified, l, filter_upsert_ids(ids)}
-      {:ok, %{"n" => matched, "nModified" => modified}}              -> {matched, modified, 0, []}
-      {:ok, _other}                                                  -> {0, 0, 0, []}
+      {:ok, %{"n" => n, "nModified" => modified, "upserted" => ids} = doc} -> l = length(ids)
+                                                                              BulkWriteResult.update_result(n - l, modified, l, filter_upsert_ids(ids), doc["writeErrors"] || [])
+      {:ok, %{"n" => matched, "nModified" => modified} = doc}              -> BulkWriteResult.update_result(matched, modified, 0, [], doc["writeErrors"] || [])
+      {:ok, _other}                                                        -> BulkWriteResult.empty()
     end)
-    |> Enum.reduce({0, 0, 0, []}, fn
-      {mat, mod, ups, ids}, {s_mat, s_mod, s_ups, all} -> {s_mat + mat, s_mod + mod, s_ups + ups, all ++ ids}
-    end)
+    |> BulkWriteResult.reduce()
 
   end
   defp collect(docs, :delete) do
 
     docs
     |> Enum.map(fn
-      {:ok, %{"n" => n}} -> n
-      {:ok, _other}      -> 0
+      {:ok, %{"n" => n} = doc } -> BulkWriteResult.delete_result(n, doc["writeErrors"] || [])
+      {:ok, _other}             -> BulkWriteResult.empty()
     end)
-    |> Enum.reduce(0, fn x, acc -> x + acc end)
+    |> BulkWriteResult.reduce()
 
   end
 

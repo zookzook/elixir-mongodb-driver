@@ -76,6 +76,8 @@ defmodule Mongo.BulkWriteResult do
     * `:upserted_count` - Number of upserted documents
     * `:upserted_ids` - If the operation was an upsert, the upserted ids
     * `:inserted_ids` - If the operation was an insert, the inserted ids
+    * `:errors` - If the operation results in an error, the error is collected
+
   """
 
   @type t :: %__MODULE__{
@@ -86,9 +88,49 @@ defmodule Mongo.BulkWriteResult do
                deleted_count: non_neg_integer,
                upserted_count: non_neg_integer,
                upserted_ids: list(BSON.ObjectId.t),
-               inserted_ids: list(BSON.ObjectId.t)
+               inserted_ids: list(BSON.ObjectId.t),
+               errors: list(Map.t)
              }
 
-  defstruct [acknowledged: true, matched_count: 0, modified_count: 0, inserted_count: 0, deleted_count: 0, upserted_count: 0, inserted_ids: [], upserted_ids: []]
+   alias Mongo.BulkWriteResult
+
+  defstruct [acknowledged: true, matched_count: 0, modified_count: 0, inserted_count: 0, deleted_count: 0, upserted_count: 0, inserted_ids: [], upserted_ids: [], errors: []]
+
+  def insert_result(count, ids, errors) do
+    %BulkWriteResult{inserted_count: count, inserted_ids: ids, errors: errors}
+  end
+
+  def update_result(matched_count, modified_count, upserted_count, ids, errors) do
+    %BulkWriteResult{matched_count: matched_count, modified_count: modified_count, upserted_count: upserted_count, upserted_ids: ids, errors: errors}
+  end
+
+  def delete_result(count, errors) do
+    %BulkWriteResult{deleted_count: count, errors: errors}
+  end
+
+  def empty() do
+    %BulkWriteResult{}
+  end
+
+  def add(%BulkWriteResult{} = src, %BulkWriteResult{} = dest) do
+    %BulkWriteResult{acknowledged: src.acknowledged,
+      matched_count: src.matched_count + dest.matched_count,
+      modified_count: src.modified_count + dest.modified_count,
+      inserted_count: src.inserted_count + dest.inserted_count,
+      deleted_count: src.deleted_count + dest.deleted_count,
+      upserted_count: src.upserted_count + dest.upserted_count,
+      inserted_ids: src.inserted_ids ++ dest.inserted_ids,
+      upserted_ids: src.upserted_ids ++ dest.upserted_ids,
+      errors: src.errors ++ dest.errors
+    }
+  end
+
+  def reduce(results, acc) do
+    Enum.reduce(results, acc, fn x, acc -> BulkWriteResult.add(acc, x) end)
+  end
+
+  def reduce(results) do
+    reduce(results, %BulkWriteResult{})
+  end
 
 end
