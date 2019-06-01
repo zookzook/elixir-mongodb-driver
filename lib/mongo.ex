@@ -648,7 +648,8 @@ defmodule Mongo do
       documents: [doc],
       ordered: Keyword.get(opts, :ordered),
       writeConcern: write_concern,
-      bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
+      bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation),
+      lsid: Keyword.get(opts, :lsid)
     ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
@@ -918,6 +919,20 @@ defmodule Mongo do
         _ -> {:ok, nil}
 
       end
+    end
+  end
+
+  def start_session(top, opts \\ []) do
+    ## todo error code handling
+    with {:ok, %{"id" => uuid, "ok" => ok}} when ok == 1 <- command(top, [startSession: 1], database: "admin") do
+      uuid
+    end
+  end
+
+  def end_sessions(top, sessions, opts \\ []) do
+    ## todo error code handling
+    with {:ok, %{"ok" => ok}} when ok == 1 <- command(top, [endSessions: sessions], database: "admin") do
+      :ok
     end
   end
 
