@@ -132,11 +132,12 @@ defmodule Mongo.Cursor do
     def get_more(conn, coll, cursor, nil, opts) do
 
       cmd = [
-        getMore: cursor,
-        collection: coll,
-        batchSize: opts[:batch_size],
-        maxTimeMS: opts[:max_time]
-      ] |> filter_nils()
+              getMore: cursor,
+              collection: coll,
+              batchSize: opts[:batch_size],
+              maxTimeMS: opts[:max_time],
+              lsid: opts[:lsid]
+            ] |> filter_nils()
 
       with {:ok, %{"cursor" => %{ "id" => cursor_id, "nextBatch" => docs}, "ok" => ok}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts) do
         {:ok, %{cursor_id: cursor_id, docs: docs}}

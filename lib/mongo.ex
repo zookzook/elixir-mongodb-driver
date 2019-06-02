@@ -235,18 +235,19 @@ defmodule Mongo do
   def aggregate(topology_pid, coll, pipeline, opts \\ []) do
 
     cmd = [
-      aggregate: coll,
-      pipeline: pipeline,
-      explain: opts[:explain],
-      allowDiskUse: opts[:allow_disk_use],
-      collation: opts[:collation],
-      maxTimeMS: opts[:max_time],
-      cursor: filter_nils(%{batchSize: opts[:batch_size]}),
-      bypassDocumentValidation: opts[:bypass_document_validation],
-      hint: opts[:hint],
-      comment: opts[:comment],
-      readConcern: opts[:read_concern]
-    ] |> filter_nils()
+            aggregate: coll,
+            pipeline: pipeline,
+            explain: opts[:explain],
+            allowDiskUse: opts[:allow_disk_use],
+            collation: opts[:collation],
+            maxTimeMS: opts[:max_time],
+            cursor: filter_nils(%{batchSize: opts[:batch_size]}),
+            bypassDocumentValidation: opts[:bypass_document_validation],
+            hint: opts[:hint],
+            comment: opts[:comment],
+            readConcern: opts[:read_concern],
+            lsid: Keyword.get(opts, :lsid)
+          ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(explain allow_disk_use collation bypass_document_validation hint comment read_concern)a)
 
@@ -274,17 +275,18 @@ defmodule Mongo do
   def find_one_and_update(topology_pid, coll, filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
     cmd = [
-      findAndModify:            coll,
-      query:                    filter,
-      update:                   update,
-      bypassDocumentValidation: opts[:bypass_document_validation],
-      maxTimeMS:                opts[:max_time],
-      fields:                   opts[:projection],
-      new:                      should_return_new(opts[:return_document]),
-      sort:                     opts[:sort],
-      upsert:                   opts[:upsert],
-      collation:                opts[:collation],
-    ] |> filter_nils()
+            findAndModify:            coll,
+            query:                    filter,
+            update:                   update,
+            bypassDocumentValidation: opts[:bypass_document_validation],
+            maxTimeMS:                opts[:max_time],
+            fields:                   opts[:projection],
+            new:                      should_return_new(opts[:return_document]),
+            sort:                     opts[:sort],
+            upsert:                   opts[:upsert],
+            collation:                opts[:collation],
+            lsid:                     opts[:lsid]
+          ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
@@ -317,17 +319,18 @@ defmodule Mongo do
   def find_one_and_replace(topology_pid, coll, filter, replacement, opts \\ []) do
     _ = modifier_docs(replacement, :replace)
     cmd = [
-      findAndModify:            coll,
-      query:                    filter,
-      update:                   replacement,
-      bypassDocumentValidation: opts[:bypass_document_validation],
-      maxTimeMS:                opts[:max_time],
-      fields:                   opts[:projection],
-      new:                      should_return_new(opts[:return_document]),
-      sort:                     opts[:sort],
-      upsert:                   opts[:upsert],
-      collation:                opts[:collation],
-    ] |> filter_nils()
+            findAndModify:            coll,
+            query:                    filter,
+            update:                   replacement,
+            bypassDocumentValidation: opts[:bypass_document_validation],
+            maxTimeMS:                opts[:max_time],
+            fields:                   opts[:projection],
+            new:                      should_return_new(opts[:return_document]),
+            sort:                     opts[:sort],
+            upsert:                   opts[:upsert],
+            collation:                opts[:collation],
+            lsid:                     opts[:lsid]
+          ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
@@ -352,14 +355,15 @@ defmodule Mongo do
   @spec find_one_and_delete(GenServer.server, collection, BSON.document, Keyword.t) :: result(BSON.document)
   def find_one_and_delete(topology_pid, coll, filter, opts \\ []) do
     cmd = [
-      findAndModify: coll,
-      query:         filter,
-      remove:        true,
-      maxTimeMS:     opts[:max_time],
-      fields:        opts[:projection],
-      sort:          opts[:sort],
-      collation:     opts[:collation],
-    ] |> filter_nils()
+            findAndModify: coll,
+            query:         filter,
+            remove:        true,
+            maxTimeMS:     opts[:max_time],
+            fields:        opts[:projection],
+            sort:          opts[:sort],
+            collation:     opts[:collation],
+            lsid:          opts[:lsid]
+          ] |> filter_nils()
     opts = Keyword.drop(opts, ~w(max_time projection sort collation)a)
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
@@ -370,13 +374,14 @@ defmodule Mongo do
   @spec count(GenServer.server, collection, BSON.document, Keyword.t) :: result(non_neg_integer)
   def count(topology_pid, coll, filter, opts \\ []) do
     cmd = [
-      count: coll,
-      query: filter,
-      limit: opts[:limit],
-      skip: opts[:skip],
-      hint: opts[:hint],
-      collation: opts[:collation]
-    ] |> filter_nils()
+            count:     coll,
+            query:     filter,
+            limit:     opts[:limit],
+            skip:      opts[:skip],
+            hint:      opts[:hint],
+            collation: opts[:collation],
+            lsid:      opts[:lsid]
+          ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(limit skip hint collation)a)
 
@@ -456,12 +461,13 @@ defmodule Mongo do
   @spec distinct(GenServer.server, collection, String.t | atom, BSON.document, Keyword.t) :: result([BSON.t])
   def distinct(topology_pid, coll, field, filter, opts \\ []) do
     cmd = [
-      distinct: coll,
-      key: field,
-      query: filter,
-      collation: opts[:collation],
-      maxTimeMS: opts[:max_time]
-    ] |> filter_nils()
+            distinct:   coll,
+            key:       field,
+            query:     filter,
+            collation: opts[:collation],
+            maxTimeMS: opts[:max_time],
+            lsid:      opts[:lsid]
+          ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(max_time)a)
 
@@ -519,7 +525,8 @@ defmodule Mongo do
            comment: opts[:comment],
            maxTimeMS: opts[:max_time],
            skip: opts[:skip],
-           sort: opts[:sort]
+           sort: opts[:sort],
+           lsid: opts[:lsid]
           ]
 
     cmd = filter_nils(cmd)
@@ -644,13 +651,13 @@ defmodule Mongo do
     } |> filter_nils()
 
     cmd = [
-      insert: coll,
-      documents: [doc],
-      ordered: Keyword.get(opts, :ordered),
-      writeConcern: write_concern,
-      bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation),
-      lsid: Keyword.get(opts, :lsid)
-    ] |> filter_nils()
+            insert: coll,
+            documents: [doc],
+            ordered: Keyword.get(opts, :ordered),
+            writeConcern: write_concern,
+            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation),
+            lsid: Keyword.get(opts, :lsid)
+          ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
          {:ok, doc} <- exec_command(conn, cmd, opts) do
@@ -699,12 +706,13 @@ defmodule Mongo do
     } |> filter_nils()
 
     cmd = [
-      insert: coll,
-      documents: docs,
-      ordered: Keyword.get(opts, :ordered),
-      writeConcern: write_concern,
-      bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
-    ] |> filter_nils()
+            insert: coll,
+            documents: docs,
+            ordered: Keyword.get(opts, :ordered),
+            writeConcern: write_concern,
+            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation),
+            lsid: Keyword.get(opts, :lsid)
+          ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
          {:ok, doc} <- exec_command(conn, cmd, opts) do
@@ -771,11 +779,12 @@ defmodule Mongo do
              } |> filter_nils()
 
     cmd = [
-              delete: coll,
-              deletes: [filter],
-              ordered: Keyword.get(opts, :ordered),
-              writeConcern: write_concern
-            ] |> filter_nils()
+            delete: coll,
+            deletes: [filter],
+            ordered: Keyword.get(opts, :ordered),
+            writeConcern: write_concern,
+            lsid: Keyword.get(opts, :lsid)
+          ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
          {:ok, doc} <- exec_command(conn, cmd, opts) do
@@ -890,12 +899,13 @@ defmodule Mongo do
              } |> filter_nils()
 
     cmd = [
-              update: coll,
-              updates: [update],
-              ordered: Keyword.get(opts, :ordered),
-              writeConcern: write_concern,
-              bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
-            ] |> filter_nils()
+            update: coll,
+            updates: [update],
+            ordered: Keyword.get(opts, :ordered),
+            writeConcern: write_concern,
+            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation),
+            lsid: Keyword.get(opts, :lsid)
+          ] |> filter_nils()
 
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
          {:ok, doc}        <- exec_command(conn, cmd, opts) do
@@ -952,7 +962,7 @@ defmodule Mongo do
   """
   @spec list_indexes(GenServer.server, String.t, Keyword.t) :: cursor
   def list_indexes(topology_pid, coll, opts \\ []) do
-    cmd = [listIndexes: coll]
+    cmd = [listIndexes: coll, lsid: Keyword.get(opts, :lsid)]
     cursor(topology_pid, cmd, opts)
   end
 
@@ -976,7 +986,7 @@ defmodule Mongo do
     # from the specs
     # https://github.com/mongodb/specifications/blob/f4bb783627e7ed5c4095c5554d35287956ef8970/source/enumerate-collections.rst#post-mongodb-280-rc3-versions
     #
-    cmd = [listCollections: 1]
+    cmd = [listCollections: 1, lsid: Keyword.get(opts, :lsid)]
     cursor(topology_pid, cmd, opts)
     |> Stream.filter(fn
       %{"type" => name} -> name == "collection"
