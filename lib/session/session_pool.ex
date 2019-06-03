@@ -16,7 +16,7 @@ defmodule Mongo.Session.SessionPool do
   @me __MODULE__
 
   @doc """
-  Starts the GenServer. The `logical_session_timeout` is the timeout in seconds for each server session.
+  Starts the GenServer. The `logical_session_timeout` is the timeout in minutes for each server session.
   """
   @spec start_link(GenServer.server, integer) :: GenServer.on_start()
   def start_link(top, logical_session_timeout) do

@@ -26,14 +26,14 @@ defmodule Mongo.Session.ServerSession do
                session_id: BSON.Binary.t
              }
 
-  defstruct last_use: System.system_time(:second), txn_num: 0, session_id: nil
+  defstruct last_use: 0, txn_num: 0, session_id: nil
 
   @doc """
   Create a new server session.
   """
   @spec new() :: ServerSession.t
   def new() do
-    %ServerSession{session_id: uuid()}
+    %ServerSession{session_id: uuid(), last_use: System.system_time(:second)}
   end
 
   @doc """
@@ -60,7 +60,7 @@ defmodule Mongo.Session.ServerSession do
   @spec about_to_expire?(ServerSession.t, integer) :: boolean
   def about_to_expire?(%ServerSession{:last_use => last_use}, logical_session_timeout) do
 
-    idle_time_minutes = (System.system_time(:second) - last_use) / 60
+    idle_time_minutes = div((System.system_time(:second) - last_use), 60)
     (idle_time_minutes + 1) >= logical_session_timeout
 
   end
