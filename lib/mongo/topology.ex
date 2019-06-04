@@ -187,7 +187,7 @@ defmodule Mongo.Topology do
   def handle_cast({:force_check, server_address}, state) do
     case Map.fetch(state.monitors, server_address) do
       {:ok, monitor_pid} ->
-        :ok = Monitor.force_check(monitor_pid)
+        _diff = Monitor.force_check(monitor_pid)
         {:noreply, state}
 
       :error ->
