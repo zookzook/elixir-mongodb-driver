@@ -586,6 +586,8 @@ defmodule Mongo do
     with {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc) do
       {:ok, doc}
+    else
+
     end
   end
 

@@ -35,14 +35,11 @@ defmodule Mongo.Topology do
   defp wait_for_connection(pid, timeout) when timeout >= 0 do
     try do
       case GenServer.call(pid, :wait_for_connection, timeout) do
-        {:new_connection, server} ->
-          {:ok, [server]}
-        {:connected, servers} ->
-          {:ok, servers}
+        {:new_connection, server} ->  {:ok, [server]}
+        {:connected, servers} -> {:ok, servers}
       end
     catch
-      :exit, {:timeout, _} ->
-        {:error, :selection_timeout}
+      :exit, {:timeout, _} -> {:error, :selection_timeout}
     end
   end
   defp wait_for_connection(pid, _timeout) do
@@ -69,24 +66,19 @@ defmodule Mongo.Topology do
     #seeds = Keyword.get(opts, :seeds, [
     #  Keyword.get(opts, :hostname, "localhost") <> ":" <> to_string(Keyword.get(opts, :port, 27017))
     #])
-    seeds = Keyword.get(opts, :seeds, [seed(opts)])
-    type = Keyword.get(opts, :type, :unknown)
-    set_name = Keyword.get(opts, :set_name, nil)
+    seeds               = Keyword.get(opts, :seeds, [seed(opts)])
+    type               = Keyword.get(opts, :type, :unknown)
+    set_name           = Keyword.get(opts, :set_name, nil)
     local_threshold_ms = Keyword.get(opts, :local_threshold_ms, 15)
 
-    :ok = Mongo.Events.notify(%TopologyOpeningEvent{
-      topology_pid: self()
-    })
+    :ok = Mongo.Events.notify(%TopologyOpeningEvent{topology_pid: self()})
 
     cond do
-      type == :single and length(seeds) > 1 ->
-        {:stop, :single_topology_multiple_hosts}
-      set_name != nil and not(type in [:unknown, :replica_set_no_primary, :single]) ->
-        {:stop, :set_name_bad_topology}
+      type == :single and length(seeds) > 1 -> {:stop, :single_topology_multiple_hosts}
+      set_name != nil and not(type in [:unknown, :replica_set_no_primary, :single]) -> {:stop, :set_name_bad_topology}
       true ->
         servers = servers_from_seeds(seeds)
-        state =
-          %{
+        state = %{
             topology: TopologyDescription.defaults(%{
               type: type,
               set_name: set_name,
@@ -202,8 +194,7 @@ defmodule Mongo.Topology do
 
   defp handle_server_description(state, server_description) do
     state
-    |> get_and_update_in([:topology],
-                         &TopologyDescription.update(&1, server_description, length(state.seeds)))
+    |> get_and_update_in([:topology], &TopologyDescription.update(&1, server_description, length(state.seeds)))
     |> process_events
     |> reconcile_servers
   end
@@ -249,6 +240,7 @@ defmodule Mongo.Topology do
       :ok = Mongo.Events.notify(%ServerOpeningEvent{address: address, topology_pid: self()})
 
       {:ok, pid} = Monitor.start_link(args)
+
       %{ state | monitors: Map.put(state.monitors, address, pid) }
     end)
 
@@ -312,7 +304,7 @@ defmodule Mongo.Topology do
     a tuple with the connection, slave_ok flag and mongos flag. Possibly you have to set slave_ok == true in
     the options for the following request because you are requesting a secondary server.
   """
-  def select_server(topology_pid, type, opts \\ []) do
+  def select_server(type, opts, state) do
     with {:ok, servers, slave_ok, mongos?} <- select_servers(topology_pid, type, opts) do
       if Enum.empty? servers do
         {:ok, nil, slave_ok, mongos?}
@@ -331,7 +323,7 @@ defmodule Mongo.Topology do
   #       in order to make the entire operation atomic instead of querying
   #       and then potentially having an outdated topology when waiting for the
   #       connection.
-  defp select_servers(topology_pid, type, opts, start_time) do
+  defp select_servers(type, opts, start_time, state) do
     topology = Topology.topology(topology_pid)
     with {:ok, servers, slave_ok, mongos?} <- TopologyDescription.select_servers(topology, type, opts) do
       case Enum.empty?(servers) do

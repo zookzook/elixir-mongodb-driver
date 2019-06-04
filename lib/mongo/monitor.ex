@@ -90,36 +90,68 @@ defmodule Mongo.Monitor do
 
   defp check(state) do
     diff = :os.system_time(:milli_seconds) - state.server_description.last_update_time
-    if diff < @min_heartbeat_frequency_ms do
-      {:noreply, state, diff}
-    else
-      server_description = is_master(state.connection_pid, state.server_description, state.opts)
-
-      :ok = GenServer.cast(state.topology_pid, {:server_description, server_description})
-      {:noreply, %{state | server_description: server_description}, state.heartbeat_frequency_ms}
+    case diff < @min_heartbeat_frequency_ms  do
+       true  -> {:noreply, state, diff}
+       false ->
+         server_description = get_server_description(state, 0)
+         GenServer.cast(state.topology_pid, {:server_description, server_description})
+         {:noreply, %{state | server_description: server_description}, state.heartbeat_frequency_ms}
     end
   end
 
-  # TODO: Remove this try/rescue once a new version of db_connection is released
-  defp call_is_master(conn_pid, opts) do
-    start_time = System.monotonic_time
-    result = try do
-      Mongo.exec_command(conn_pid, [isMaster: 1], opts)
-    rescue
-      e -> {:error, e}
+  # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#network-error-when-calling-ismaster
+  ##
+  # Calls isMaster and parses the result to update the server description
+  #
+  defp get_server_description(%{connection_pid: conn_pid, server_description: last_server_description, opts: opts} = state, counter) do
+
+    Mongo.Events.notify(%ServerHeartbeatStartedEvent{ connection_pid: conn_pid})
+
+    {result, finish_time, rtt} = call_is_master(conn_pid, opts)
+    case result do
+      {:ok, is_master_reply} ->
+        notify_success(rtt, is_master_reply, conn_pid)
+        ServerDescription.from_is_master(last_server_description, rtt, finish_time, is_master_reply)
+
+      {:error, error} when counter == 1 ->
+        notify_error(rtt, error, conn_pid)
+        ServerDescription.from_is_master_error(last_server_description, error)
+      {:error, error} ->  get_server_description(state, counter + 1)
     end
+  end
+
+  defp average_rtt(last_rtt, rtt) do
+    round(0.2 * rtt + 0.8 * last_rtt)
+  end
+
+  defp call_is_master(conn_pid, opts) do
+    start_time  = System.monotonic_time
+    result      = Mongo.exec_command(conn_pid, [isMaster: 1], opts)
     finish_time = System.monotonic_time
-    rtt = System.convert_time_unit(finish_time - start_time, :native, :millisecond)
+    rtt         = System.convert_time_unit(finish_time - start_time, :native, :millisecond)
     finish_time = System.convert_time_unit(finish_time, :native, :millisecond)
 
     {result, finish_time, rtt}
   end
 
-  # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#network-error-when-calling-ismaster
-  defp is_master(conn_pid, last_server_description, opts) do
-    :ok = Mongo.Events.notify(%ServerHeartbeatStartedEvent{
+  defp notify_error(rtt, error, conn_pid) do
+    :ok = Mongo.Events.notify(%ServerHeartbeatFailedEvent{
+            duration: rtt,
+             failure: error,
       connection_pid: conn_pid
     })
+  end
+
+  defp notify_success(rtt, reply, conn_pid) do
+    :ok = Mongo.Events.notify(%ServerHeartbeatSucceededEvent{
+      duration: rtt,
+      reply: reply,
+      connection_pid: conn_pid
+    })
+  end
+
+  defp get_server_description_old(%{connection_pid: conn_pid, server_description: last_server_description, opts: opts}) do
+    Mongo.Events.notify(%ServerHeartbeatStartedEvent{ connection_pid: conn_pid})
 
     {result, finish_time, rtt} = call_is_master(conn_pid, opts)
     case result do
@@ -143,21 +175,5 @@ defmodule Mongo.Monitor do
           end
         end
     end
-  end
-
-  defp notify_error(rtt, error, conn_pid) do
-    :ok = Mongo.Events.notify(%ServerHeartbeatFailedEvent{
-            duration: rtt,
-             failure: error,
-      connection_pid: conn_pid
-    })
-  end
-
-  defp notify_success(rtt, reply, conn_pid) do
-    :ok = Mongo.Events.notify(%ServerHeartbeatSucceededEvent{
-      duration: rtt,
-      reply: reply,
-      connection_pid: conn_pid
-    })
   end
 end
