@@ -53,6 +53,10 @@ defmodule Mongo.Topology do
     GenServer.call(pid, :topology)
   end
 
+  def select_server(pid, type, opts \\ []) do
+    GenServer.call(pid, {:select_server, type, opts})
+  end
+
   def stop(pid) do
     GenServer.stop(pid)
   end
@@ -300,5 +304,51 @@ defmodule Mongo.Topology do
 
   defp fetch_arbiters(state) do
     Enum.flat_map(state.topology.servers, fn {_, s} -> s.arbiters end)
+  end
+
+
+  @doc"""
+    Determines the appropriate connection depending on the type (:read, :write). The result is
+    a tuple with the connection, slave_ok flag and mongos flag. Possibly you have to set slave_ok == true in
+    the options for the following request because you are requesting a secondary server.
+  """
+  def select_server(topology_pid, type, opts \\ []) do
+    with {:ok, servers, slave_ok, mongos?} <- select_servers(topology_pid, type, opts) do
+      if Enum.empty? servers do
+        {:ok, nil, slave_ok, mongos?}
+      else
+        with {:ok, connection} <- servers |> Enum.take_random(1) |> Enum.at(0)
+                                  |> get_connection(topology_pid) do
+          {:ok, connection, slave_ok, mongos?}
+        end
+      end
+    end
+  end
+
+  defp select_servers(topology_pid, type, opts), do: select_servers(topology_pid, type, opts, System.monotonic_time)
+  @sel_timeout 30000
+  # NOTE: Should think about the handling completely in the Topology GenServer
+  #       in order to make the entire operation atomic instead of querying
+  #       and then potentially having an outdated topology when waiting for the
+  #       connection.
+  defp select_servers(topology_pid, type, opts, start_time) do
+    topology = Topology.topology(topology_pid)
+    with {:ok, servers, slave_ok, mongos?} <- TopologyDescription.select_servers(topology, type, opts) do
+      case Enum.empty?(servers) do
+        true ->
+          case Topology.wait_for_connection(topology_pid, @sel_timeout, start_time) do
+            {:ok, _servers} -> select_servers(topology_pid, type, opts, start_time)
+            {:error, :selection_timeout} = error -> error
+          end
+        false -> {:ok, servers, slave_ok, mongos?}
+      end
+    end
+  end
+
+  defp get_connection(nil, _pid), do: {:ok, nil}
+  defp get_connection(server, pid) do
+    with {:ok, connection} <- Topology.connection_for_address(pid, server) do
+      {:ok, connection}
+    end
   end
 end
