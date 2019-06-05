@@ -22,6 +22,20 @@ defmodule Mongo.Topology do
     GenServer.start_link(__MODULE__, opts, gen_server_opts)
   end
 
+  @doc """
+  Update async the server_description received from the Monitor-Process
+  """
+  def update_server_description(pid, server_description) do
+    GenServer.cast(pid, {:server_description, server_description})
+  end
+
+  @doc """
+  Called from the monitor in case that a connection was established.
+  """
+  def monitor_connected(pid, monitor_pid) do
+    GenServer.cast(pid, {:connected, monitor_pid})
+  end
+
   def connection_for_address(pid, address) do
     GenServer.call(pid, {:connection, address})
   end
@@ -63,10 +77,7 @@ defmodule Mongo.Topology do
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#configuration
   @doc false
   def init(opts) do
-    #seeds = Keyword.get(opts, :seeds, [
-    #  Keyword.get(opts, :hostname, "localhost") <> ":" <> to_string(Keyword.get(opts, :port, 27017))
-    #])
-    seeds               = Keyword.get(opts, :seeds, [seed(opts)])
+    seeds              = Keyword.get(opts, :seeds, [seed(opts)])
     type               = Keyword.get(opts, :type, :unknown)
     set_name           = Keyword.get(opts, :set_name, nil)
     local_threshold_ms = Keyword.get(opts, :local_threshold_ms, 15)
@@ -89,9 +100,10 @@ defmodule Mongo.Topology do
             opts: opts,
             monitors: %{},
             connection_pools: %{},
+            ## session_pid: nil
             waiting_pids: []
           }
-          |> reconcile_servers
+          |> reconcile_servers()
         {:ok, state}
     end
   end
@@ -195,8 +207,8 @@ defmodule Mongo.Topology do
   defp handle_server_description(state, server_description) do
     state
     |> get_and_update_in([:topology], &TopologyDescription.update(&1, server_description, length(state.seeds)))
-    |> process_events
-    |> reconcile_servers
+    |> process_events()
+    |> reconcile_servers()
   end
 
   defp process_events({events, state}) do
@@ -218,6 +230,7 @@ defmodule Mongo.Topology do
     state
   end
 
+  ## todo: update_monitor(state)
   defp reconcile_servers(state) do
     arbiters = fetch_arbiters(state)
     old_addrs = Map.keys(state.monitors)
@@ -228,17 +241,13 @@ defmodule Mongo.Topology do
     removed = old_addrs -- new_addrs
 
     state = Enum.reduce(added, state, fn (address, state) ->
+
       server_description = state.topology.servers[address]
       connopts = connect_opts_from_address(state.opts, address)
-      args = [
-        server_description,
-        self(),
-        @heartbeat_frequency_ms,
-        Keyword.put(connopts, :pool, DBConnection.ConnectionPool)
-      ]
 
-      :ok = Mongo.Events.notify(%ServerOpeningEvent{address: address, topology_pid: self()})
+      Mongo.Events.notify(%ServerOpeningEvent{address: address, topology_pid: self()})
 
+      args = [server_description.address, self(), @heartbeat_frequency_ms, Keyword.put(connopts, :pool, DBConnection.ConnectionPool)]
       {:ok, pid} = Monitor.start_link(args)
 
       %{ state | monitors: Map.put(state.monitors, address, pid) }
@@ -298,49 +307,4 @@ defmodule Mongo.Topology do
     Enum.flat_map(state.topology.servers, fn {_, s} -> s.arbiters end)
   end
 
-
-  @doc"""
-    Determines the appropriate connection depending on the type (:read, :write). The result is
-    a tuple with the connection, slave_ok flag and mongos flag. Possibly you have to set slave_ok == true in
-    the options for the following request because you are requesting a secondary server.
-  """
-  def select_server(type, opts, state) do
-    with {:ok, servers, slave_ok, mongos?} <- select_servers(topology_pid, type, opts) do
-      if Enum.empty? servers do
-        {:ok, nil, slave_ok, mongos?}
-      else
-        with {:ok, connection} <- servers |> Enum.take_random(1) |> Enum.at(0)
-                                  |> get_connection(topology_pid) do
-          {:ok, connection, slave_ok, mongos?}
-        end
-      end
-    end
-  end
-
-  defp select_servers(topology_pid, type, opts), do: select_servers(topology_pid, type, opts, System.monotonic_time)
-  @sel_timeout 30000
-  # NOTE: Should think about the handling completely in the Topology GenServer
-  #       in order to make the entire operation atomic instead of querying
-  #       and then potentially having an outdated topology when waiting for the
-  #       connection.
-  defp select_servers(type, opts, start_time, state) do
-    topology = Topology.topology(topology_pid)
-    with {:ok, servers, slave_ok, mongos?} <- TopologyDescription.select_servers(topology, type, opts) do
-      case Enum.empty?(servers) do
-        true ->
-          case Topology.wait_for_connection(topology_pid, @sel_timeout, start_time) do
-            {:ok, _servers} -> select_servers(topology_pid, type, opts, start_time)
-            {:error, :selection_timeout} = error -> error
-          end
-        false -> {:ok, servers, slave_ok, mongos?}
-      end
-    end
-  end
-
-  defp get_connection(nil, _pid), do: {:ok, nil}
-  defp get_connection(server, pid) do
-    with {:ok, connection} <- Topology.connection_for_address(pid, server) do
-      {:ok, connection}
-    end
-  end
 end

@@ -573,7 +573,6 @@ defmodule Mongo do
     rp_opts = [read_preference: Keyword.get(opts, :read_preference, rp)]
     with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, rp_opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
-         opts = Keyword.put(opts, :lsid, session_id), füge die session_id hier rein
          do: exec_command(conn, cmd, opts)
   end
 
@@ -586,8 +585,6 @@ defmodule Mongo do
     with {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc) do
       {:ok, doc}
-    else
-
     end
   end
 
@@ -911,11 +908,8 @@ defmodule Mongo do
           ] |> filter_nils()
 
 
-    ## {:ok, connection, slave_ok, mongos?}
-  {:ok, conn, slave_ok, mongos, session_id} = Topology.select_server(topology_pid, :write, opts)
-
     with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc}        <- exec_command(conn, cmd, session_id, opts) do
+         {:ok, doc}        <- exec_command(conn, cmd, opts) do
 
       case doc do
 

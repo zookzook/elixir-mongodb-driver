@@ -10,8 +10,7 @@ defmodule Mongo.TopologyDescription do
   alias Mongo.ReadPreference
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#topologydescription
-  @type type :: :unknown | :single | :replica_set_no_primary |
-                :replica_set_with_primary | :sharded
+  @type type :: :unknown | :single | :replica_set_no_primary | :replica_set_with_primary | :sharded
   @type t :: %{
     type: type,
     set_name: String.t | nil,
@@ -51,8 +50,7 @@ defmodule Mongo.TopologyDescription do
 
   # steps 3-4
   def select_servers(topology, type, opts \\ []) do
-    read_preference = Keyword.get(opts, :read_preference)
-                      |> ReadPreference.defaults()
+    read_preference = Keyword.get(opts, :read_preference) |> ReadPreference.defaults()
     if topology[:compatible] == false do
       {:error, :invalid_wire_version}
     else
@@ -199,12 +197,9 @@ defmodule Mongo.TopologyDescription do
     if Enum.empty?(servers) do
       servers
     else
-      min_server =
-        servers
-        |> Enum.min_by(fn {_, server} ->
-          server.round_trip_time
-        end)
-        |> elem(1)
+      min_server = servers
+                   |> Enum.min_by(fn {_, server} -> server.round_trip_time end)
+                   |> elem(1)
       latency_window = min_server.round_trip_time + local_threshold_ms
 
       Enum.filter(servers, fn {_, server} ->
@@ -241,10 +236,8 @@ defmodule Mongo.TopologyDescription do
   defp check_for_single_topology(topology, server_description, num_seeds) do
     case topology.type do
       :single ->
-        previous_description =
-          topology.servers |> Map.values |> hd
-        {[{previous_description, server_description}],
-         put_in(topology.servers[server_description.address], server_description)}
+        previous_description = topology.servers |> Map.values |> hd
+        {[{previous_description, server_description}],  put_in(topology.servers[server_description.address], server_description)}
       _ ->
         check_server_in_topology(topology, server_description, num_seeds)
     end
@@ -270,24 +263,20 @@ defmodule Mongo.TopologyDescription do
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#topologytype-explanations
   defp update_topology(topology, :unknown, server_description, num_seeds) do
     case server_description.type do
-      :unknown ->
-        {[], %{topology | type: :unknown}}
-      :rs_ghost ->
-        {[], %{topology | type: :unknown}}
-      :standalone ->
-        update_unknown_with_standalone(topology, server_description, num_seeds)
-      :mongos ->
-        {[], %{topology | type: :sharded}}
+      :unknown -> {[], %{topology | type: :unknown}}
+      :rs_ghost ->  {[], %{topology | type: :unknown}}
+      :standalone ->  update_unknown_with_standalone(topology, server_description, num_seeds)
+      :mongos -> {[], %{topology | type: :sharded}}
       :rs_primary ->
         topology
         |> Map.put(:set_name, server_description.set_name)
         |> update_rs_from_primary(server_description)
+
       type when type in [:rs_secondary, :rs_arbiter, :rs_other] ->
         topology
         |> Map.put(:set_name, server_description.set_name)
         |> update_rs_without_primary(server_description)
-      _ ->
-        {[], topology} # don't touch broken states...
+      _ ->  {[], topology} # don't touch broken states...
     end
   end
 
@@ -324,19 +313,16 @@ defmodule Mongo.TopologyDescription do
   defp update_topology(topology, :replica_set_with_primary, server_description,
                        _) do
     case server_description.type do
-      :unknown ->
-        topology |> check_if_has_primary
-      :rs_ghost ->
-        topology |> check_if_has_primary
+      :unknown -> topology |> check_if_has_primary
+      :rs_ghost -> topology |> check_if_has_primary
       type when type in [:standalone, :mongos] ->
-	      {_, new_topology} = pop_in(topology.servers[server_description.address])
+
+        {_, new_topology} = pop_in(topology.servers[server_description.address])
         check_if_has_primary(new_topology)
-      :rs_primary ->
-        update_rs_from_primary(topology, server_description)
-      type when type in [:rs_secondary, :rs_arbiter, :rs_ghost] ->
-        update_rs_with_primary_from_member(topology, server_description)
-      _ ->
-        {[], topology}
+
+      :rs_primary -> update_rs_from_primary(topology, server_description)
+      type when type in [:rs_secondary, :rs_arbiter, :rs_ghost] -> update_rs_with_primary_from_member(topology, server_description)
+      _ -> {[], topology}
     end
   end
 
