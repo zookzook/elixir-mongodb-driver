@@ -295,6 +295,11 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 * For `--sslMode` you can use one of `allowSSL` or `preferSSL`
 * You can enable any other options you want when starting `mongod`
 
+
+## Special thanks
+
+Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-driver) for providing a free JetBrains Open Source license for their complete toolbox.
+
 ## License
 
 Copyright 2015 Eric Meadows-Jönsson and Justin Wood
