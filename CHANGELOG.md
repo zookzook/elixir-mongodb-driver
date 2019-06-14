@@ -1,3 +1,11 @@
+## 0.5.6
+
+* Bug Fixes
+    * Fixed a match error in `after_fun` of cursor module
+    * Fixed a match error in the result of function `Monitor.force_check` 
+    * Resolved decode problem for the Binary (Old) BinData subtype
+    * Added support for `Mongo.BulkWriteResult`
+
 ## 0.5.5
 
 * Bug Fixes
