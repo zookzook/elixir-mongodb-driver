@@ -301,6 +301,7 @@ defmodule Mongo.Cursor do
       fn
         state(cursor: 0)                              -> :ok
         state(cursor: cursor, coll: coll, conn: conn) -> kill_cursors(conn, only_coll(coll), [cursor], opts)
+        {:error, error} = error                       -> error
       end
     end
 
