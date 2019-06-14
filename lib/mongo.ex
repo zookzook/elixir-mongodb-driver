@@ -290,11 +290,30 @@ defmodule Mongo do
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- exec_command(conn, cmd, opts) do
+    with {:ok, doc} <- call_command_for_type(topology_pid, cmd, :write, tops) do
         {:ok, doc["value"]}
     end
 
+  end
+
+  def call_command_for_type(topology_pid, cmd, :write, opts) do
+    with {:ok, conn, _, _, session_id} <- select_server(topology_pid, :write, opts),
+         {:ok, doc} <- exec_command(conn, update_session_id(cmd, session_id), opts) do
+      {:ok, doc}
+    end
+  end
+  def call_command_for_type(topology_pid, cmd, :read, opts) do
+    with {:ok, conn, slave_ok, _, session_id} <- select_server(topology_pid, :read, opts),
+         {:ok, doc} <- exec_command(conn, update_session_id(cmd, session_id), opts) do
+      {:ok, doc}
+    end
+  end
+
+  defp update_session_id(cmd, nil) do
+    cmd
+  end
+  defp update_session_id(cmd, session_id) do
+    Keyword.merge(cmd, [lsid: session_id])
   end
 
   @doc """
@@ -1002,13 +1021,13 @@ defmodule Mongo do
     the options for the following request because you are requesting a secondary server.
   """
     def select_server(topology_pid, type, opts \\ []) do
-    with {:ok, servers, slave_ok, mongos?} <- select_servers(topology_pid, type, opts) do
+    with {:ok, servers, slave_ok, mongos?, session_id} <- select_servers(topology_pid, type, opts) do
       if Enum.empty? servers do
-        {:ok, nil, slave_ok, mongos?}
+        {:ok, nil, slave_ok, mongos?, session_id}
       else
         with {:ok, connection} <- servers |> Enum.take_random(1) |> Enum.at(0)
                                           |> get_connection(topology_pid) do
-          {:ok, connection, slave_ok, mongos?}
+          {:ok, connection, slave_ok, mongos?, session_id}
         end
       end
     end
@@ -1022,24 +1041,34 @@ defmodule Mongo do
   #       connection.
   defp select_servers(topology_pid, type, opts, start_time) do
     topology = Topology.topology(topology_pid)
-    with {:ok, servers, slave_ok, mongos?} <- TopologyDescription.select_servers(topology, type, opts) do
-      case Enum.empty?(servers) do
-        true ->
-          case Topology.wait_for_connection(topology_pid, @sel_timeout, start_time) do
-            {:ok, _servers} -> select_servers(topology_pid, type, opts, start_time)
-            {:error, :selection_timeout} = error -> error
-          end
-        false -> {:ok, servers, slave_ok, mongos?}
-      end
+
+    case TopologyDescription.select_servers(topology, type, opts) do
+
+      :empty ->
+        case Topology.wait_for_connection(topology_pid, @sel_timeout, start_time) do
+          {:ok, _servers}                      -> select_servers(topology_pid, type, opts, start_time) ##todo wait a little
+          {:error, :selection_timeout} = error -> error
+        end
+
+      {:ok, result} -> result
+
+      error         -> error
     end
+
+#    with {:ok, servers, slave_ok, mongos?, session_id} <- TopologyDescription.select_servers(topology, type, opts) do
+#      case servers do
+#        [] ->
+#          case Topology.wait_for_connection(topology_pid, @sel_timeout, start_time) do
+#            {:ok, _servers}                      -> select_servers(topology_pid, type, opts, start_time) ##todo wait a little
+#            {:error, :selection_timeout} = error -> error
+#          end
+#        _full -> {:ok, servers, slave_ok, mongos?, session_id}
+#      end
+#    end
   end
 
   defp get_connection(nil, _pid), do: {:ok, nil}
-  defp get_connection(server, pid) do
-    with {:ok, connection} <- Topology.connection_for_address(pid, server) do
-      {:ok, connection}
-    end
-  end
+  defp get_connection(server, pid), do: Topology.connection_for_address(pid, server)
 
   defp modifier_docs([{key, _}|_], type), do: key |> key_to_string |> modifier_key(type)
   defp modifier_docs(map, _type) when is_map(map) and map_size(map) == 0,  do: :ok

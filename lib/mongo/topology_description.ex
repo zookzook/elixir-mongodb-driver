@@ -48,40 +48,55 @@ defmodule Mongo.TopologyDescription do
     check_server_supported(topology, server_description, num_seeds)
   end
 
-  # steps 3-4
-  def select_servers(topology, type, opts \\ []) do
-    read_preference = Keyword.get(opts, :read_preference) |> ReadPreference.defaults()
-    if topology[:compatible] == false do
-      {:error, :invalid_wire_version}
-    else
-      {servers, slave_ok, mongos?} = case topology.type do
-        :unknown -> {[], false, false}
-        :single ->
-          server   = topology.servers |> Map.values |> Enum.at(0, %{type: :unknown})
-          slave_ok = type != :write and server.type != :mongos
-          {topology.servers, slave_ok, server.type == :mongos}
-        :sharded ->
-          mongos_servers = topology.servers |> Enum.filter(fn {_, server} -> server.type == :mongos end)
-          {mongos_servers, false, true}
-        _ ->
-          case type do
-            :read -> {select_replica_set_server(topology, read_preference.mode, read_preference), true, false}
-            :write ->
-              if topology.type == :replica_set_with_primary do
-                {select_replica_set_server(topology, :primary, ReadPreference.defaults), false, false}
-              else
-                {[], false, false}
-              end
-          end
-      end
+  def checkout_session(_top, []) do
+    nil
+  end
+  def checkout_session(%{:session_pool => pool}, _servers) do
+    SessionPool.checkout(pool)
+  end
+  def checkout_session(_other, _servers) do
+    nil
+  end
 
-      servers =
-        for {server, _} <- servers do
-          server
+  def select_servers(%{:compatible => false}, _type, _opts) do
+    {:error, :invalid_wire_version}
+  end
+  def select_servers(topology, type, opts \\ []) do
+    read_preference = opts
+                      |> Keyword.get(:read_preference)
+                      |> ReadPreference.defaults()
+
+    {servers, slave_ok, mongos?} = case topology.type do
+      :unknown -> {[], false, false}
+
+      :single ->
+        server   = topology.servers
+                   |> Map.values
+                   |> Enum.at(0, %{type: :unknown})
+        slave_ok = type != :write and server.type != :mongos
+        {topology.servers, slave_ok, server.type == :mongos}
+
+      :sharded -> {mongos_servers(topology), false, true}
+      _ ->
+        case type do
+          :read -> {select_replica_set_server(topology, read_preference.mode, read_preference), true, false}
+          :write ->
+            if topology.type == :replica_set_with_primary do
+              {select_replica_set_server(topology, :primary, ReadPreference.defaults), false, false}
+            else
+              {[], false, false}
+            end
         end
-        # todo: Enum.map(elem(0)) ?
-      {:ok, servers, slave_ok, mongos?}
     end
+
+    case Enum.map(servers, fn {server, _} -> server end) do
+      []      -> :empty
+      servers -> {:ok, servers, slave_ok, mongos?, checkout_session(topology)}
+    end
+  end
+
+  defp mongos_servers(topology) do
+    Enum.filter(topology.servers, fn {_, server} -> server.type == :mongos end)
   end
 
   ## Private Functions

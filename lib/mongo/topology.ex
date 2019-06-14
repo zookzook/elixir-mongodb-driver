@@ -7,6 +7,7 @@ defmodule Mongo.Topology do
   alias Mongo.TopologyDescription
   alias Mongo.ServerDescription
   alias Mongo.Monitor
+  alias Mongo.Session.SessionPool
 
   # https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#heartbeatfrequencyms-defaults-to-10-seconds-or-60-seconds
   @heartbeat_frequency_ms 10_000
@@ -49,8 +50,8 @@ defmodule Mongo.Topology do
   defp wait_for_connection(pid, timeout) when timeout >= 0 do
     try do
       case GenServer.call(pid, :wait_for_connection, timeout) do
-        {:new_connection, server} ->  {:ok, [server]}
-        {:connected, servers} -> {:ok, servers}
+        {:new_connection, server} -> {:ok, [server]}
+        {:connected, servers}     -> {:ok, servers}
       end
     catch
       :exit, {:timeout, _} -> {:error, :selection_timeout}
@@ -100,10 +101,10 @@ defmodule Mongo.Topology do
             opts: opts,
             monitors: %{},
             connection_pools: %{},
-            ## session_pid: nil
+            session_pool: nil,
             waiting_pids: []
           }
-          |> reconcile_servers()
+          |> update_monitor()
         {:ok, state}
     end
   end
@@ -153,7 +154,7 @@ defmodule Mongo.Topology do
   end
 
   def handle_cast(:reconcile, state) do
-    new_state = reconcile_servers(state)
+    new_state = update_monitor(state)
     {:noreply, new_state}
   end
   def handle_cast({:disconnect, :monitor, host}, state) do
@@ -168,8 +169,7 @@ defmodule Mongo.Topology do
   def handle_cast({:connected, monitor_pid}, state) do
     monitor = Enum.find(state.monitors, fn {_key, value} -> value == monitor_pid end)
     new_state = case monitor do
-      nil ->
-        state
+      nil -> state
       {host, ^monitor_pid} ->
         arbiters = fetch_arbiters(state)
         if host in arbiters do
@@ -186,7 +186,7 @@ defmodule Mongo.Topology do
           Enum.each(state.waiting_pids, fn from ->
             GenServer.reply(from, {:new_connection, host})
           end)
-          %{ state | connection_pools: connection_pools, waiting_pids: [] }
+          %{ state | connection_pools: connection_pools, waiting_pids: []}
         end
     end
     {:noreply, new_state}
@@ -204,17 +204,26 @@ defmodule Mongo.Topology do
     end
   end
 
+  ##
+  # Update server description: in case of logical session the function creates a session pool for the `deployment`.
+  #
+  defp handle_server_description(state, %{:logical_session_timeout => logical_session_timeout} = server_description) do
+    state
+    |> get_and_update_in([:topology], &TopologyDescription.update(&1, server_description, length(state.seeds)))
+    |> process_events()
+    |> update_monitor()
+    |> update_session_pool(logical_session_timeout)
+  end
   defp handle_server_description(state, server_description) do
     state
     |> get_and_update_in([:topology], &TopologyDescription.update(&1, server_description, length(state.seeds)))
     |> process_events()
-    |> reconcile_servers()
+    |> update_monitor()
   end
 
   defp process_events({events, state}) do
     Enum.each(events, fn
-      {:force_check, _} = message ->
-        :ok = GenServer.cast(self(), message)
+      {:force_check, _} = message -> :ok = GenServer.cast(self(), message)
       {previous, next} ->
         if previous != next do
           :ok = Mongo.Events.notify(%ServerDescriptionChangedEvent{
@@ -230,8 +239,11 @@ defmodule Mongo.Topology do
     state
   end
 
-  ## todo: update_monitor(state)
-  defp reconcile_servers(state) do
+
+  ##
+  # update the monitor process. For new servers the function creates new monitor processes.
+  #
+  defp update_monitor(state) do
     arbiters = fetch_arbiters(state)
     old_addrs = Map.keys(state.monitors)
     # remove arbiters from connection pool as descriptions are recieved
@@ -254,6 +266,14 @@ defmodule Mongo.Topology do
     end)
 
     Enum.reduce(removed, state, &remove_address/2)
+  end
+
+  defp update_session_pool(%{:session_pool => nil} = state, logical_session_timeout) do
+    {:ok, session_pool} = SessionPool.start_link(self(), logical_session_timeout)
+    %{ state | session_pool: session_pool}
+  end
+  defp update_session_pool(state, _logical_session_timeout) do
+    state
   end
 
   defp maybe_reinit(%{monitors: monitors} = state) when map_size(monitors) > 0,

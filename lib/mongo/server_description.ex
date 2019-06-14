@@ -22,7 +22,8 @@ defmodule Mongo.ServerDescription do
     set_version: non_neg_integer | nil,
     election_id: BSON.ObjectId.t | nil,
     primary: String.t | nil,
-    last_update_time: non_neg_integer
+    last_update_time: non_neg_integer,
+    logical_session_timeout: non_neg_integer
   }
 
   def defaults(map \\ %{}) do
@@ -44,7 +45,8 @@ defmodule Mongo.ServerDescription do
       set_version: nil,
       election_id: nil,
       primary: nil,
-      last_update_time: 0
+      last_update_time: 0,
+      logical_session_timeout: 30
     }, map)
   end
 
@@ -74,7 +76,8 @@ defmodule Mongo.ServerDescription do
       set_name: is_master_reply["setName"],
       set_version: is_master_reply["setVersion"],
       election_id: is_master_reply["electionId"],
-      primary: is_master_reply["primary"]
+      primary: is_master_reply["primary"],
+      logical_session_timeout: is_master_reply["logicalSessionTimeoutMinutes"]
     }
   end
 
@@ -84,7 +87,7 @@ defmodule Mongo.ServerDescription do
   defp determine_server_type(%{"isreplicaset" => true}), do: :rs_ghost
   defp determine_server_type(%{"setName" => set_name} = is_master_reply) when set_name != nil do
     case is_master_reply do
-      %{"ismaster" => true}    ->  :rs_primary
+      %{"ismaster" => true}    -> :rs_primary
       %{"secondary" => true}   -> :rs_secondary
       %{"arbiterOnly" => true} -> :rs_arbiter
       _                        -> :rs_other

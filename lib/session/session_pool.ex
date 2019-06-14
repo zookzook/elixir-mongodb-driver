@@ -13,8 +13,6 @@ defmodule Mongo.Session.SessionPool do
 
   use GenServer
 
-  @me __MODULE__
-
   @doc """
   Starts the GenServer. The `logical_session_timeout` is the timeout in minutes for each server session.
   """
@@ -27,25 +25,25 @@ defmodule Mongo.Session.SessionPool do
       queue: []
     }
 
-    GenServer.start_link(__MODULE__, state, name: @me)
+    GenServer.start_link(__MODULE__, state)
   end
 
   @doc """
   Return a server session. If the session timeout is not reached, then a cached server session is return for reuse.
   Otherwise a newly created server session is returned.
   """
-  @spec checkout() :: ServerSession.t
-  def checkout() do
-    GenServer.call(@me, :checkout)
+  @spec checkout(GenServer.server) :: ServerSession.t
+  def checkout(pid) do
+    GenServer.call(pid, :checkout)
   end
 
   @doc """
   Checkin a used server session. It if is already expired, the server session is dropped. Otherwise the server session
   is cache for reuse, until it expires due of being cached all the time.
   """
-  @spec checkin(ServerSession.t) :: none()
-  def checkin(session) do
-    GenServer.cast(@me, {:checkin, session})
+  @spec checkin(GenServer.server, ServerSession.t) :: none()
+  def checkin(pid, session) do
+    GenServer.cast(pid, {:checkin, session})
   end
 
   @doc """

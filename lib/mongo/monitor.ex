@@ -70,10 +70,6 @@ defmodule Mongo.Monitor do
            |> Keyword.put(:idle_interval, 5_000)
 
     with {:ok, pid} <- DBConnection.start_link(Mongo.MongoDBConnection, opts) do
-
-      ## we start after one second
-      Process.send_after(self(), :update, 1_000)
-
       {:ok, %{
         connection_pid: pid,                            ## our connection pid to the mongodb server
         topology_pid: topology_pid,                     ## the topology_pid to which we report
@@ -99,6 +95,7 @@ defmodule Mongo.Monitor do
   """
   def connected(_connection, me, topology_pid) do
     Topology.monitor_connected(topology_pid, me)
+    GenServer.cast(me, :update)
   end
 
   @doc """
