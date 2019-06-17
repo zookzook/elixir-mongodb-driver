@@ -53,6 +53,7 @@ defmodule Mongo do
   alias Mongo.TopologyDescription
   alias Mongo.Topology
   alias Mongo.UrlParser
+  alias Mongo.Session.ServerSession
 
   @timeout 15000 # 5000
 
@@ -285,35 +286,62 @@ defmodule Mongo do
             sort:                     opts[:sort],
             upsert:                   opts[:upsert],
             collation:                opts[:collation],
-            lsid:                     opts[:lsid]
+            lsid:                     opts[:lsid] || :implicit
           ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
-    with {:ok, doc} <- call_command_for_type(topology_pid, cmd, :write, tops) do
+    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts) do
         {:ok, doc["value"]}
     end
 
   end
 
-  def call_command_for_type(topology_pid, cmd, :write, opts) do
-    with {:ok, conn, _, _, session_id} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- exec_command(conn, update_session_id(cmd, session_id), opts) do
-      {:ok, doc}
+  @doc """
+  This function is very fundamental. First a server is selected. If no explicit session id is found, then
+  the Topology-Module returns an implicit session id. The `opts` is updated for using the new session id.
+  Then is command is sent to the server and executed. On return implicit session id is checked in into the
+  session pool for reuse.
+  """
+  def issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, conn, _, _, session_id} <- Topology.select_server(topology_pid, :write, opts),
+         {:ok, doc} <- exec_command(conn, update_session_id(cmd, session_id), opts),
+         ok <- checkin_session_id(topology_pid, cmd, session_id) do
+      {:ok, conn, doc}
+    else
+      {:new_connection, _server} ->
+        IO.puts "too fast, call it again"
+        issue_command(topology_pid, cmd, :write, opts)
     end
   end
-  def call_command_for_type(topology_pid, cmd, :read, opts) do
-    with {:ok, conn, slave_ok, _, session_id} <- select_server(topology_pid, :read, opts),
-         {:ok, doc} <- exec_command(conn, update_session_id(cmd, session_id), opts) do
-      {:ok, doc}
+  def issue_command(topology_pid, cmd, :read, opts) do
+
+    IO.puts "issue_command: read #{inspect cmd}"
+    with {:ok, conn, slave_ok, _, session_id} <- Topology.select_server(topology_pid, :read, opts),
+         opts = Keyword.put(opts, :slave_ok, slave_ok),
+         {:ok, doc} <- exec_command(conn, update_session_id(cmd, session_id), opts),
+          ok <- checkin_session_id(topology_pid, cmd, session_id) do
+      {:ok, conn, doc}
+      else
+      {:new_connection, _server} ->
+        IO.puts "too fast, call it again"
+        issue_command(topology_pid, cmd, :read, opts)
     end
   end
 
   defp update_session_id(cmd, nil) do
     cmd
   end
-  defp update_session_id(cmd, session_id) do
-    Keyword.merge(cmd, [lsid: session_id])
+  defp update_session_id(cmd, %ServerSession{:session_id => session_id}) do
+    IO.puts "update_session_id #{inspect session_id}"
+    Keyword.merge(cmd, [lsid: %{id: session_id}])
+  end
+  defp checkin_session_id(topology_pid, cmd, nil), do: :ok
+  defp checkin_session_id(topology_pid, cmd, session_id) do
+    case Keyword.get(cmd, :lsid, :implicit) do
+      :implicit -> Topology.checkin_session_id(topology_pid, session_id)
+      _         -> :ok
+    end
   end
 
   @doc """
@@ -353,8 +381,7 @@ defmodule Mongo do
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- exec_command(conn, cmd, opts), do: {:ok, doc["value"]}
+    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts), do: {:ok, doc["value"]}
   end
 
   defp should_return_new(:after), do: true
@@ -385,8 +412,7 @@ defmodule Mongo do
           ] |> filter_nils()
     opts = Keyword.drop(opts, ~w(max_time projection sort collation)a)
 
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- exec_command(conn, cmd, opts), do: {:ok, doc["value"]}
+    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts), do: {:ok, doc["value"]}
   end
 
   @doc false
@@ -490,10 +516,7 @@ defmodule Mongo do
 
     opts = Keyword.drop(opts, ~w(max_time)a)
 
-    with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, opts),
-         opts = Keyword.put(opts, :slave_ok, slave_ok),
-         {:ok, doc} <- exec_command(conn, cmd, opts),
-         do: {:ok, doc["values"]}
+    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :read, opts), do: {:ok, doc["values"]}
   end
 
   @doc """
@@ -545,7 +568,7 @@ defmodule Mongo do
            maxTimeMS: opts[:max_time],
            skip: opts[:skip],
            sort: opts[:sort],
-           lsid: opts[:lsid]
+           lsid: opts[:lsid] || :implicit
           ]
 
     cmd = filter_nils(cmd)
@@ -568,8 +591,7 @@ defmodule Mongo do
 
        Mongo.find_one(top, "jobs", %{}, read_concern: %{level: "local"})
   """
-  @spec find_one(GenServer.server, collection, BSON.document, Keyword.t) ::
-    BSON.document | nil
+  @spec find_one(GenServer.server, collection, BSON.document, Keyword.t) :: BSON.document | nil
   def find_one(conn, coll, filter, opts \\ []) do
     opts = opts
            |> Keyword.delete(:sort)
@@ -590,9 +612,9 @@ defmodule Mongo do
   def command(topology_pid, cmd, opts \\ []) do
     rp = ReadPreference.defaults(%{mode: :primary})
     rp_opts = [read_preference: Keyword.get(opts, :read_preference, rp)]
-    with {:ok, conn, slave_ok, _} <- select_server(topology_pid, :read, rp_opts),
-         opts = Keyword.put(opts, :slave_ok, slave_ok),
-         do: exec_command(conn, cmd, opts)
+    with {:ok, _conn, doc} <- Mongo.issue_command(topology_pid, cmd, :read, rp_opts) do
+      {:ok, doc}
+    end
   end
 
   @doc false
@@ -600,6 +622,8 @@ defmodule Mongo do
   @spec exec_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command(conn, cmd, opts) do
     action = %Query{action: :command}
+
+    IO.puts "Executing cmd #{inspect cmd}"
 
     with {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc) do
@@ -675,11 +699,10 @@ defmodule Mongo do
             ordered: Keyword.get(opts, :ordered),
             writeConcern: write_concern,
             bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation),
-            lsid: Keyword.get(opts, :lsid)
+            lsid: Keyword.get(opts, :lsid, :implicit)
           ] |> filter_nils()
 
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- exec_command(conn, cmd, opts) do
+    with {:ok, _conn, doc} <- Mongo.issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -733,8 +756,7 @@ defmodule Mongo do
             lsid: Keyword.get(opts, :lsid)
           ] |> filter_nils()
 
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- exec_command(conn, cmd, opts) do
+    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} ->  {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -805,8 +827,7 @@ defmodule Mongo do
             lsid: Keyword.get(opts, :lsid)
           ] |> filter_nils()
 
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc} <- exec_command(conn, cmd, opts) do
+    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         %{ "ok" => _ok, "n" => n } ->
@@ -927,8 +948,7 @@ defmodule Mongo do
           ] |> filter_nils()
 
 
-    with {:ok, conn, _, _} <- select_server(topology_pid, :write, opts),
-         {:ok, doc}        <- exec_command(conn, cmd, opts) do
+    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts) do
 
       case doc do
 
@@ -1014,61 +1034,6 @@ defmodule Mongo do
     end)
     |> Stream.map(fn coll -> coll["name"] end)
   end
-
-  @doc"""
-    Determines the appropriate connection depending on the type (:read, :write). The result is
-    a tuple with the connection, slave_ok flag and mongos flag. Possibly you have to set slave_ok == true in
-    the options for the following request because you are requesting a secondary server.
-  """
-    def select_server(topology_pid, type, opts \\ []) do
-    with {:ok, servers, slave_ok, mongos?, session_id} <- select_servers(topology_pid, type, opts) do
-      if Enum.empty? servers do
-        {:ok, nil, slave_ok, mongos?, session_id}
-      else
-        with {:ok, connection} <- servers |> Enum.take_random(1) |> Enum.at(0)
-                                          |> get_connection(topology_pid) do
-          {:ok, connection, slave_ok, mongos?, session_id}
-        end
-      end
-    end
-  end
-
-  defp select_servers(topology_pid, type, opts), do: select_servers(topology_pid, type, opts, System.monotonic_time)
-  @sel_timeout 30000
-  # NOTE: Should think about the handling completely in the Topology GenServer
-  #       in order to make the entire operation atomic instead of querying
-  #       and then potentially having an outdated topology when waiting for the
-  #       connection.
-  defp select_servers(topology_pid, type, opts, start_time) do
-    topology = Topology.topology(topology_pid)
-
-    case TopologyDescription.select_servers(topology, type, opts) do
-
-      :empty ->
-        case Topology.wait_for_connection(topology_pid, @sel_timeout, start_time) do
-          {:ok, _servers}                      -> select_servers(topology_pid, type, opts, start_time) ##todo wait a little
-          {:error, :selection_timeout} = error -> error
-        end
-
-      {:ok, result} -> result
-
-      error         -> error
-    end
-
-#    with {:ok, servers, slave_ok, mongos?, session_id} <- TopologyDescription.select_servers(topology, type, opts) do
-#      case servers do
-#        [] ->
-#          case Topology.wait_for_connection(topology_pid, @sel_timeout, start_time) do
-#            {:ok, _servers}                      -> select_servers(topology_pid, type, opts, start_time) ##todo wait a little
-#            {:error, :selection_timeout} = error -> error
-#          end
-#        _full -> {:ok, servers, slave_ok, mongos?, session_id}
-#      end
-#    end
-  end
-
-  defp get_connection(nil, _pid), do: {:ok, nil}
-  defp get_connection(server, pid), do: Topology.connection_for_address(pid, server)
 
   defp modifier_docs([{key, _}|_], type), do: key |> key_to_string |> modifier_key(type)
   defp modifier_docs(map, _type) when is_map(map) and map_size(map) == 0,  do: :ok

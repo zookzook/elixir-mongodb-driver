@@ -8,6 +8,7 @@ defmodule Mongo.TopologyDescription do
 
   alias Mongo.ServerDescription
   alias Mongo.ReadPreference
+  alias Mongo.Session.SessionPool
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#topologydescription
   @type type :: :unknown | :single | :replica_set_no_primary | :replica_set_with_primary | :sharded
@@ -48,20 +49,18 @@ defmodule Mongo.TopologyDescription do
     check_server_supported(topology, server_description, num_seeds)
   end
 
-  def checkout_session(_top, []) do
-    nil
-  end
-  def checkout_session(%{:session_pool => pool}, _servers) do
-    SessionPool.checkout(pool)
-  end
-  def checkout_session(_other, _servers) do
-    nil
-  end
 
+  @doc """
+  Returns a tuple of three values:
+  * servers: possible list of servers, maybe []
+  * slave_ok:
+  * mongod?:
+  """
   def select_servers(%{:compatible => false}, _type, _opts) do
     {:error, :invalid_wire_version}
   end
   def select_servers(topology, type, opts \\ []) do
+
     read_preference = opts
                       |> Keyword.get(:read_preference)
                       |> ReadPreference.defaults()
@@ -78,20 +77,17 @@ defmodule Mongo.TopologyDescription do
 
       :sharded -> {mongos_servers(topology), false, true}
       _ ->
-        case type do
-          :read -> {select_replica_set_server(topology, read_preference.mode, read_preference), true, false}
-          :write ->
-            if topology.type == :replica_set_with_primary do
-              {select_replica_set_server(topology, :primary, ReadPreference.defaults), false, false}
-            else
-              {[], false, false}
-            end
+        case {type, topology.type == :replica_set_with_primary} do
+          {:read, _}     -> {select_replica_set_server(topology, read_preference.mode, read_preference), true, false}
+          {:write, true} -> {select_replica_set_server(topology, :primary, ReadPreference.defaults), false, false}
+          _              ->  {[], false, false}
         end
     end
 
+    # check now three possible cases
     case Enum.map(servers, fn {server, _} -> server end) do
-      []      -> :empty
-      servers -> {:ok, servers, slave_ok, mongos?, checkout_session(topology)}
+      []        -> :empty
+      servers   -> {:ok, servers, slave_ok, mongos?}
     end
   end
 

@@ -39,14 +39,16 @@ defmodule Mongo.Cursor do
     #
     defp start_fun(topology_pid, cmd, nil, opts) do
       fn ->
-        with {:ok, conn, opts} <- select_server(topology_pid, opts),
-             {:ok, %{"ok" => ok,
-                     "cursor" => %{
-                     "id" => cursor_id,
-                     "ns" => coll,
-                     "firstBatch" => docs}}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts) do
-            state(conn: conn, cursor: cursor_id, coll: coll, docs: docs)
+
+        with {:ok, conn,
+               %{"ok" => ok,
+                 "cursor" => %{
+                   "id" => cursor_id,
+                   "ns" => coll,
+                   "firstBatch" => docs}}} when ok == 1 <- Mongo.issue_command(topology_pid, cmd, :read, opts) do
+          state(conn: conn, cursor: cursor_id, coll: coll, docs: docs)
         end
+
       end
     end
 
@@ -89,13 +91,12 @@ defmodule Mongo.Cursor do
 
     def aggregate(topology_pid, cmd, fun, opts) do
 
-      with {:ok, conn, opts} <- select_server(topology_pid, opts),
-           {:ok, %{"ok" => ok,
+      with {:ok, conn, %{"ok" => ok,
              "operationTime" => op_time,
              "cursor" => %{
                "id" => cursor_id,
                "ns" => coll,
-               "firstBatch" => docs} = response}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts),
+               "firstBatch" => docs} = response}} when ok == 1 <- Mongo.issue_command(topology_pid, cmd, :read, opts),
            {:ok, wire_version} <- Mongo.wire_version(conn) do
 
           [%{"$changeStream" => stream_opts} | _pipeline] = Keyword.get(cmd, :pipeline) # extract the change stream options
@@ -287,13 +288,6 @@ defmodule Mongo.Cursor do
       end
     end
 
-    defp select_server(topology_pid, opts) do
-      with {:ok, conn, slave_ok, _} <- Mongo.select_server(topology_pid, :read, opts),
-           opts = Keyword.put(opts, :slave_ok, slave_ok) do
-        {:ok, conn, opts}
-      end
-    end
-
     defp filter_nils(keyword) when is_list(keyword) do
       Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
     end
@@ -302,7 +296,7 @@ defmodule Mongo.Cursor do
       fn
         state(cursor: 0)                              -> :ok
         state(cursor: cursor, coll: coll, conn: conn) -> kill_cursors(conn, only_coll(coll), [cursor], opts)
-        {:error, error} = error                       -> error
+        error                                         -> error
       end
     end
 
