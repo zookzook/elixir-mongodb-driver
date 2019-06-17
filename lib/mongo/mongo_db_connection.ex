@@ -259,26 +259,23 @@ defmodule Mongo.MongoDBConnection do
     cmd = cmd ++ ["$db": opts[:database] || state.database,
       "$readPreference": [mode: update_read_preferences(opts[:slave_ok])]]
 
-    timeout = Keyword.get(opts, :max_time, 0)
-
     # MongoDB 3.6 only allows certain command arguments to be provided this way. These are:
     op = case pulling_out?(cmd, :documents) || pulling_out?(cmd, :updates) || pulling_out?(cmd, :deletes) do
       nil -> op_msg(flags: 0, sections: [section(payload_type: 0, payload: payload(doc: cmd))])
       key -> pulling_out(cmd, key)
     end
 
-    with {:ok, doc} <- Utils.post_request(op, state.request_id, state, timeout),
+    with {:ok, doc} <- Utils.post_request(op, state.request_id, state),
          state = %{state | request_id: state.request_id + 1} do
       {:ok, doc, state}
     end
   end
   defp execute_action(:command, [cmd], opts, state) do
 
-    timeout = Keyword.get(opts, :max_time, 0)
-    flags   = Keyword.take(opts, @find_one_flags)
-    op      = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: cmd, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
+    flags    = Keyword.take(opts, @find_one_flags)
+    op       = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: cmd, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
 
-    with {:ok, doc} <- Utils.post_request(op, state.request_id, state, timeout),
+    with {:ok, doc} <- Utils.post_request(op, state.request_id, state),
          state = %{state | request_id: state.request_id + 1}  do
       {:ok, doc, state}
     end
