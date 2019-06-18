@@ -256,8 +256,7 @@ defmodule Mongo.MongoDBConnection do
   end
   defp execute_action(:command, [cmd], opts, %{wire_version: version} = state) when version >= 6 do
 
-    cmd = cmd ++ ["$db": opts[:database] || state.database,
-      "$readPreference": [mode: update_read_preferences(opts[:slave_ok])]]
+    cmd = cmd ++ ["$db": opts[:database] || state.database, "$readPreference": [mode: update_read_preferences(opts[:slave_ok])]]
 
     # MongoDB 3.6 only allows certain command arguments to be provided this way. These are:
     op = case pulling_out?(cmd, :documents) || pulling_out?(cmd, :updates) || pulling_out?(cmd, :deletes) do
@@ -265,7 +264,10 @@ defmodule Mongo.MongoDBConnection do
       key -> pulling_out(cmd, key)
     end
 
-    with {:ok, doc} <- Utils.post_request(op, state.request_id, state),
+    # overwrite temporary timeout by timeout option
+    timeout = Keyword.get(opts, :timeout, state.timeout)
+
+    with {:ok, doc} <- Utils.post_request(op, state.request_id, %{state | timeout: timeout}),
          state = %{state | request_id: state.request_id + 1} do
       {:ok, doc, state}
     end
@@ -274,8 +276,8 @@ defmodule Mongo.MongoDBConnection do
 
     flags    = Keyword.take(opts, @find_one_flags)
     op       = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: cmd, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
-
-    with {:ok, doc} <- Utils.post_request(op, state.request_id, state),
+    timeout  = Keyword.get(opts, :timeout, state.timeout)
+    with {:ok, doc} <- Utils.post_request(op, state.request_id, %{state | timeout: timeout}),
          state = %{state | request_id: state.request_id + 1}  do
       {:ok, doc, state}
     end
