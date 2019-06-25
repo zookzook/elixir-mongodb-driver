@@ -1,3 +1,11 @@
+## 0.5.7
+
+* Bug Fixes
+   * Test for existing index in `Bucket` works right now
+
+* Enhancements
+   * Better handling for the `:timeout` options 
+
 ## 0.5.6
 
 * Bug Fixes

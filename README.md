@@ -74,7 +74,7 @@ def application do
 end
 
 defp deps do
-  [{:mongodb_driver, "~> 0.5.3"}]
+  [{:mongodb_driver, "~> 0.5"}]
 end
 ```
 
