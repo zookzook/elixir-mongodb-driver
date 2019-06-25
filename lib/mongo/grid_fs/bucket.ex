@@ -172,9 +172,13 @@ defmodule Mongo.GridFs.Bucket do
   end
 
   # returns true if the collection contains a index with the given name
-  defp index_member?(topology_pid, coll, index, opts) do
+  def index_member?(topology_pid, coll, index, opts) do
     topology_pid
     |> Mongo.list_indexes(coll, opts)
+    |> Enum.map(fn
+      %{"name" => name} -> name
+        _               -> ""
+       end)
     |> Enum.member?(index)
   end
 
