@@ -13,10 +13,10 @@ defmodule Mongo.MongoDBConnection.Utils do
     Sends a request id and waits for the response with the same id
 
   """
-  def post_request(op, id, state, timeout \\ 0) do
+  def post_request(op, id, state) do
 
     with :ok <- send_data(encode(id, op), state),
-         {:ok, ^id, response} <- recv_data(nil, "", state, timeout),
+         {:ok, ^id, response} <- recv_data(nil, "", state),
          {:ok, doc} <- get_doc(response),
          do: {:ok, doc}
   end
@@ -39,7 +39,7 @@ defmodule Mongo.MongoDBConnection.Utils do
     command = command ++ ["$db": db]
 
     op_msg(flags: 0, sections: [section(payload_type: 0, payload: payload(doc: command))])
-    |> post_request(id, state, 0)
+    |> post_request(id, state)
 
   end
   def command(id, command, state)  do
@@ -52,7 +52,7 @@ defmodule Mongo.MongoDBConnection.Utils do
     end
 
     op_query(coll: ns, query: command, select: "", num_skip: 0, num_return: 1, flags: [])
-    |> post_request(id, state, 0)
+    |> post_request(id, state)
 
   end
 
@@ -84,28 +84,28 @@ defmodule Mongo.MongoDBConnection.Utils do
     end
   end
 
-  defp recv_data(nil, "", %{connection: {mod, socket}} = state, timeout) do
-    case mod.recv(socket, 0, timeout + state.timeout) do
-      {:ok, tail}      -> recv_data(nil, tail, state, timeout)
+  defp recv_data(nil, "", %{connection: {mod, socket}} = state) do
+    case mod.recv(socket, 0, state.timeout) do
+      {:ok, tail}      -> recv_data(nil, tail, state)
       {:error, reason} -> recv_error(reason, state)
     end
   end
-  defp recv_data(nil, data, %{connection: {mod, socket}} = state, timeout) do
+  defp recv_data(nil, data, %{connection: {mod, socket}} = state) do
     case decode_header(data) do
-      {:ok, header, rest} -> recv_data(header, rest, state, timeout)
+      {:ok, header, rest} -> recv_data(header, rest, state)
       :error ->
-        case mod.recv(socket, 0, timeout + state.timeout) do
-          {:ok, tail}      -> recv_data(nil, [data|tail], state, timeout)
+        case mod.recv(socket, 0, state.timeout) do
+          {:ok, tail}      -> recv_data(nil, [data|tail], state)
           {:error, reason} -> recv_error(reason, state)
         end
     end
   end
-  defp recv_data(header, data, %{connection: {mod, socket}} = state, timeout) do
+  defp recv_data(header, data, %{connection: {mod, socket}} = state) do
     case decode_response(header, data) do
       {:ok, id, reply, ""} -> {:ok, id, reply}
       :error ->
-        case mod.recv(socket, 0, timeout + state.timeout) do
-          {:ok, tail}      -> recv_data(header, [data|tail], state, timeout)
+        case mod.recv(socket, 0, state.timeout) do
+          {:ok, tail}      -> recv_data(header, [data|tail], state)
           {:error, reason} -> recv_error(reason, state)
         end
     end

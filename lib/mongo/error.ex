@@ -14,12 +14,12 @@ defmodule Mongo.Error do
 
   def exception(tag: :tcp, action: action, reason: reason, host: host) do
     formatted_reason = :inet.format_error(reason)
-    %Mongo.Error{message: "#{host} tcp #{action}: #{formatted_reason} - #{inspect(reason)}"}
+    %Mongo.Error{message: "#{host} tcp #{action}: #{formatted_reason} - #{inspect(reason)}", host: host}
   end
 
   def exception(tag: :ssl, action: action, reason: reason, host: host) do
     formatted_reason = :ssl.format_error(reason)
-    %Mongo.Error{message: "#{host} ssl #{action}: #{formatted_reason} - #{inspect(reason)}"}
+    %Mongo.Error{message: "#{host} ssl #{action}: #{formatted_reason} - #{inspect(reason)}", host: host}
   end
 
   def exception(message: message, code: code) do
