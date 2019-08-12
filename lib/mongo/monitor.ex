@@ -23,7 +23,7 @@ defmodule Mongo.Monitor do
 
   # this is not configurable because the specification says so
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#minheartbeatfrequencyms
-  @min_heartbeat_frequency_ms 500
+  # not used @min_heartbeat_frequency_ms 500
 
   def start_link(args) do
     GenServer.start_link(__MODULE__, args)

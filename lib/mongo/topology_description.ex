@@ -8,7 +8,6 @@ defmodule Mongo.TopologyDescription do
 
   alias Mongo.ServerDescription
   alias Mongo.ReadPreference
-  alias Mongo.Session.SessionPool
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#topologydescription
   @type type :: :unknown | :single | :replica_set_no_primary | :replica_set_with_primary | :sharded
@@ -56,10 +55,11 @@ defmodule Mongo.TopologyDescription do
   * slave_ok:
   * mongod?:
   """
+  def select_servers(topology, type, opts \\ [])
   def select_servers(%{:compatible => false}, _type, _opts) do
     {:error, :invalid_wire_version}
   end
-  def select_servers(topology, type, opts \\ []) do
+  def select_servers(topology, type, opts) do
 
     read_preference = opts
                       |> Keyword.get(:read_preference)

@@ -46,11 +46,12 @@ defmodule Mongo do
       interval, the operation returns an error
   """
 
+  require Logger
+
   use Bitwise
   use Mongo.Messages
   alias Mongo.Query
   alias Mongo.ReadPreference
-  alias Mongo.TopologyDescription
   alias Mongo.Topology
   alias Mongo.UrlParser
   alias Mongo.Session.ServerSession
@@ -304,27 +305,28 @@ defmodule Mongo do
   session pool for reuse.
   """
   def issue_command(topology_pid, cmd, :write, opts) do
+
+    Logger.debug("issue_command: write #{inspect cmd}")
+
     with {:ok, conn, _, _, session_id} <- Topology.select_server(topology_pid, :write, opts),
          {:ok, doc} <- exec_command(conn, update_session_id(cmd, session_id), opts),
-         ok <- checkin_session_id(topology_pid, cmd, session_id) do
+         :ok <- checkin_session_id(topology_pid, cmd, session_id) do
       {:ok, conn, doc}
     else
       {:new_connection, _server} ->
-        IO.puts "too fast, call it again"
         issue_command(topology_pid, cmd, :write, opts)
     end
   end
   def issue_command(topology_pid, cmd, :read, opts) do
 
-    IO.puts "issue_command: read #{inspect cmd}"
+    Logger.debug("issue_command: read #{inspect cmd}")
     with {:ok, conn, slave_ok, _, session_id} <- Topology.select_server(topology_pid, :read, opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
          {:ok, doc} <- exec_command(conn, update_session_id(cmd, session_id), opts),
-          ok <- checkin_session_id(topology_pid, cmd, session_id) do
+          :ok <- checkin_session_id(topology_pid, cmd, session_id) do
       {:ok, conn, doc}
       else
       {:new_connection, _server} ->
-        IO.puts "too fast, call it again"
         issue_command(topology_pid, cmd, :read, opts)
     end
   end
@@ -333,10 +335,10 @@ defmodule Mongo do
     cmd
   end
   defp update_session_id(cmd, %ServerSession{:session_id => session_id}) do
-    IO.puts "update_session_id #{inspect session_id}"
+    Logger.debug("update_session_id for cmd #{inspect session_id}")
     Keyword.merge(cmd, [lsid: %{id: session_id}])
   end
-  defp checkin_session_id(topology_pid, cmd, nil), do: :ok
+  defp checkin_session_id(_topology_pid, _cmd, nil), do: :ok
   defp checkin_session_id(topology_pid, cmd, session_id) do
     case Keyword.get(cmd, :lsid, :implicit) do
       :implicit -> Topology.checkin_session_id(topology_pid, session_id)
@@ -618,12 +620,11 @@ defmodule Mongo do
   end
 
   @doc false
-  ## refactor: exec_command
   @spec exec_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command(conn, cmd, opts) do
     action = %Query{action: :command}
 
-    IO.puts "Executing cmd #{inspect cmd}"
+    Logger.debug("Executing cmd: #{inspect cmd}")
 
     with {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc) do
@@ -972,14 +973,14 @@ defmodule Mongo do
     end
   end
 
-  def start_session(top, opts \\ []) do
+  def start_session(top) do
     ## todo error code handling
     with {:ok, %{"id" => uuid, "ok" => ok}} when ok == 1 <- command(top, [startSession: 1], database: "admin") do
       uuid
     end
   end
 
-  def end_sessions(top, sessions, opts \\ []) do
+  def end_sessions(top, sessions) do
     ## todo error code handling
     with {:ok, %{"ok" => ok}} when ok == 1 <- command(top, [endSessions: sessions], database: "admin") do
       :ok

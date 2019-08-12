@@ -1,6 +1,8 @@
 defmodule Mongo.Topology do
   @moduledoc false
 
+  require Logger
+
   use GenServer
   alias Mongo.Events.{ServerDescriptionChangedEvent, ServerOpeningEvent, ServerClosedEvent,
                       TopologyDescriptionChangedEvent, TopologyOpeningEvent, TopologyClosedEvent}
@@ -8,7 +10,6 @@ defmodule Mongo.Topology do
   alias Mongo.ServerDescription
   alias Mongo.Monitor
   alias Mongo.Session.SessionPool
-  alias Mongo.Session.ServerSession
 
   # https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#heartbeatfrequencyms-defaults-to-10-seconds-or-60-seconds
   @heartbeat_frequency_ms 10_000
@@ -107,14 +108,6 @@ defmodule Mongo.Topology do
     :ok = Mongo.Events.notify(%TopologyClosedEvent{
       topology_pid: self()
     })
-  end
-
-  def handle_call(:topology, _from, state) do
-    {:reply, state.topology, state}
-  end
-
-  def handle_call({:connection, address}, _from, state) do
-    {:reply, Map.fetch(state.connection_pools, address), state}
   end
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#updating-the-topologydescription
@@ -226,30 +219,37 @@ defmodule Mongo.Topology do
     state
   end
 
+  def handle_call(:topology, _from, state) do
+    {:reply, state.topology, state}
+  end
+
+  def handle_call({:connection, address}, _from, state) do
+    {:reply, Map.fetch(state.connection_pools, address), state}
+  end
+
   def handle_call({:select_server, type, opts}, from, %{:topology => topology, :waiting_pids => waiting, connection_pools: pools} = state) do
     case TopologyDescription.select_servers(topology, type, opts) do
 
       :empty ->
-        IO.puts "select_servers: Empty "
+        Logger.debug("select_server: empty")
         {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
 
       {:ok, servers, slave_ok, mongos?} ->                ## found, select randomly a server and return its connection_pool
-        IO.puts "select_servers: found #{inspect servers}"
-        IO.puts "select_servers: found #{inspect pools}"
+        Logger.debug("select_server: found #{inspect servers}, pools: #{inspect pools}")
         with {:ok, connection} <- servers
                      |> Enum.take_random(1)
                      |> get_connection(state) do
 
           session_id = checkout_session(state)
-        IO.puts "connection is #{inspect connection}"
-        IO.puts "session_id is #{inspect session_id}"
 
+
+        Logger.debug("select_server: connection is #{inspect connection}, session_id is #{inspect session_id}")
 
         {:reply, {:ok, connection, slave_ok, mongos?, session_id}, state}
         end
       error ->
-        IO.puts "select_servers: error "
-        {:reply, error, state}                                 ## in case of an error, just return the error
+        Logger.debug("select_servers: #{inspect error}")
+        {:reply, error, state} ## in case of an error, just return the error
     end
   end
 
@@ -292,12 +292,11 @@ defmodule Mongo.Topology do
   end
 
   defp update_session_pool(%{:session_pool => nil} = state, logical_session_timeout) do
-    IO.puts "creating session pool"
+    Logger.debug("Creating session pool")
     {:ok, session_pool} = SessionPool.start_link(self(), logical_session_timeout)
     %{ state | session_pool: session_pool}
   end
   defp update_session_pool(state, _logical_session_timeout) do
-    IO.puts "no session pool created"
     state
   end
 
