@@ -1,9 +1,9 @@
-/_build
-/doc
-/deps
+_build/
+doc/
+deps/
 erl_crash.dump
 *.ez
-/tmp
+tmp/
 .tool-versions
 .elixir_ls
 plt_core_path/*.plt

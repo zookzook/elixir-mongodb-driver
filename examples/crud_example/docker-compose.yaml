@@ -1,0 +1,21 @@
+version: '3'
+services:
+
+  mongodb:
+    image: mongo:4
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-volume:/data/db
+    networks:
+      - crud
+    logging:
+      options:
+        max-size: "10k"
+        max-file: "1"
+
+volumes:
+  mongodb-volume:
+
+networks:
+  crud:
