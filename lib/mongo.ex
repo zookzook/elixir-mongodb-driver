@@ -55,6 +55,7 @@ defmodule Mongo do
   alias Mongo.Topology
   alias Mongo.UrlParser
   alias Mongo.Session.ServerSession
+  alias Mongo.Session
 
   @timeout 15000 # 5000
 
@@ -292,10 +293,19 @@ defmodule Mongo do
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
-    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
         {:ok, doc["value"]}
     end
 
+  end
+
+  def start_session(topology_pid, type, opts) do
+    with {:ok, session, _, _} <- Topology.checkout_session(topology_pid, type, :explicit, opts) do
+      {:ok, session}
+    else
+      {:new_connection, _server} ->
+        start_session(topology_pid, type, opts)
+    end
   end
 
   @doc """
@@ -308,43 +318,27 @@ defmodule Mongo do
 
     Logger.debug("issue_command: write #{inspect cmd}")
 
-    with {:ok, conn, _, _, session_id} <- Topology.select_server(topology_pid, :write, opts),
-         {:ok, doc} <- exec_command(conn, update_session_id(cmd, session_id), opts),
-         :ok <- checkin_session_id(topology_pid, cmd, session_id) do
-      {:ok, conn, doc}
+    with {:ok, session, slave_ok, _mongos} <- Topology.checkout_session(topology_pid, :write, :implicit, opts),
+         {:ok, doc} <- exec_command_session(session, cmd, opts),
+         :ok <- Topology.checkin_session(topology_pid, session) do
+      {:ok, doc}
     else
-      {:new_connection, _server} ->
-        issue_command(topology_pid, cmd, :write, opts)
+      {:new_connection, _server} ->  issue_command(topology_pid, cmd, :write, opts)
     end
   end
   def issue_command(topology_pid, cmd, :read, opts) do
 
     Logger.debug("issue_command: read #{inspect cmd}")
-    with {:ok, conn, slave_ok, _, session_id} <- Topology.select_server(topology_pid, :read, opts),
+    with {:ok, session, slave_ok, _mongos} <- Topology.checkout_session(topology_pid, :read, :implict, opts),
          opts = Keyword.put(opts, :slave_ok, slave_ok),
-         {:ok, doc} <- exec_command(conn, update_session_id(cmd, session_id), opts),
-          :ok <- checkin_session_id(topology_pid, cmd, session_id) do
-      {:ok, conn, doc}
+         {:ok, doc} <- exec_command_session(session, cmd, opts),
+         :ok <- Topology.checkin_session(topology_pid, session) do
+      {:ok, doc}
       else
-      {:new_connection, _server} ->
-        issue_command(topology_pid, cmd, :read, opts)
+      {:new_connection, _server} -> issue_command(topology_pid, cmd, :read, opts)
     end
   end
 
-  defp update_session_id(cmd, nil) do
-    cmd
-  end
-  defp update_session_id(cmd, %ServerSession{:session_id => session_id}) do
-    Logger.debug("update_session_id for cmd #{inspect session_id}")
-    Keyword.merge(cmd, [lsid: %{id: session_id}])
-  end
-  defp checkin_session_id(_topology_pid, _cmd, nil), do: :ok
-  defp checkin_session_id(topology_pid, cmd, session_id) do
-    case Keyword.get(cmd, :lsid, :implicit) do
-      :implicit -> Topology.checkin_session_id(topology_pid, session_id)
-      _         -> :ok
-    end
-  end
 
   @doc """
   Finds a document and replaces it.
@@ -383,7 +377,7 @@ defmodule Mongo do
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
 
-    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts), do: {:ok, doc["value"]}
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts), do: {:ok, doc["value"]}
   end
 
   defp should_return_new(:after), do: true
@@ -414,7 +408,7 @@ defmodule Mongo do
           ] |> filter_nils()
     opts = Keyword.drop(opts, ~w(max_time projection sort collation)a)
 
-    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts), do: {:ok, doc["value"]}
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts), do: {:ok, doc["value"]}
   end
 
   @doc false
@@ -518,7 +512,7 @@ defmodule Mongo do
 
     opts = Keyword.drop(opts, ~w(max_time)a)
 
-    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :read, opts), do: {:ok, doc["values"]}
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :read, opts), do: {:ok, doc["values"]}
   end
 
   @doc """
@@ -594,13 +588,13 @@ defmodule Mongo do
        Mongo.find_one(top, "jobs", %{}, read_concern: %{level: "local"})
   """
   @spec find_one(GenServer.server, collection, BSON.document, Keyword.t) :: BSON.document | nil
-  def find_one(conn, coll, filter, opts \\ []) do
+  def find_one(topology_pid, coll, filter, opts \\ []) do
     opts = opts
            |> Keyword.delete(:sort)
            |> Keyword.put(:limit, 1)
            |> Keyword.put(:batch_size, 1)
 
-    conn
+    topology_pid
     |> find(coll, filter, opts)
     |> Enum.at(0)
   end
@@ -614,22 +608,40 @@ defmodule Mongo do
   def command(topology_pid, cmd, opts \\ []) do
     rp = ReadPreference.defaults(%{mode: :primary})
     rp_opts = [read_preference: Keyword.get(opts, :read_preference, rp)]
-    with {:ok, _conn, doc} <- Mongo.issue_command(topology_pid, cmd, :read, rp_opts) do
+    with {:ok, doc} <- Mongo.issue_command(topology_pid, cmd, :read, rp_opts) do
       {:ok, doc}
     end
   end
 
   @doc false
-  @spec exec_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
-  def exec_command(conn, cmd, opts) do
-    action = %Query{action: :command}
+  @spec exec_command_session(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
+  def exec_command_session(session, cmd, opts) do
 
     Logger.debug("Executing cmd: #{inspect cmd}")
+
+    action = %Query{action: :command}
+
+    with {:ok, conn, cmd} <- Session.bind_session(session, cmd),
+         {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
+         {:ok, doc} <- check_for_error(doc) do
+      {:ok, doc}
+    end
+
+  end
+
+  @doc false
+  @spec exec_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
+  def exec_command(conn, cmd, opts) do
+
+    Logger.debug("Executing cmd: #{inspect cmd}")
+
+    action = %Query{action: :command}
 
     with {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc) do
       {:ok, doc}
     end
+
   end
 
   defp check_for_error(%{"ok" => ok} = response) when ok == 1, do: {:ok, response}
@@ -682,6 +694,13 @@ defmodule Mongo do
   ## Examples
 
       Mongo.insert_one(pid, "users", %{first_name: "John", last_name: "Smith"})
+
+      {:ok, session} = Mongo.start_session(pid)
+      Session.start_transaction(session)
+      Mongo.insert_one(pid, "users", %{first_name: "John", last_name: "Smith"}, session: session)
+      Session.commit_transaction(session)
+      Mongo.end_sessions([pid])
+
   """
   @spec insert_one(GenServer.server, collection, BSON.document, Keyword.t) :: result(Mongo.InsertOneResult.t)
   def insert_one(topology_pid, coll, doc, opts \\ []) do
@@ -698,12 +717,11 @@ defmodule Mongo do
             insert: coll,
             documents: [doc],
             ordered: Keyword.get(opts, :ordered),
-            writeConcern: write_concern,
-            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation),
-            lsid: Keyword.get(opts, :lsid, :implicit)
+            writeConcern: write_concern, ## todo in der Transaction löschen
+            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
           ] |> filter_nils()
 
-    with {:ok, _conn, doc} <- Mongo.issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, doc} <- Mongo.issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -757,7 +775,7 @@ defmodule Mongo do
             lsid: Keyword.get(opts, :lsid)
           ] |> filter_nils()
 
-    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} ->  {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
@@ -828,7 +846,7 @@ defmodule Mongo do
             lsid: Keyword.get(opts, :lsid)
           ] |> filter_nils()
 
-    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         %{ "ok" => _ok, "n" => n } ->
@@ -949,7 +967,7 @@ defmodule Mongo do
           ] |> filter_nils()
 
 
-    with {:ok, _conn, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
 
       case doc do
 
@@ -970,13 +988,6 @@ defmodule Mongo do
         _ -> {:ok, nil}
 
       end
-    end
-  end
-
-  def start_session(top) do
-    ## todo error code handling
-    with {:ok, %{"id" => uuid, "ok" => ok}} when ok == 1 <- command(top, [startSession: 1], database: "admin") do
-      uuid
     end
   end
 
