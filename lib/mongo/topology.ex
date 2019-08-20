@@ -59,7 +59,7 @@ defmodule Mongo.Topology do
     session = Keyword.get(opts, :session, nil)
     case Session.alive?(session) do
        false -> GenServer.call(pid, {:checkout_session, cmd_type, type, opts})
-       true -> {:ok, session}
+       true -> {:ok, session, false, false} ## todo server_session holen
     end
 
   end
@@ -191,6 +191,11 @@ defmodule Mongo.Topology do
   # checkin the current session, if the session was implicit created
   #
   def handle_cast({:checkin_session, session}, %{:session_pool => pool} = state) do
+
+    result = Session.server_session(session)
+
+    IO.puts "Result #{inspect result}"
+
     case Session.server_session(session) do
       {:ok, server_session, true} -> SessionPool.checkin(pool, server_session)
       _                           -> []

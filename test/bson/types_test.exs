@@ -52,4 +52,9 @@ defmodule BSON.TypesTest do
     value = %BSON.Timestamp{value: 1412180887, ordinal: 12}
     assert inspect(value) == "#BSON.Timestamp<1412180887:12>"
   end
+
+  test "inspect BSON.Long" do
+    value = %BSON.Long{value: 1412180887}
+    assert inspect(value) == "#BSON.Long<1412180887>"
+  end
 end

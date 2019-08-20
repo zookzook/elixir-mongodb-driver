@@ -318,7 +318,7 @@ defmodule Mongo do
 
     Logger.debug("issue_command: write #{inspect cmd}")
 
-    with {:ok, session, slave_ok, _mongos} <- Topology.checkout_session(topology_pid, :write, :implicit, opts),
+    with {:ok, session, _slave_ok, _mongos} <- Topology.checkout_session(topology_pid, :write, :implicit, opts),
          {:ok, doc} <- exec_command_session(session, cmd, opts),
          :ok <- Topology.checkin_session(topology_pid, session) do
       {:ok, doc}
@@ -617,7 +617,7 @@ defmodule Mongo do
   @spec exec_command_session(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command_session(session, cmd, opts) do
 
-    Logger.debug("Executing cmd: #{inspect cmd}")
+    Logger.debug("Executing cmd with session: #{inspect cmd}")
 
     action = %Query{action: :command}
 

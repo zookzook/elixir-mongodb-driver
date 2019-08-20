@@ -157,3 +157,19 @@ defmodule BSON.Timestamp do
     end
   end
 end
+
+defmodule BSON.LongNumber do
+  @moduledoc """
+  Represents BSON long type
+  """
+
+  @type t :: %__MODULE__{value: integer}
+
+  defstruct [value: 0]
+
+  defimpl Inspect do
+    def inspect(%BSON.LongNumber{value: value}, _opts) do
+      "#BSON.LongNumber<#{value}>"
+    end
+  end
+end

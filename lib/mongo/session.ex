@@ -23,7 +23,7 @@ defmodule Mongo.Session do
   # * `slave_ok` true or false
   # * `mongos` true or false
   # * `implicit` true or false
-  defstruct [conn: nil, server_session: nil, slave_ok: false, mongos: false, implicit: false, opts: []]
+  defstruct [conn: nil, slave_ok: false, mongos: false, server_session: nil, implicit: false, opts: []]
 
   @impl true
   def callback_mode() do
@@ -87,7 +87,11 @@ defmodule Mongo.Session do
 
   @impl true
   def init({conn, server_session, slave_ok, mongos, type, opts}) do
-    data = %Session{conn: conn, server_session: server_session, slave_ok: slave_ok, mongos: mongos, implicit: (type == :implict), opts: opts}
+    data = %Session{conn: conn,
+      server_session: server_session,
+      slave_ok: slave_ok,
+      mongos: mongos,
+      implicit: (type == :implicit), opts: opts}
     {:ok, :no_transaction, data}
   end
 
@@ -96,22 +100,24 @@ defmodule Mongo.Session do
     {:next_state, :starting_transaction, %Session{data | server_session: ServerSession.next_txn_num(session)}, {:reply, from, :ok}}
   end
   def handle_event({:call, from}, {:bind_session, cmd}, :no_transaction, %Session{conn: conn, server_session: %ServerSession{session_id: id}}) do
-    {:keep_state_and_data, {:reply, from, conn, Keyword.merge(cmd, lsid: id)}}
+    {:keep_state_and_data, {:reply, from, {:ok, conn, Keyword.merge(cmd, lsid: %{id: id})}}}
   end
   def handle_event({:call, from}, {:bind_session, cmd}, :starting_transaction, %Session{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}} = data) do
     result = Keyword.merge(cmd,
-                           lsid: id,
-                           txnNumber: txn_num,
+                           readConcern: Keyword.get(opts, :read_concern),
+                           lsid: %{id: id},
+                           txnNumber: %BSON.LongNumber{value: txn_num},
                            startTransaction: true,
-                           autocommit: false)
-    {:next_state, :transaction_in_progress, data, {:reply, from, conn, result}}
+                           autocommit: false) |> filter_nils()
+    IO.puts inspect result
+    {:next_state, :transaction_in_progress, data, {:reply, from, {:ok, conn, result}}}
   end
   def handle_event({:call, from}, {:bind_session, cmd}, :transaction_in_progress, %Session{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}}) do
     result = Keyword.merge(cmd,
-                           lsid: id,
-                           txnNumber: txn_num,
+                           lsid: %{id: id},
+                           txnNumber: %BSON.LongNumber{value: txn_num},
                            autocommit: false)
-    {:keep_state_and_data, {:reply, from, conn, result}}
+    {:keep_state_and_data, {:reply, from, {:ok, conn, result}}}
   end
 
   def handle_event({:call, from}, {:commit_transaction}, :transaction_in_progress, data) do
@@ -126,47 +132,41 @@ defmodule Mongo.Session do
   def handle_event({:call, from}, {:end_session}, _state, _data) do
     {:stop_and_reply, :normal, {:reply, from, :ok}}
   end
+  def handle_event({:call, from}, {:server_session}, _state,  %Session{server_session: session_server, implicit: implicit}) do
+    {:keep_state_and_data, {:reply, from, {:ok, session_server, implicit}}}
+  end
 
-  defp run_commit_command(%{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}}) do
+  defp run_commit_command(%{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
 
     #{
-    #    commitTransaction : 1,
-    #    lsid : { id : <UUID> },
-    #    txnNumber : <Int64>,
-    #    autocommit : false,
-    #    writeConcern : {...},
-    #    maxTimeMS: <Int64>,
     #    recoveryToken : {...}
     #}
 
     cmd = [
       commitTransaction: 1,
-      lsid: id,
-      txnNumber: txn_num,
+      lsid: %{id: id},
+      txnNumber: %BSON.LongNumber{value: txn_num},
       autocommit: false,
-      writeConcern: %{w: 1}
-    ]
+      writeConcern: Keyword.get(opts, :write_concern),
+      maxTimeMS: Keyword.get(opts, :max_commit_time_ms)
+      ] |> filter_nils()
 
     Mongo.exec_command(conn, cmd, database: "admin")
   end
 
-  defp run_abort_command(%{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}}) do
+  defp filter_nils(keyword) when is_list(keyword) do
+    Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
+  end
 
-    #{
-    #    abortTransaction : 1,
-    #    lsid : { id : <UUID> },
-    #    txnNumber : <Int64>,
-    #    autocommit : false,
-    #    writeConcern : {...}
-    #}
+  defp run_abort_command(%{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
 
     cmd = [
       abortTransaction: 1,
-      lsid: id,
-      txnNumber: txn_num,
+      lsid: %{id: id},
+      txnNumber: %BSON.LongNumber{value: txn_num},
       autocommit: false,
-      writeConcern: %{w: 1}
-    ]
+      writeConcern: Keyword.get(opts, :write_concern),
+    ] |> filter_nils()
 
     Mongo.exec_command(conn, cmd, database: "admin")
   end

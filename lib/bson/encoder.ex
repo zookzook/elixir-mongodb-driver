@@ -51,6 +51,8 @@ defmodule BSON.Encoder do
   def encode(%BSON.Timestamp{value: epoch, ordinal: ordinal}),
     do: <<ordinal::int32, epoch::int32>>
 
+  def encode(%BSON.LongNumber{value: value}), do: <<value::int64>>
+
   def encode([]) do
     document([])
   end
@@ -140,6 +142,7 @@ defmodule BSON.Encoder do
   defp type(%BSON.JavaScript{scope: nil}),  do: @type_js
   defp type(%BSON.JavaScript{}),            do: @type_js_scope
   defp type(%BSON.Timestamp{}),             do: @type_timestamp
+  defp type(%BSON.LongNumber{}),             do: @type_int64
   defp type(nil),                           do: @type_null
   defp type(:BSON_min),                     do: @type_min
   defp type(:BSON_max),                     do: @type_max
