@@ -20,4 +20,17 @@ defmodule Mongo.ReadPreference do
     Map.merge(@default, map)
   end
   def defaults(_), do: @default
+
+  @doc """
+  Add read preference to the cmd
+  """
+  def add_read_preference(cmd, opts) do
+
+    read_preference = opts
+                      |> Keyword.get(:read_preference)
+                      |> Mongo.ReadPreference.defaults()
+
+    cmd ++ ["$readPreference": read_preference]
+  end
+
 end

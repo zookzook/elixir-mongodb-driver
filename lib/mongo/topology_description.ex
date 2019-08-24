@@ -65,29 +65,24 @@ defmodule Mongo.TopologyDescription do
                       |> Keyword.get(:read_preference)
                       |> ReadPreference.defaults()
 
-    {servers, slave_ok, mongos?} = case topology.type do
-      :unknown -> {[], false, false}
+    servers = case topology.type do
+      :unknown -> []
 
-      :single ->
-        server   = topology.servers
-                   |> Map.values
-                   |> Enum.at(0, %{type: :unknown})
-        slave_ok = type != :write and server.type != :mongos
-        {topology.servers, slave_ok, server.type == :mongos}
+      :single -> topology.servers
 
       :sharded -> {mongos_servers(topology), false, true}
       _ ->
         case {type, topology.type == :replica_set_with_primary} do
-          {:read, _}     -> {select_replica_set_server(topology, read_preference.mode, read_preference), true, false}
-          {:write, true} -> {select_replica_set_server(topology, :primary, ReadPreference.defaults), false, false}
-          _              ->  {[], false, false}
+          {:read, _}     -> select_replica_set_server(topology, read_preference.mode, read_preference)
+          {:write, true} -> select_replica_set_server(topology, :primary, ReadPreference.defaults)
+          _              ->  []
         end
     end
 
     # check now three possible cases
     case Enum.map(servers, fn {server, _} -> server end) do
       []        -> :empty
-      servers   -> {:ok, servers, slave_ok, mongos?}
+      servers   -> {:ok, servers}
     end
   end
 

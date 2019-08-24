@@ -46,6 +46,9 @@ defmodule Mongo do
       interval, the operation returns an error
   """
 
+  import Keywords
+  import WriteConcern
+
   require Logger
 
   use Bitwise
@@ -56,6 +59,7 @@ defmodule Mongo do
   alias Mongo.UrlParser
   alias Mongo.Session.ServerSession
   alias Mongo.Session
+  alias Mongo.ReadPreference
 
   @timeout 15000 # 5000
 
@@ -248,8 +252,7 @@ defmodule Mongo do
             bypassDocumentValidation: opts[:bypass_document_validation],
             hint: opts[:hint],
             comment: opts[:comment],
-            readConcern: opts[:read_concern],
-            lsid: Keyword.get(opts, :lsid)
+            readConcern: opts[:read_concern]
           ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(explain allow_disk_use collation bypass_document_validation hint comment read_concern)a)
@@ -287,8 +290,7 @@ defmodule Mongo do
             new:                      should_return_new(opts[:return_document]),
             sort:                     opts[:sort],
             upsert:                   opts[:upsert],
-            collation:                opts[:collation],
-            lsid:                     opts[:lsid] || :implicit
+            collation:                opts[:collation]
           ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
@@ -299,46 +301,23 @@ defmodule Mongo do
 
   end
 
-  def start_session(topology_pid, type, opts) do
-    with {:ok, session, _, _} <- Topology.checkout_session(topology_pid, type, :explicit, opts) do
-      {:ok, session}
-    else
-      {:new_connection, _server} ->
-        start_session(topology_pid, type, opts)
-    end
-  end
-
   @doc """
-  This function is very fundamental. First a server is selected. If no explicit session id is found, then
-  the Topology-Module returns an implicit session id. The `opts` is updated for using the new session id.
-  Then is command is sent to the server and executed. On return implicit session id is checked in into the
-  session pool for reuse.
+  This function is very fundamental.
   """
-  def issue_command(topology_pid, cmd, :write, opts) do
+  def issue_command(topology_pid, cmd, type, opts) do
 
-    Logger.debug("issue_command: write #{inspect cmd}")
+    new_cmd = ReadPreference.add_read_preference(cmd, opts)
 
-    with {:ok, session, _slave_ok, _mongos} <- Topology.checkout_session(topology_pid, :write, :implicit, opts),
-         {:ok, doc} <- exec_command_session(session, cmd, opts),
-         :ok <- Topology.checkin_session(topology_pid, session) do
+    Logger.debug("issue_command: #{inspect type} #{inspect new_cmd}")
+
+    with {:ok, session} <- Session.start_implicit_session(topology_pid, type, opts),
+         {:ok, doc} <- exec_command_session(session, new_cmd, opts),
+         :ok <- Session.end_implict_session(topology_pid, session) do
       {:ok, doc}
     else
-      {:new_connection, _server} ->  issue_command(topology_pid, cmd, :write, opts)
+      {:new_connection, _server} -> issue_command(topology_pid, cmd, type, opts)
     end
   end
-  def issue_command(topology_pid, cmd, :read, opts) do
-
-    Logger.debug("issue_command: read #{inspect cmd}")
-    with {:ok, session, slave_ok, _mongos} <- Topology.checkout_session(topology_pid, :read, :implict, opts),
-         opts = Keyword.put(opts, :slave_ok, slave_ok),
-         {:ok, doc} <- exec_command_session(session, cmd, opts),
-         :ok <- Topology.checkin_session(topology_pid, session) do
-      {:ok, doc}
-      else
-      {:new_connection, _server} -> issue_command(topology_pid, cmd, :read, opts)
-    end
-  end
-
 
   @doc """
   Finds a document and replaces it.
@@ -371,8 +350,7 @@ defmodule Mongo do
             new:                      should_return_new(opts[:return_document]),
             sort:                     opts[:sort],
             upsert:                   opts[:upsert],
-            collation:                opts[:collation],
-            lsid:                     opts[:lsid]
+            collation:                opts[:collation]
           ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
@@ -403,8 +381,7 @@ defmodule Mongo do
             maxTimeMS:     opts[:max_time],
             fields:        opts[:projection],
             sort:          opts[:sort],
-            collation:     opts[:collation],
-            lsid:          opts[:lsid]
+            collation:     opts[:collation]
           ] |> filter_nils()
     opts = Keyword.drop(opts, ~w(max_time projection sort collation)a)
 
@@ -420,13 +397,11 @@ defmodule Mongo do
             limit:     opts[:limit],
             skip:      opts[:skip],
             hint:      opts[:hint],
-            collation: opts[:collation],
-            lsid:      opts[:lsid]
+            collation: opts[:collation]
           ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(limit skip hint collation)a)
 
-    # Mongo 2.4 and 2.6 returns a float
     with {:ok, doc} <- command(topology_pid, cmd, opts),
          do: {:ok, trunc(doc["n"])}
   end
@@ -506,8 +481,7 @@ defmodule Mongo do
             key:       field,
             query:     filter,
             collation: opts[:collation],
-            maxTimeMS: opts[:max_time],
-            lsid:      opts[:lsid]
+            maxTimeMS: opts[:max_time]
           ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(max_time)a)
@@ -563,8 +537,7 @@ defmodule Mongo do
            comment: opts[:comment],
            maxTimeMS: opts[:max_time],
            skip: opts[:skip],
-           sort: opts[:sort],
-           lsid: opts[:lsid] || :implicit
+           sort: opts[:sort]
           ]
 
     cmd = filter_nils(cmd)
@@ -607,8 +580,8 @@ defmodule Mongo do
   @spec command(GenServer.server, BSON.document, Keyword.t) :: result(BSON.document)
   def command(topology_pid, cmd, opts \\ []) do
     rp = ReadPreference.defaults(%{mode: :primary})
-    rp_opts = [read_preference: Keyword.get(opts, :read_preference, rp)]
-    with {:ok, doc} <- Mongo.issue_command(topology_pid, cmd, :read, rp_opts) do
+    rp_opts = [read_preference: Keyword.get(opts, :read_preference, rp)] # todo andere optionen gehen verloren
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :read, rp_opts) do
       {:ok, doc}
     end
   end
@@ -619,11 +592,9 @@ defmodule Mongo do
 
     Logger.debug("Executing cmd with session: #{inspect cmd}")
 
-    action = %Query{action: :command}
-
     with {:ok, conn, cmd} <- Session.bind_session(session, cmd),
-         {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
-         {:ok, doc} <- check_for_error(doc) do
+         {:ok, _cmd, doc} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
+         {:ok, doc}       <- check_for_error(doc) do
       {:ok, doc}
     end
 
@@ -635,9 +606,7 @@ defmodule Mongo do
 
     Logger.debug("Executing cmd: #{inspect cmd}")
 
-    action = %Query{action: :command}
-
-    with {:ok, _cmd, doc} <- DBConnection.execute(conn, action, [cmd], defaults(opts)),
+    with {:ok, _cmd, doc} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc) do
       {:ok, doc}
     end
@@ -695,11 +664,11 @@ defmodule Mongo do
 
       Mongo.insert_one(pid, "users", %{first_name: "John", last_name: "Smith"})
 
-      {:ok, session} = Mongo.start_session(pid)
+      {:ok, session} = Session.start_session(pid)
       Session.start_transaction(session)
       Mongo.insert_one(pid, "users", %{first_name: "John", last_name: "Smith"}, session: session)
       Session.commit_transaction(session)
-      Mongo.end_sessions([pid])
+      Session.end_session(pid)
 
   """
   @spec insert_one(GenServer.server, collection, BSON.document, Keyword.t) :: result(Mongo.InsertOneResult.t)
@@ -707,12 +676,7 @@ defmodule Mongo do
     assert_single_doc!(doc)
     {[id], [doc]} = assign_ids([doc])
 
-    write_concern = %{
-      w: Keyword.get(opts, :w),
-      j: Keyword.get(opts, :j),
-      wtimeout: Keyword.get(opts, :wtimeout)
-    } |> filter_nils()
-
+    write_concern = write_concern(opts)
     cmd = [
             insert: coll,
             documents: [doc],
@@ -725,9 +689,9 @@ defmodule Mongo do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
-          case Map.get(write_concern, :w) do
-            0 -> {:ok, %Mongo.InsertOneResult{acknowledged: false}}
-            _ -> {:ok, %Mongo.InsertOneResult{inserted_id: id}}
+          case acknowledged?(write_concern) do
+            true  -> {:ok, %Mongo.InsertOneResult{acknowledged: false}}
+            false -> {:ok, %Mongo.InsertOneResult{inserted_id: id}}
           end
       end
     end
@@ -760,28 +724,23 @@ defmodule Mongo do
     assert_many_docs!(docs)
     {ids, docs} = assign_ids(docs)
 
-    write_concern = %{
-      w: Keyword.get(opts, :w),
-      j: Keyword.get(opts, :j),
-      wtimeout: Keyword.get(opts, :wtimeout)
-    } |> filter_nils()
+    write_concern = write_concern(opts)
 
     cmd = [
             insert: coll,
             documents: docs,
             ordered: Keyword.get(opts, :ordered),
             writeConcern: write_concern,
-            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation),
-            lsid: Keyword.get(opts, :lsid)
+            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
           ] |> filter_nils()
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} ->  {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
-          case Map.get(write_concern, :w) do
-            0 -> {:ok, %Mongo.InsertManyResult{acknowledged: false}}
-            _ -> {:ok, %Mongo.InsertManyResult{inserted_ids: ids}}
+          case acknowledged?(write_concern)  do
+            false -> {:ok, %Mongo.InsertManyResult{acknowledged: false}}
+            true  -> {:ok, %Mongo.InsertManyResult{inserted_ids: ids}}
           end
       end
     end
@@ -826,11 +785,7 @@ defmodule Mongo do
   defp delete_documents(topology_pid, coll, filter, limit, opts)  do
 
     # see https://docs.mongodb.com/manual/reference/command/delete/#dbcmd.delete
-    write_concern = %{
-                      w: Keyword.get(opts, :w),
-                      j: Keyword.get(opts, :j),
-                      wtimeout: Keyword.get(opts, :wtimeout)
-                    } |> filter_nils()
+    write_concern = write_concern(opts)
 
     filter = %{
                q: filter,
@@ -842,17 +797,16 @@ defmodule Mongo do
             delete: coll,
             deletes: [filter],
             ordered: Keyword.get(opts, :ordered),
-            writeConcern: write_concern,
-            lsid: Keyword.get(opts, :lsid)
+            writeConcern: write_concern
           ] |> filter_nils()
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         %{ "ok" => _ok, "n" => n } ->
-          case Map.get(write_concern, :w) do
-            0 -> {:ok, %Mongo.DeleteResult{acknowledged: false}}
-            _ -> {:ok, %Mongo.DeleteResult{deleted_count: n}}
+          case acknowledged?(write_concern) do
+            false -> {:ok, %Mongo.DeleteResult{acknowledged: false}}
+            true  -> {:ok, %Mongo.DeleteResult{deleted_count: n}}
           end
         _ -> {:ok, nil}
       end
@@ -942,11 +896,7 @@ defmodule Mongo do
   #
   defp update_documents(topology_pid, coll, filter, update, multi, opts) do
 
-    write_concern = %{
-                      w: Keyword.get(opts, :w),
-                      j: Keyword.get(opts, :j),
-                      wtimeout: Keyword.get(opts, :wtimeout)
-                    } |> filter_nils()
+    write_concern = write_concern(opts)
 
     update = %{
                q: filter,
@@ -962,8 +912,7 @@ defmodule Mongo do
             updates: [update],
             ordered: Keyword.get(opts, :ordered),
             writeConcern: write_concern,
-            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation),
-            lsid: Keyword.get(opts, :lsid)
+            bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
           ] |> filter_nils()
 
 
@@ -974,27 +923,20 @@ defmodule Mongo do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
 
         %{"n" => n, "nModified" => n_modified, "upserted" => upserted} ->
-          case Map.get(write_concern, :w) do
-            0 -> {:ok, %Mongo.UpdateResult{acknowledged: false}}
-            _ -> {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n_modified, upserted_ids: filter_upsert_ids(upserted)}}
+          case acknowledged?(write_concern)  do
+            false -> {:ok, %Mongo.UpdateResult{acknowledged: false}}
+            true  -> {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n_modified, upserted_ids: filter_upsert_ids(upserted)}}
           end
 
         %{"n" => n, "nModified" => n_modified} ->
-          case Map.get(write_concern, :w) do
-            0 -> {:ok, %Mongo.UpdateResult{acknowledged: false}}
-            _ -> {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n_modified}}
+          case acknowledged?(write_concern)  do
+            false -> {:ok, %Mongo.UpdateResult{acknowledged: false}}
+            true  -> {:ok, %Mongo.UpdateResult{matched_count: n, modified_count: n_modified}}
           end
 
         _ -> {:ok, nil}
 
       end
-    end
-  end
-
-  def end_sessions(top, sessions) do
-    ## todo error code handling
-    with {:ok, %{"ok" => ok}} when ok == 1 <- command(top, [endSessions: sessions], database: "admin") do
-      :ok
     end
   end
 
@@ -1014,7 +956,7 @@ defmodule Mongo do
   """
   @spec list_indexes(GenServer.server, String.t, Keyword.t) :: cursor
   def list_indexes(topology_pid, coll, opts \\ []) do
-    cmd = [listIndexes: coll, lsid: Keyword.get(opts, :lsid)]
+    cmd = [listIndexes: coll]
     cursor(topology_pid, cmd, opts)
   end
 
@@ -1038,7 +980,7 @@ defmodule Mongo do
     # from the specs
     # https://github.com/mongodb/specifications/blob/f4bb783627e7ed5c4095c5554d35287956ef8970/source/enumerate-collections.rst#post-mongodb-280-rc3-versions
     #
-    cmd = [listCollections: 1, lsid: Keyword.get(opts, :lsid)]
+    cmd = [listCollections: 1]
     cursor(topology_pid, cmd, opts)
     |> Stream.filter(fn
       %{"type" => name} -> name == "collection"
@@ -1066,15 +1008,6 @@ defmodule Mongo do
 
   defp change_stream_cursor(topology_pid, cmd, fun, opts) do
     %Mongo.Cursor{topology_pid: topology_pid, cmd: cmd, on_resume_token: fun, opts: opts}
-  end
-
-  defp filter_nils(keyword) when is_list(keyword) do
-    Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
-  end
-
-  defp filter_nils(map) when is_map(map) do
-    Enum.reject(map, fn {_key, value} -> is_nil(value) end)
-    |> Enum.into(%{})
   end
 
   ##

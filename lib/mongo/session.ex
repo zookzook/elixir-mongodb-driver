@@ -10,8 +10,13 @@ defmodule Mongo.Session do
 
   @behaviour :gen_statem
 
+  import Keywords
+
   alias Mongo.Session.ServerSession
   alias Mongo.Session
+  alias Mongo.Topology
+
+  require Logger
 
   @type t :: pid()
 
@@ -20,10 +25,8 @@ defmodule Mongo.Session do
   # * `conn` the used connection to the database
   # * `server_session` the server_session data
   # * `opts` options
-  # * `slave_ok` true or false
-  # * `mongos` true or false
   # * `implicit` true or false
-  defstruct [conn: nil, slave_ok: false, mongos: false, server_session: nil, implicit: false, opts: []]
+  defstruct [conn: nil, server_session: nil, implicit: false, opts: []]
 
   @impl true
   def callback_mode() do
@@ -33,9 +36,9 @@ defmodule Mongo.Session do
   @doc """
   Start the generic state machine.
   """
-  @spec start_link(GenServer.server, ServerSession.t, boolean, boolean, atom, keyword()) :: {:ok, Session.t} | :ignore | {:error, term()}
-  def start_link(conn, server_session, slave_ok, mongos, type, opts) do
-    :gen_statem.start_link(__MODULE__, {conn, server_session, slave_ok, mongos, type, opts}, [])
+  @spec start_link(GenServer.server, ServerSession.t, atom, keyword()) :: {:ok, Session.t} | :ignore | {:error, term()}
+  def start_link(conn, server_session, type, opts) do
+    :gen_statem.start_link(__MODULE__, {conn, server_session, type, opts}, [])
   end
 
   @doc """
@@ -44,6 +47,32 @@ defmodule Mongo.Session do
   @spec start_transaction(Session.t) :: :ok | {:error, term()}
   def start_transaction(pid) do
     :gen_statem.call(pid, {:start_transaction})
+  end
+
+  @doc """
+  Start a new session
+  """
+  def start_session(topology_pid, type, opts) do
+    with {:ok, session} <- Topology.checkout_session(topology_pid, type, :explicit, opts) do
+      {:ok, session}
+    else
+      {:new_connection, _server} -> start_session(topology_pid, type, opts)
+    end
+  end
+
+  @doc """
+  Start a new implicit session only if no explicit session exists.
+  """
+  def start_implicit_session(topology_pid, type, opts) do
+    case Keyword.get(opts, :session, nil) do
+       nil ->
+         with {:ok, session} <- Topology.checkout_session(topology_pid, type, :implicit, opts) do
+           {:ok, session}
+         else
+           {:new_connection, _server} -> start_implicit_session(topology_pid, type, opts)
+         end
+       session -> {:ok, session}
+    end
   end
 
   @doc """
@@ -70,8 +99,19 @@ defmodule Mongo.Session do
     :gen_statem.call(pid, {:bind_session, cmd})
   end
 
-  def end_session(pid) do
-    :gen_statem.call(pid, {:end_session})
+  def end_implict_session(topology_pid, session) do
+    with {:ok, session_server} <- :gen_statem.call(session, {:end_implicit_session}) do
+      Topology.checkin_session(topology_pid, session_server)
+    else
+      :noop -> :ok
+      _     -> :error
+    end
+  end
+
+  def end_session(topology_pid, session) do
+    with {:ok, session_server} <- :gen_statem.call(session, {:end_session}) do
+      Topology.checkin_session(topology_pid, session_server)
+    end
   end
 
   def connection(pid) do
@@ -86,11 +126,9 @@ defmodule Mongo.Session do
   def alive?(pid), do: Process.alive?(pid)
 
   @impl true
-  def init({conn, server_session, slave_ok, mongos, type, opts}) do
+  def init({conn, server_session, type, opts}) do
     data = %Session{conn: conn,
       server_session: server_session,
-      slave_ok: slave_ok,
-      mongos: mongos,
       implicit: (type == :implicit), opts: opts}
     {:ok, :no_transaction, data}
   end
@@ -102,14 +140,13 @@ defmodule Mongo.Session do
   def handle_event({:call, from}, {:bind_session, cmd}, :no_transaction, %Session{conn: conn, server_session: %ServerSession{session_id: id}}) do
     {:keep_state_and_data, {:reply, from, {:ok, conn, Keyword.merge(cmd, lsid: %{id: id})}}}
   end
-  def handle_event({:call, from}, {:bind_session, cmd}, :starting_transaction, %Session{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}} = data) do
+  def handle_event({:call, from}, {:bind_session, cmd}, :starting_transaction, %Session{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts} = data) do
     result = Keyword.merge(cmd,
                            readConcern: Keyword.get(opts, :read_concern),
                            lsid: %{id: id},
                            txnNumber: %BSON.LongNumber{value: txn_num},
                            startTransaction: true,
                            autocommit: false) |> filter_nils()
-    IO.puts inspect result
     {:next_state, :transaction_in_progress, data, {:reply, from, {:ok, conn, result}}}
   end
   def handle_event({:call, from}, {:bind_session, cmd}, :transaction_in_progress, %Session{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}}) do
@@ -129,14 +166,32 @@ defmodule Mongo.Session do
   def handle_event({:call, from}, {:connection}, _state,  %{conn: conn}) do
     {:keep_state_and_data, {:reply, from, conn}}
   end
-  def handle_event({:call, from}, {:end_session}, _state, _data) do
-    {:stop_and_reply, :normal, {:reply, from, :ok}}
+  def handle_event({:call, from}, {:end_session}, _state, %Session{server_session: session_server}) do
+    {:stop_and_reply, :normal, {:reply, from, {:ok, session_server}}}
   end
+  def handle_event({:call, from}, {:end_implicit_session}, _state, %Session{server_session: session_server, implicit: true}) do
+    {:stop_and_reply, :normal, {:reply, from, {:ok, session_server}}}
+  end
+  def handle_event({:call, from}, {:end_implicit_session}, _state, %Session{server_session: session_server, implicit: false}) do
+    {:keep_state_and_data, {:reply, from, :noop}}
+  end
+
   def handle_event({:call, from}, {:server_session}, _state,  %Session{server_session: session_server, implicit: implicit}) do
     {:keep_state_and_data, {:reply, from, {:ok, session_server, implicit}}}
   end
 
+  @impl true
+  def terminate(reason, state, data) when state in [:transaction_in_progress] do
+    Logger.debug("Terminating because of #{inspect reason}")
+    run_abort_command(data)
+  end
+  def terminate(reason, _state, _data) do
+    Logger.debug("Terminating because of #{inspect reason}")
+  end
+
   defp run_commit_command(%{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
+
+    Logger.debug("Running commit transaction")
 
     #{
     #    recoveryToken : {...}
@@ -154,12 +209,9 @@ defmodule Mongo.Session do
     Mongo.exec_command(conn, cmd, database: "admin")
   end
 
-  defp filter_nils(keyword) when is_list(keyword) do
-    Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
-  end
-
   defp run_abort_command(%{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
 
+    Logger.debug("Running abort transaction")
     cmd = [
       abortTransaction: 1,
       lsid: %{id: id},
@@ -171,56 +223,5 @@ defmodule Mongo.Session do
     Mongo.exec_command(conn, cmd, database: "admin")
   end
 
-  @impl true
-  def terminate(_reason, state, data) when state in [:transaction_in_progress] do
-    IO.puts "terminating"
-    run_abort_command(data)
-  end
-  def terminate(_reason, _state, _data) do
-    IO.puts "terminating"
-  end
-
-  def test() do
-#    {:ok, session_pool} = Mongo.Session.SessionPool.start_link(self(), 3_000)
-#    ssession = Mongo.Session.SessionPool.checkout(session_pool)
-#    {:ok, session} = Mongo.Session.start_link(self(), ssession, [])
-#
-#    :sys.trace session, true
-#    cmd = [
-#      insert: "Test",
-#      documents: [%{name: "Waldo"}]
-#    ]
-#
-#    cmd = Mongo.Session.bind_session(session, cmd)
-#
-#
-#    Mongo.Session.start_transaction(session)
-#
-#    cmd = [
-#      insert: "Test",
-#      documents: [%{name: "Greta"}]
-#    ]
-#
-#    cmd = Mongo.Session.bind_session(session, cmd)
-#
-#    IO.puts inspect cmd
-#
-#    cmd = [
-#      insert: "Test",
-#      documents: [%{name: "Tom"}]
-#    ]
-#
-#    cmd = Mongo.Session.bind_session(session, cmd)
-#
-#    IO.puts inspect cmd
-#
-#    IO.puts inspect Mongo.Session.alive?(session)
-#
-#    IO.puts inspect Mongo.Session.commit_transaction(session)
-#    IO.puts inspect Mongo.Session.end_session(session)
-#
-#    IO.puts inspect Mongo.Session.alive?(session)
-
-  end
 
 end

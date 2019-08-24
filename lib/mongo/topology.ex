@@ -53,19 +53,14 @@ defmodule Mongo.Topology do
   end
 
   @doc """
-  Checkout a new session. In case of an explicit session the session is returned and no new session will be created.
+
   """
   def checkout_session(pid, cmd_type, type, opts \\ []) do
-    session = Keyword.get(opts, :session, nil)
-    case Session.alive?(session) do
-       false -> GenServer.call(pid, {:checkout_session, cmd_type, type, opts})
-       true -> {:ok, session, false, false} ## todo server_session holen
-    end
-
+    GenServer.call(pid, {:checkout_session, cmd_type, type, opts})
   end
 
-  def checkin_session(pid, session) do
-    GenServer.cast(pid, {:checkin_session, session})
+  def checkin_session(pid, server_session) do
+    GenServer.cast(pid, {:checkin_session, server_session})
   end
 
   def stop(pid) do
@@ -188,19 +183,10 @@ defmodule Mongo.Topology do
   end
 
   ##
-  # checkin the current session, if the session was implicit created
+  # checkin the current session
   #
-  def handle_cast({:checkin_session, session}, %{:session_pool => pool} = state) do
-
-    result = Session.server_session(session)
-
-    IO.puts "Result #{inspect result}"
-
-    case Session.server_session(session) do
-      {:ok, server_session, true} -> SessionPool.checkin(pool, server_session)
-      _                           -> []
-    end
-
+  def handle_cast({:checkin_session, server_session}, %{:session_pool => pool} = state) do
+    SessionPool.checkin(pool, server_session)
     {:noreply, state}
   end
 
@@ -260,16 +246,16 @@ defmodule Mongo.Topology do
         Logger.debug("select_server: empty")
         {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
 
-      {:ok, servers, slave_ok, mongos?} ->                ## found, select randomly a server and return its connection_pool
+      {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
         Logger.debug("select_server: found #{inspect servers}, pools: #{inspect pools}")
 
         with {:ok, connection} <- servers
                                   |> Enum.take_random(1)
                                   |> get_connection(state),
              server_session <- checkout_server_session(state),
-            {:ok, session}  <- Session.start_link(connection, server_session, slave_ok, mongos?, type, opts) do
+            {:ok, session}  <- Session.start_link(connection, server_session, type, opts) do
           Logger.debug("select_server: connection is #{inspect connection}, server_session is #{inspect server_session}")
-          {:reply, {:ok, session, slave_ok, mongos?}, state}
+          {:reply, {:ok, session}, state}
         end
 
       error ->
@@ -284,7 +270,7 @@ defmodule Mongo.Topology do
         Logger.debug("select_server: empty")
         {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
 
-      {:ok, servers, slave_ok, mongos?} ->                ## found, select randomly a server and return its connection_pool
+      {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
         Logger.debug("select_server: found #{inspect servers}, pools: #{inspect pools}")
 
         with {:ok, connection} <- servers
@@ -292,7 +278,7 @@ defmodule Mongo.Topology do
                                   |> get_connection(state) do
           Logger.debug("select_server: connection is #{inspect connection}")
 
-          {:reply, {:ok, connection, slave_ok, mongos?}, state}
+          {:reply, {:ok, connection}, state}
         end
       error ->
         Logger.debug("select_servers: #{inspect error}")

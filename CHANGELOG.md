@@ -1,3 +1,12 @@
+## 0.6.0
+
+* Enhancements
+    * refactored `writeConcern`
+    * refactored `filter_nils`
+    * refactored usage of `ReadPreference`
+    * added support for sessions (`ServerSession`, `SessionPool`, `Session`)
+    * added support for transaction
+    
 ## 0.5.7
 
 * Bug Fixes
