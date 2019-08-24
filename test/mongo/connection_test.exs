@@ -137,7 +137,6 @@ defmodule Mongo.ConnectionTest do
   test "find" do
     pid = connect_auth()
     coll = unique_name()
-    {:ok, _conn, _, _} = Mongo.select_server(pid, :read)
 
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 42}, [])
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 43}, [])
@@ -190,7 +189,6 @@ defmodule Mongo.ConnectionTest do
     coll   = unique_name()
     size   = 1024*1024
     binary = <<0::size(size)>>
-    {:ok, _conn, _, _} = Mongo.select_server(pid, :read)
 
     Enum.each(1..10, fn _ ->
       Mongo.insert_one(pid, coll, %{data: binary}, [w: 0])
