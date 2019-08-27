@@ -1,4 +1,4 @@
-defmodule WriteConcern do
+defmodule Mongo.WriteConcern do
   @moduledoc false
 
   import Keywords
@@ -13,10 +13,17 @@ defmodule WriteConcern do
 
   end
 
-  def acknowledged?(write_concern) do
+  def acknowledged?(write_concern) when is_map(write_concern) do
     case Map.get(write_concern, :w) do
-      0 -> true
-      _ -> false
+      0 -> false
+      _ -> true
+    end
+  end
+
+  def acknowledged?(write_concern) when is_list(write_concern) do
+    case Keyword.get(write_concern, :w) do
+      0 -> false
+      _ -> true
     end
   end
 

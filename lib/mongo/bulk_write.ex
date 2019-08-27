@@ -155,10 +155,12 @@ defmodule Mongo.BulkWrite do
   """
 
   import Mongo.Utils
+  import Mongo.WriteConcern
   alias Mongo.UnorderedBulk
   alias Mongo.OrderedBulk
   alias Mongo.BulkWriteResult
   alias Mongo.Session.ServerSession
+  alias Mongo.Session
   alias Mongo.Topology
 
   @doc """
@@ -182,15 +184,12 @@ defmodule Mongo.BulkWrite do
   @spec write(GenServer.server, (UnorderedBulk.t | OrderedBulk.t), Keyword.t) :: Mongo.BulkWriteResult.t
   def write(topology_pid, %UnorderedBulk{} = bulk, opts) do
 
-    write_concern = write_concern(opts)
-
-    with {:ok, conn, _, _, session_id} <- Topology.select_server(topology_pid, :write, opts),
-         result                        = one_bulk_write(conn, bulk, write_concern, Keyword.merge(opts, [lsid: session_id])),
-         :ok                           <- checkin_session_id(topology_pid, Keyword.get(opts, :lsid, :implicit), session_id) do
+    with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
+         result         = one_bulk_write(session, bulk, opts),
+         :ok            <- Session.end_implict_session(topology_pid, session) do
       result
       else
-      {:new_connection, _server} ->
-        write(topology_pid, bulk, opts)
+      {:new_connection, _server} -> write(topology_pid, bulk, opts)
     end
 
   end
@@ -199,34 +198,21 @@ defmodule Mongo.BulkWrite do
 
     write_concern = write_concern(opts)
 
-    empty = %BulkWriteResult{acknowledged: acknowledged(write_concern)}
+    empty = %BulkWriteResult{acknowledged: acknowledged?(write_concern)}
 
-    with {:ok, conn, _, _, session_id} <- Topology.select_server(topology_pid, :write, opts),
-         {:ok, limits} <- Mongo.limits(conn),
+    with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
+         {:ok, limits} <- get_limits(session),
          max_batch_size <- limits.max_write_batch_size,
          result = ops
                   |> get_op_sequence()
-                  |> Enum.map(fn {cmd, docs} -> one_bulk_write_operation(conn, cmd, coll, docs, write_concern, max_batch_size, Keyword.merge(opts, [lsid: session_id])) end)
-                  |> BulkWriteResult.reduce(empty),
-         :ok <- checkin_session_id(topology_pid, Keyword.get(opts, :lsid, :implicit), session_id) do
+                  |> Enum.map(fn {cmd, docs} -> one_bulk_write_operation(session, cmd, coll, docs, max_batch_size, opts) end)
+                  |> BulkWriteResult.reduce(empty) do
 
       result
     else
-      {:new_connection, _server} ->
-        write(topology_pid, bulk, opts)
+      {:new_connection, _server} -> write(topology_pid, bulk, opts)
     end
 
-  end
-
-  ##
-  # returns the current write concerns from `opts`
-  #
-  defp write_concern(opts) do
-    %{
-      w: Keyword.get(opts, :w),
-      j: Keyword.get(opts, :j),
-      wtimeout: Keyword.get(opts, :wtimeout)
-    } |> filter_nils()
   end
 
   ##
@@ -239,34 +225,24 @@ defmodule Mongo.BulkWrite do
   # The function returns a keyword list with the results of each operation group:
   # For the details see https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#results
   #
-  defp one_bulk_write(conn, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, write_concern, opts) do
+  defp one_bulk_write(session, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, opts) do
 
-    with {:ok, limits} <- Mongo.limits(conn),
+    with {:ok, limits} <- get_limits(session),
          max_batch_size <- limits.max_write_batch_size,
-         insert_result <- one_bulk_write_operation(conn, :insert, coll, inserts, write_concern, max_batch_size, opts),
-         update_result <- one_bulk_write_operation(conn, :update, coll, updates, write_concern, max_batch_size, opts),
-         delete_result <- one_bulk_write_operation(conn, :delete, coll, deletes, write_concern, max_batch_size, opts)  do
+         insert_result <- one_bulk_write_operation(session, :insert, coll, inserts, max_batch_size, opts),
+         update_result <- one_bulk_write_operation(session, :update, coll, updates, max_batch_size, opts),
+         delete_result <- one_bulk_write_operation(session, :delete, coll, deletes, max_batch_size, opts)  do
 
       [insert_result, update_result, delete_result]
-      |> BulkWriteResult.reduce(%BulkWriteResult{acknowledged: acknowledged(write_concern)})
+      |> BulkWriteResult.reduce(%BulkWriteResult{acknowledged: acknowledged?(opts)})
     end
   end
-
-  defp update_session_id(cmd, nil) do
-    cmd
-  end
-  defp update_session_id(cmd, %ServerSession{:session_id => session_id}) do
-    Keyword.merge(cmd, [lsid: %{id: session_id}])
-  end
-
-  defp checkin_session_id(topology_pid, :implicit, session_id), do: Topology.checkin_session_id(topology_pid, session_id)
-  defp checkin_session_id(_, _, _), do: :ok
 
   ###
   # Executes the command `cmd` and collects the result.
   #
-  defp one_bulk_write_operation(conn, cmd, coll, docs, write_concern, max_batch_size, opts) do
-    with result <- conn |> run_commands(get_cmds(cmd, coll, docs, write_concern, max_batch_size, opts), opts) |> collect(cmd) do
+  defp one_bulk_write_operation(session, cmd, coll, docs, max_batch_size, opts) do
+    with result <- session |> run_commands(get_cmds(cmd, coll, docs, max_batch_size, opts), opts) |> collect(cmd) do
       result
     end
   end
@@ -274,12 +250,9 @@ defmodule Mongo.BulkWrite do
   ##
   # Converts the list of operations into insert/update/delete commands
   #
-  defp get_cmds(:insert, coll, docs, write_concern, max_batch_size, opts), do: get_insert_cmds(coll, docs, write_concern, max_batch_size, opts)
-  defp get_cmds(:update, coll, docs, write_concern, max_batch_size, opts), do: get_update_cmds(coll, docs, write_concern, max_batch_size, opts)
-  defp get_cmds(:delete, coll, docs, write_concern, max_batch_size, opts), do: get_delete_cmds(coll, docs, write_concern, max_batch_size, opts)
-
-  defp acknowledged(%{w: w}) when w > 0, do: true
-  defp acknowledged(%{}), do: false
+  defp get_cmds(:insert, coll, docs, max_batch_size, opts), do: get_insert_cmds(coll, docs, max_batch_size, opts)
+  defp get_cmds(:update, coll, docs, max_batch_size, opts), do: get_update_cmds(coll, docs, max_batch_size, opts)
+  defp get_cmds(:delete, coll, docs, max_batch_size, opts), do: get_delete_cmds(coll, docs, max_batch_size, opts)
 
   ###
   # Converts the list of operations into list of lists with same operations.
@@ -357,48 +330,47 @@ defmodule Mongo.BulkWrite do
   defp filter_upsert_ids(nil), do: []
   defp filter_upsert_ids(upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
 
-  defp run_commands(conn, {cmds, ids}, opts) do
-    {Enum.map(cmds, fn cmd -> Mongo.exec_command(conn, cmd, opts) end), ids}
+  defp run_commands(session, {cmds, ids}, opts) do
+    {Enum.map(cmds, fn cmd -> Mongo.exec_command_session(session, cmd, opts) end), ids}
   end
-  defp run_commands(conn, cmds, opts) do
-    Enum.map(cmds, fn cmd -> Mongo.exec_command(conn, cmd, opts) end)
+  defp run_commands(session, cmds, opts) do
+    Enum.map(cmds, fn cmd -> Mongo.exec_command_session(session, cmd, opts) end)
   end
 
-  defp get_insert_cmds(coll, docs, write_concern, max_batch_size, opts) do
+  defp get_insert_cmds(coll, docs, max_batch_size, opts) do
 
     {ids, docs} = assign_ids(docs)
 
     cmds = docs
            |> Enum.chunk_every(max_batch_size)
-           |> Enum.map(fn inserts -> get_insert_cmd(coll, inserts, write_concern) end)
-           |> Enum.map(fn cmd -> update_session_id(cmd, Keyword.get(opts, :lsid)) end)
+           |> Enum.map(fn inserts -> get_insert_cmd(coll, inserts, opts) end)
+
     {cmds, ids}
 
   end
 
-  defp get_insert_cmd(coll, inserts, write_concern) do
+  defp get_insert_cmd(coll, inserts, opts) do
 
     [insert: coll,
      documents: inserts,
-     writeConcern: write_concern] |> filter_nils()
+     writeConcern: write_concern(opts)] |> filter_nils()
 
   end
 
-  defp get_delete_cmds(coll, docs, write_concern, max_batch_size, opts) do
+  defp get_delete_cmds(coll, docs, max_batch_size, opts) do
 
     docs
     |> Enum.chunk_every(max_batch_size)
-    |> Enum.map(fn deletes -> get_delete_cmd(coll, deletes, write_concern, opts) end)
-    |> Enum.map(fn cmd -> update_session_id(cmd, Keyword.get(opts, :lsid)) end)
+    |> Enum.map(fn deletes -> get_delete_cmd(coll, deletes, opts) end)
 
   end
 
-  defp get_delete_cmd(coll, deletes, write_concern, opts ) do
+  defp get_delete_cmd(coll, deletes, opts ) do
 
     [delete: coll,
      deletes: Enum.map(deletes, fn delete -> get_delete_doc(delete) end),
      ordered: Keyword.get(opts, :ordered),
-     writeConcern: write_concern] |> filter_nils()
+     writeConcern: write_concern(opts)] |> filter_nils()
 
   end
 
@@ -410,21 +382,20 @@ defmodule Mongo.BulkWrite do
 
   end
 
-  defp get_update_cmds(coll, docs, write_concern, max_batch_size, opts) do
+  defp get_update_cmds(coll, docs, max_batch_size, opts) do
 
     docs
     |> Enum.chunk_every(max_batch_size)
-    |> Enum.map(fn updates -> get_update_cmd(coll, updates, write_concern, opts) end)
-    |> Enum.map(fn cmd -> update_session_id(cmd, Keyword.get(opts, :lsid)) end)
+    |> Enum.map(fn updates -> get_update_cmd(coll, updates, opts) end)
 
   end
 
-  defp get_update_cmd(coll, updates, write_concern, opts) do
+  defp get_update_cmd(coll, updates, opts) do
 
     [ update: coll,
       updates: Enum.map(updates, fn update -> get_update_doc(update) end),
       ordered: Keyword.get(opts, :ordered),
-      writeConcern: write_concern,
+      writeConcern: write_concern(opts),
       bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
     ] |> filter_nils()
 
@@ -440,6 +411,12 @@ defmodule Mongo.BulkWrite do
       arrayFilters: Keyword.get(update_opts, :filters)
     ] |> filter_nils()
 
+  end
+
+  defp get_limits(session) do
+    with conn <- Session.connection(session) do
+      Mongo.limits(conn)
+    end
   end
 
 end

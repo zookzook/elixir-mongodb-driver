@@ -47,7 +47,7 @@ defmodule Mongo do
   """
 
   import Keywords
-  import WriteConcern
+  import Mongo.WriteConcern
 
   require Logger
 
@@ -311,9 +311,9 @@ defmodule Mongo do
     Logger.debug("issue_command: #{inspect type} #{inspect new_cmd}")
 
     with {:ok, session} <- Session.start_implicit_session(topology_pid, type, opts),
-         {:ok, doc} <- exec_command_session(session, new_cmd, opts),
+         result <- exec_command_session(session, new_cmd, opts),
          :ok <- Session.end_implict_session(topology_pid, session) do
-      {:ok, doc}
+      result
     else
       {:new_connection, _server} -> issue_command(topology_pid, cmd, type, opts)
     end
@@ -402,7 +402,7 @@ defmodule Mongo do
 
     opts = Keyword.drop(opts, ~w(limit skip hint collation)a)
 
-    with {:ok, doc} <- command(topology_pid, cmd, opts),
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :read, opts),
          do: {:ok, trunc(doc["n"])}
   end
 
@@ -579,9 +579,7 @@ defmodule Mongo do
   """
   @spec command(GenServer.server, BSON.document, Keyword.t) :: result(BSON.document)
   def command(topology_pid, cmd, opts \\ []) do
-    rp = ReadPreference.defaults(%{mode: :primary})
-    rp_opts = [read_preference: Keyword.get(opts, :read_preference, rp)] # todo andere optionen gehen verloren
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :read, rp_opts) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       {:ok, doc}
     end
   end
@@ -643,7 +641,7 @@ defmodule Mongo do
   """
   @spec command!(GenServer.server, BSON.document, Keyword.t) :: result!(BSON.document)
   def command!(topology_pid, cmd, opts \\ []) do
-    bangify(command(topology_pid, cmd, opts))
+    bangify(issue_command(topology_pid, cmd, :write, opts))
   end
 
   @doc """
@@ -651,7 +649,7 @@ defmodule Mongo do
   """
   @spec ping(GenServer.server) :: result(BSON.document)
   def ping(topology_pid) do
-    command(topology_pid, [ping: 1], [batch_size: 1])
+    issue_command(topology_pid, [ping: 1], :read, [batch_size: 1])
   end
 
   @doc """
@@ -681,17 +679,17 @@ defmodule Mongo do
             insert: coll,
             documents: [doc],
             ordered: Keyword.get(opts, :ordered),
-            writeConcern: write_concern, ## todo in der Transaction löschen
+            writeConcern: write_concern,
             bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
           ] |> filter_nils()
 
-    with {:ok, doc} <- Mongo.issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} -> {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
         _ ->
           case acknowledged?(write_concern) do
-            true  -> {:ok, %Mongo.InsertOneResult{acknowledged: false}}
-            false -> {:ok, %Mongo.InsertOneResult{inserted_id: id}}
+            false -> {:ok, %Mongo.InsertOneResult{acknowledged: false}}
+            true  -> {:ok, %Mongo.InsertOneResult{inserted_id: id}}
           end
       end
     end

@@ -9,6 +9,9 @@ defmodule Mongo.Test do
   defmacro unique_name do
     {function, _arity} = __CALLER__.function
     "#{__CALLER__.module}.#{function}"
+    |> String.replace(" ", "_")
+    |> String.replace(".", "_")
+    |> String.downcase()
   end
 
   test "object_id" do
@@ -563,9 +566,9 @@ defmodule Mongo.Test do
   test "access multiple databases", c do
     coll = unique_name()
 
-    assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 42}, database: "mongodb_test2")
+    assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 42}, database: "mongodb_test2", verbose: true)
 
-    assert {:ok, 1} = Mongo.count(c.pid, coll, [], database: "mongodb_test2")
-    assert {:ok, 0} = Mongo.count(c.pid, coll, [])
+    assert {:ok, 1} = Mongo.count(c.pid, coll, %{}, database: "mongodb_test2", verbose: true)
+    assert {:ok, 0} = Mongo.count(c.pid, coll, %{}, verbose: true)
  end
 end

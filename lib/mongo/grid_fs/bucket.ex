@@ -94,8 +94,8 @@ defmodule Mongo.GridFs.Bucket do
   """
   @spec drop(Bucket.t) :: Mongo.result(BSON.document)
   def drop(%Bucket{topology_pid: topology_pid, opts: opts} = bucket) do
-    {:ok, _} = Mongo.command(topology_pid, [drop: files_collection_name(bucket)], opts)
-    {:ok, _} = Mongo.command(topology_pid, [drop: chunks_collection_name(bucket)], opts)
+    {:ok, _} = Mongo.issue_command(topology_pid, [drop: files_collection_name(bucket)], :write, opts)
+    {:ok, _} = Mongo.issue_command(topology_pid, [drop: chunks_collection_name(bucket)], :write, opts)
   end
 
   @doc """
@@ -188,7 +188,7 @@ defmodule Mongo.GridFs.Bucket do
   defp create_chunks_index({%Bucket{topology_pid: topology_pid, opts: opts} = bucket, false} ) do
 
     cmd      = [createIndexes: chunks_collection_name(bucket), indexes: [[key: [files_id: 1, n: 1], name: @chunks_index_name, unique: true]]]
-    {:ok, _} = Mongo.command(topology_pid, cmd, opts)
+    {:ok, _} = Mongo.issue_command(topology_pid, cmd, :write, opts)
 
     bucket
   end
@@ -204,7 +204,7 @@ defmodule Mongo.GridFs.Bucket do
   defp create_files_index({%Bucket{topology_pid: topology_pid, opts: opts} = bucket, false}) do
 
     cmd      = [createIndexes: files_collection_name(bucket), indexes: [[key: [filename: 1, uploadDate: 1], name: @files_index_name]]]
-    {:ok, _} = Mongo.command(topology_pid, cmd, opts)
+    {:ok, _} = Mongo.issue_command(topology_pid, cmd, :write, opts)
 
     bucket
   end

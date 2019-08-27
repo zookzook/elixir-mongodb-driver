@@ -4,6 +4,7 @@ defmodule Mongo.SessionTest do
   alias Mongo.InsertOneResult
   alias Mongo.Session.SessionPool
   alias Mongo.Session.ServerSession
+  alias Mongo.Session
 
   setup_all do
     assert {:ok, pid} = Mongo.TestConnection.connect
@@ -14,10 +15,10 @@ defmodule Mongo.SessionTest do
   test "simple session insert", top do
     coll = unique_name()
 
-    sessionId = Mongo.start_session(top.pid)
-    {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top.pid, coll, %{name: "Greta"}, lsid: sessionId)
+    {:ok, session} = Session.start_session(top.pid, :write, [])
+    {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top.pid, coll, %{name: "Greta"}, session: session)
     assert id != nil
-    assert :ok == Mongo.end_sessions(top.pid, [sessionId])
+    assert :ok == Session.end_session(top.pid, session)
 
   end
 

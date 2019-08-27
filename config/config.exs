@@ -9,7 +9,7 @@ use Mix.Config
 # party users, it should be done in your mix.exs file.
 
 config :logger, :console,
-  level: :debug,
+  level: :info,
   truncate: 1024,
   format: "$time [$level] $message ($metadata)\n\n",
   metadata: [:module, :function, :line]
