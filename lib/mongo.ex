@@ -306,7 +306,10 @@ defmodule Mongo do
   """
   def issue_command(topology_pid, cmd, type, opts) do
 
-    new_cmd = ReadPreference.add_read_preference(cmd, opts)
+    new_cmd = case type do
+      :read  -> ReadPreference.add_read_preference(cmd, opts)
+      :write -> cmd
+    end
 
     Logger.debug("issue_command: #{inspect type} #{inspect new_cmd}")
 
