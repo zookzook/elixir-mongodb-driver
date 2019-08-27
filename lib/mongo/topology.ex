@@ -252,8 +252,10 @@ defmodule Mongo.Topology do
         with {:ok, connection} <- servers
                                   |> Enum.take_random(1)
                                   |> get_connection(state),
+             {:ok, wire_version} <- Mongo.wire_version(connection),
              server_session <- checkout_server_session(state),
-            {:ok, session}  <- Session.start_link(connection, server_session, type, opts) do
+            {:ok, session}  <- Session.start_link(connection, server_session, type, wire_version, opts) do
+
           Logger.debug("select_server: connection is #{inspect connection}, server_session is #{inspect server_session}")
           {:reply, {:ok, session}, state}
         end
