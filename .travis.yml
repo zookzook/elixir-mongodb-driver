@@ -7,14 +7,14 @@ elixir:
 
 install:
   - wget http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-${MONGODB}.tgz
-  - tar xzf mongodb-linux-x86_64-${MONGODB}.tgz
-  - ${PWD}/mongodb-linux-x86_64-${MONGODB}/bin/mongod --version
+  - tar xzf mongodb-linux-x86_64-${MONGODB}.tgz -C ${PWD}/mongodb
+  - ${PWD}/mongodb/bin/mongod --version
 
 before_script:
-  - export PATH=${PWD}/mongodb-linux-x86_64-${MONGODB}/bin/:$PATH
+  - export PATH=${PWD}/mongodb/bin/:$PATH
   - bash ./start_mongo.bash
-  - mkdir ${PWD}/mongodb-linux-x86_64-${MONGODB}/data
-  - ${PWD}/mongodb-linux-x86_64-${MONGODB}/bin/mongod --dbpath ${PWD}/mongodb-linux-x86_64-${MONGODB}/data --logpath ${PWD}/mongodb-linux-x86_64-${MONGODB}/mongodb.log --fork
+  - mkdir ${PWD}/mongodb/data
+  - ${PWD}/mongodb/bin/mongod --dbpath ${PWD}/mongodb/data --logpath ${PWD}/mongodb/mongodb.log --fork
 
 script:
   - mix local.hex --force
