@@ -13,6 +13,7 @@ install:
   - ${PWD}/mongodb/bin/mongod --version
 
 before_script:
+  - sudo apt-get install -y openssl
   - export PATH=${PWD}/mongodb/bin/:$PATH
   - bash ./start_mongo.bash
   - mkdir ${PWD}/mongodb/data
