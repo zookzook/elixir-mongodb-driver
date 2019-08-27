@@ -26,4 +26,4 @@ env:
     - MONGODB=3.2.20
     - MONGODB=3.4.16
     - MONGODB=3.6.6
-    - MONGODB=4.2
+    - MONGODB=ubuntu1804-v4.2-latest

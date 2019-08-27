@@ -14,7 +14,7 @@ defmodule Mongo.TopologyTest do
       rp = Mongo.ReadPreference.defaults(%{mode: mode})
       assert [%{"_id" => ^new_id, "topology_test" => 1}] =
                mongo_pid
-               |> Mongo.find("test", %{_id: new_id}, read_preference: rp)
+               |> Mongo.find("test", %{_id: new_id}, read_preference: rp, slave_ok: mode in [:secondary, :secondary_preferred])
                |> Enum.to_list
 
       assert {:ok, %Mongo.DeleteResult{deleted_count: 1}} = Mongo.delete_one(mongo_pid, "test", %{_id: new_id})
