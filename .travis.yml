@@ -8,7 +8,7 @@ elixir:
   - 1.9
 
 otp_release:
-  - '19.1'
+  - '19.3'
 
 install:
   - wget http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-${MONGODB}.tgz
