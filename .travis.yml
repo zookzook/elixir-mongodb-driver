@@ -1,14 +1,14 @@
 sudo: required
 language: elixir
 
-elixir:
-  - 1.6
-  - 1.7
-  - 1.8
-  - 1.9
-
-otp_release:
-  - '19.3'
+matrix:
+  include:
+    - elixir: '1.6'
+      otp_release: '19.3'
+    - elixir: '1.7'
+      otp_release: '19.3'
+    - elixir: '1.8'
+    - elixir: '1.9'
 
 install:
   - wget http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-${MONGODB}.tgz
@@ -31,4 +31,4 @@ env:
     - MONGODB=3.2.20
     - MONGODB=3.4.16
     - MONGODB=3.6.6
-    - MONGODB=4.2.0
+    - MONGODB=4.0.9
