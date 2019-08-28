@@ -6,6 +6,7 @@
     * refactored usage of `ReadPreference`
     * added support for sessions (`ServerSession`, `SessionPool`, `Session`)
     * added support for transaction
+    * added Decimal128 encoder
     
 ## 0.5.7
 

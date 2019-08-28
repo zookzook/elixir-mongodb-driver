@@ -556,8 +556,8 @@ defmodule Mongo.Test do
   @tag :mongo_3_4
   test "correctly query NumberDecimal", c do
     coll = "number_decimal_test"
-    Mongo.insert_one(c.pid, coll, %{number: Decimal.new(123.456), index: 1})
-    Mongo.insert_one(c.pid, coll, %{number: Decimal.new(-123.456), index: 2})
+    Mongo.insert_one(c.pid, coll, %{number: Decimal.from_float(123.456), index: 1})
+    Mongo.insert_one(c.pid, coll, %{number: Decimal.from_float(-123.456), index: 2})
     assert %{"number" => %Decimal{coef: 123456, exp: -3}} = Mongo.find(c.pid, coll, %{index: 1}, limit: 1) |> Enum.to_list |> List.first()
     assert %{"number" => %Decimal{sign: -1, coef: 123456, exp: -3}} = Mongo.find(c.pid, coll, %{index: 2}, limit: 1) |> Enum.to_list |> List.first()
   end

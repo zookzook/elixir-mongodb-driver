@@ -22,14 +22,14 @@ for the individual options.
   * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
   * [x] Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
   * [x] Added bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
-  * [ ] Add support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
-  * [ ] Add support driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
+  * [x] Add support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
+  * [x] Add support driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
   * [ ] Add support for `op_compressed` ([See](https://github.com/mongodb/specifications/blob/master/source/compression/OP_COMPRESSED.rst))
   * [ ] Because the driver is used in production environments, quick adjustments are necessary.
 
 ## Features
 
-  * Supports MongoDB versions 3.2, 3.4, 3.6, 4.0
+  * Supports MongoDB versions 3.2, 3.4, 3.6, 4.0, 4.2
   * Connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * Streaming cursors
   * Performant ObjectID generation
@@ -57,6 +57,7 @@ for the individual options.
     symbol              "foo" (2)
     min key             :BSON_min
     max key             :BSON_max
+    decimal128          Decimal{}
 
 1) Since BSON documents are ordered Elixir maps cannot be used to fully represent them. This driver chose to accept both maps and lists of key-value pairs when encoding but will only decode documents to lists. This has the side-effect that it's impossible to discern empty arrays from empty documents. Additionally the driver will accept both atoms and strings for document keys but will only decode to strings.
 

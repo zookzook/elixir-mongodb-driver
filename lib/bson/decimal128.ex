@@ -42,8 +42,8 @@ defmodule BSON.Decimal128 do
     <<low::little-64, high::little-64>>
   end
 
-  def encode(%Decimal{sign: sign, coef: significand, exp: exponent}) do
-    message = "Exponent is out of range for Decimal128 encoding"
+  def encode(%Decimal{exp: exponent}) do
+    message = "Exponent is out of range for Decimal128 encoding, #{exponent}"
     raise ArgumentError, message
   end
 
