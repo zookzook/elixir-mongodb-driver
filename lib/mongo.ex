@@ -57,7 +57,6 @@ defmodule Mongo do
   alias Mongo.ReadPreference
   alias Mongo.Topology
   alias Mongo.UrlParser
-  alias Mongo.Session.ServerSession
   alias Mongo.Session
   alias Mongo.ReadPreference
 

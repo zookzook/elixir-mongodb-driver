@@ -159,9 +159,7 @@ defmodule Mongo.BulkWrite do
   alias Mongo.UnorderedBulk
   alias Mongo.OrderedBulk
   alias Mongo.BulkWriteResult
-  alias Mongo.Session.ServerSession
   alias Mongo.Session
-  alias Mongo.Topology
 
   @doc """
   Executes unordered and ordered bulk writes.
