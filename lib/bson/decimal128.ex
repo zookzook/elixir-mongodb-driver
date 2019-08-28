@@ -7,6 +7,8 @@ defmodule BSON.Decimal128 do
   @combintation_nan 31
   @exponent_mask 0x3fff
   @exponent_bias 6176
+  @max_exponent 6111
+  @min_exponent -6176
 
   def decode(<<_::little-64, high::little-64>> = bits) do
     is_negative = (high &&& @signed_bit_mask) == (@signed_bit_mask)
@@ -25,6 +27,24 @@ defmodule BSON.Decimal128 do
       coef(bits),
       exponent
     )
+  end
+
+  def encode(%Decimal{sign: sign, coef: significand, exp: exponent}) when exponent >= @min_exponent and exponent <= @max_exponent do
+    biasedExponent = exponent + @exponent_bias
+    low  = significand &&& 0xffffffff
+    high = (significand >>> 64) &&& 0xffffffff
+    high = bor(high, biasedExponent <<< 49)
+    high = case sign do
+      1 -> high
+      _ -> bor(high, @signed_bit_mask)
+    end
+
+    <<low::little-64, high::little-64>>
+  end
+
+  def encode(%Decimal{sign: sign, coef: significand, exp: exponent}) do
+    message = "Exponent is out of range for Decimal128 encoding"
+    raise ArgumentError, message
   end
 
   defp exponent(high, _two_highest_bits_set = true) do

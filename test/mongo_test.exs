@@ -126,7 +126,7 @@ defmodule Mongo.Test do
   test "count", c do
     coll = unique_name()
 
-    assert {:ok, 0} = Mongo.count(c.pid, coll, [])
+    assert {:ok, 0} = Mongo.count(c.pid, coll, %{})
 
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 42})
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 43})
@@ -556,11 +556,10 @@ defmodule Mongo.Test do
   @tag :mongo_3_4
   test "correctly query NumberDecimal", c do
     coll = "number_decimal_test"
-    Mongo.command(c.pid,
-      [eval: "db.#{coll}.insert({number: NumberDecimal('123.456')})"]
-    )
-
-    assert %{"number" => %Decimal{coef: 123456, exp: -3}} = Mongo.find(c.pid, coll, %{}, limit: 1) |> Enum.to_list |> List.first()
+    Mongo.insert_one(c.pid, coll, %{number: Decimal.new(123.456), index: 1})
+    Mongo.insert_one(c.pid, coll, %{number: Decimal.new(-123.456), index: 2})
+    assert %{"number" => %Decimal{coef: 123456, exp: -3}} = Mongo.find(c.pid, coll, %{index: 1}, limit: 1) |> Enum.to_list |> List.first()
+    assert %{"number" => %Decimal{sign: -1, coef: 123456, exp: -3}} = Mongo.find(c.pid, coll, %{index: 2}, limit: 1) |> Enum.to_list |> List.first()
   end
 
   test "access multiple databases", c do
