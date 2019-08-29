@@ -40,6 +40,33 @@ defmodule BSON.Decimal128Test do
     assert_decimal(@binaries_neg_tiny, %Decimal{sign: -1, coef: 1, exp: -6176})
   end
 
+  @tag :mongo_3_4
+  test "BSON.Decimal128.encode/1" do
+    assert_decimal(%Decimal{coef: :qNaN})
+    assert_decimal(%Decimal{coef: :sNaN})
+    assert_decimal(%Decimal{sign: -1, coef: :inf})
+    assert_decimal(%Decimal{coef: :inf})
+    assert_decimal(%Decimal{coef: 0, exp: -611})
+    assert_decimal(%Decimal{sign: -1, coef: 0, exp: -1})
+    assert_decimal(%Decimal{coef: 1, exp: 3})
+    assert_decimal(%Decimal{coef: 1234, exp: -6})
+    assert_decimal(%Decimal{coef: 123400000, exp: -11})
+    assert_decimal(%Decimal{coef: 1234567890123456789012345678901234, exp: -34})
+    assert_decimal(%Decimal{coef: 1234567890123456789012345678901234, exp: 0})
+    assert_decimal(%Decimal{coef: 9999999999999999999999999999999999, exp: -6176})
+    assert_decimal(%Decimal{coef: 1, exp: -6176})
+    assert_decimal(%Decimal{sign: -1, coef: 1, exp: -6176})
+  end
+
+  defp assert_decimal(expected_decimal) do
+
+    value = expected_decimal
+    |> BSON.Decimal128.encode()
+    |> BSON.Decimal128.decode()
+
+    assert value == expected_decimal
+  end
+
   defp assert_decimal(binaries, expected_decimal) do
     assert BSON.Decimal128.decode(binaries) == expected_decimal
   end

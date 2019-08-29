@@ -556,10 +556,31 @@ defmodule Mongo.Test do
   @tag :mongo_3_4
   test "correctly query NumberDecimal", c do
     coll = "number_decimal_test"
-    Mongo.insert_one(c.pid, coll, %{number: Decimal.from_float(123.456), index: 1})
-    Mongo.insert_one(c.pid, coll, %{number: Decimal.from_float(-123.456), index: 2})
-    assert %{"number" => %Decimal{coef: 123456, exp: -3}} = Mongo.find(c.pid, coll, %{index: 1}, limit: 1) |> Enum.to_list |> List.first()
-    assert %{"number" => %Decimal{sign: -1, coef: 123456, exp: -3}} = Mongo.find(c.pid, coll, %{index: 2}, limit: 1) |> Enum.to_list |> List.first()
+
+    Mongo.delete_many(c.pid, coll, %{})
+
+    values = [
+    %Decimal{coef: :qNaN},
+    %Decimal{coef: :sNaN},
+    %Decimal{sign: -1, coef: :inf},
+    %Decimal{coef: :inf},
+    %Decimal{coef: 0, exp: -611},
+    %Decimal{sign: -1, coef: 0, exp: -1},
+    %Decimal{coef: 1, exp: 3},
+    %Decimal{coef: 1234, exp: -6},
+    %Decimal{coef: 123400000, exp: -11},
+    %Decimal{coef: 1234567890123456789012345678901234, exp: -34},
+    %Decimal{coef: 1234567890123456789012345678901234, exp: 0},
+    %Decimal{coef: 9999999999999999999999999999999999, exp: -6176},
+    %Decimal{coef: 1, exp: -6176},
+    %Decimal{sign: -1, coef: 1, exp: -6176}] |> Enum.with_index()
+
+    Enum.each(values, fn {dec, i} -> Mongo.insert_one(c.pid, coll, %{number: dec, index: i}) end)
+
+    Enum.each(values, fn {dec, i} ->
+      assert %{"number" => ^dec} = Mongo.find(c.pid, coll, %{index: i}, limit: 1) |> Enum.to_list |> List.first()
+    end)
+
   end
 
   test "access multiple databases", c do
