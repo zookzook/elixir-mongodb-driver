@@ -298,6 +298,7 @@ defmodule Mongo.BulkWrite do
     |> Enum.map(fn
       {:ok, %{"n" => n} = doc} -> BulkWriteResult.insert_result(n, ids, doc["writeErrors"] || [])
       {:ok, _other}            -> BulkWriteResult.empty()
+      {:error, reason}         -> BulkWriteResult.error(reason)
     end)
     |> BulkWriteResult.reduce()
   end
@@ -310,6 +311,7 @@ defmodule Mongo.BulkWrite do
                                                                               BulkWriteResult.update_result(n - l, modified, l, filter_upsert_ids(ids), doc["writeErrors"] || [])
       {:ok, %{"n" => matched, "nModified" => modified} = doc}              -> BulkWriteResult.update_result(matched, modified, 0, [], doc["writeErrors"] || [])
       {:ok, _other}                                                        -> BulkWriteResult.empty()
+      {:error, reason}                                                     -> BulkWriteResult.error(reason)
     end)
     |> BulkWriteResult.reduce()
 
@@ -320,6 +322,7 @@ defmodule Mongo.BulkWrite do
     |> Enum.map(fn
       {:ok, %{"n" => n} = doc } -> BulkWriteResult.delete_result(n, doc["writeErrors"] || [])
       {:ok, _other}             -> BulkWriteResult.empty()
+      {:error, reason}          -> BulkWriteResult.error(reason)
     end)
     |> BulkWriteResult.reduce()
 

@@ -279,20 +279,22 @@ defmodule Mongo do
   @spec find_one_and_update(GenServer.server, collection, BSON.document, BSON.document, Keyword.t) :: result(BSON.document) | {:ok, nil}
   def find_one_and_update(topology_pid, coll, filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
+
     cmd = [
             findAndModify:            coll,
             query:                    filter,
-            update:                   update,
-            bypassDocumentValidation: opts[:bypass_document_validation],
-            maxTimeMS:                opts[:max_time],
-            fields:                   opts[:projection],
-            new:                      should_return_new(opts[:return_document]),
             sort:                     opts[:sort],
+            update:                   update,
+            new:                      should_return_new(opts[:return_document]),
+            fields:                   opts[:projection],
             upsert:                   opts[:upsert],
+            bypassDocumentValidation: opts[:bypass_document_validation],
+            writeConcern:             write_concern(opts),
+            maxTimeMS:                opts[:max_time],
             collation:                opts[:collation]
           ] |> filter_nils()
 
-    opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
+    opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation w j wtimeout)a)
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
         {:ok, doc["value"]}
@@ -342,6 +344,9 @@ defmodule Mongo do
   @spec find_one_and_replace(GenServer.server, collection, BSON.document, BSON.document, Keyword.t) :: result(BSON.document)
   def find_one_and_replace(topology_pid, coll, filter, replacement, opts \\ []) do
     _ = modifier_docs(replacement, :replace)
+
+    write_concern = write_concern(opts)
+
     cmd = [
             findAndModify:            coll,
             query:                    filter,
@@ -352,7 +357,8 @@ defmodule Mongo do
             new:                      should_return_new(opts[:return_document]),
             sort:                     opts[:sort],
             upsert:                   opts[:upsert],
-            collation:                opts[:collation]
+            collation:                opts[:collation],
+            writeConcern:             write_concern
           ] |> filter_nils()
 
     opts = Keyword.drop(opts, ~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
@@ -376,6 +382,9 @@ defmodule Mongo do
   """
   @spec find_one_and_delete(GenServer.server, collection, BSON.document, Keyword.t) :: result(BSON.document)
   def find_one_and_delete(topology_pid, coll, filter, opts \\ []) do
+
+    write_concern = write_concern(opts)
+
     cmd = [
             findAndModify: coll,
             query:         filter,
@@ -383,7 +392,8 @@ defmodule Mongo do
             maxTimeMS:     opts[:max_time],
             fields:        opts[:projection],
             sort:          opts[:sort],
-            collation:     opts[:collation]
+            collation:     opts[:collation],
+            writeConcern:  write_concern
           ] |> filter_nils()
     opts = Keyword.drop(opts, ~w(max_time projection sort collation)a)
 
@@ -437,8 +447,8 @@ defmodule Mongo do
 
     case documents do
       [%{"n" => count}] -> {:ok, count}
-      []                -> {:error, Mongo.Error.exception(message: "nothing returned")}
-      _                 -> :ok # fixes {:error, :too_many_documents_returned}
+      []                -> {:ok, 0}
+      _                 -> :error
     end
   end
 
