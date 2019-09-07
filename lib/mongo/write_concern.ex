@@ -9,10 +9,20 @@ defmodule Mongo.WriteConcern do
       w: Keyword.get(opts, :w),
       j: Keyword.get(opts, :j),
       wtimeout: Keyword.get(opts, :wtimeout)
-     } |> filter_nils()
+     } |> filter_nils() |> filter_empty()
 
   end
 
+  def filter_empty(map) when is_map(map) and map == %{} do
+    nil
+  end
+  def filter_empty(map) when is_map(map) do
+    map
+  end
+
+  def acknowledged?(nil) do
+    true
+  end
   def acknowledged?(write_concern) when is_map(write_concern) do
     case Map.get(write_concern, :w) do
       0 -> false

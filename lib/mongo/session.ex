@@ -140,10 +140,10 @@ defmodule Mongo.Session do
 
     ## warte max 120ms, ansonsten kill
     try do
+      fun.(opts)
     rescue
       reason -> {:error, reason}
     end
-    fun.(opts)
 
   end
 
@@ -280,7 +280,12 @@ defmodule Mongo.Session do
       maxTimeMS: Keyword.get(opts, :max_commit_time_ms)
       ] |> filter_nils()
 
-    Mongo.exec_command(conn, cmd, database: "admin")
+    _doc = Mongo.exec_command(conn, cmd, database: "admin")
+
+    # {:ok, %{"$clusterTime" => %{"clusterTime" => #BSON.Timestamp<1567853627:8>,
+    # "signature" => %{"hash" => #BSON.Binary<0000000000000000000000000000000000000000>, "keyId" => 0}},
+    # "ok" => 1.0, "operationTime" => #BSON.Timestamp<1567853627:6>}}
+    :ok
   end
 
   defp run_abort_command(%{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
@@ -295,7 +300,15 @@ defmodule Mongo.Session do
       writeConcern: write_concern(opts)
     ] |> filter_nils()
 
-    Mongo.exec_command(conn, cmd, database: "admin")
+    _doc = Mongo.exec_command(conn, cmd, database: "admin")
+
+    #
+    # doc:
+    #    %{"$clusterTime" => %{"clusterTime" => #BSON.Timestamp<1567853164:4>,
+    # "signature" => %{"hash" => #BSON.Binary<0000000000000000000000000000000000000000>, "keyId" => 0}},
+    #"ok" => 1.0, "operationTime" => #BSON.Timestamp<1567853164:4>}
+
+    :ok
   end
 
 

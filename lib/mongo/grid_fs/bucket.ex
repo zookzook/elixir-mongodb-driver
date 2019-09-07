@@ -41,8 +41,12 @@ defmodule Mongo.GridFs.Bucket do
 
     Keyword.merge(@defaults, options)
     |> Enum.reduce(%Bucket{topology_pid: topology_pid, opts: options}, fn {k, v}, bucket -> Map.put(bucket, k, v) end)
-    |> check_indexes
+    |> check_indexes()
 
+  end
+
+  def add_session(%Bucket{opts: opts} = bucket, session_opts) do
+    %Bucket{bucket | opts: opts ++ session_opts}
   end
 
   @doc """
@@ -127,19 +131,41 @@ defmodule Mongo.GridFs.Bucket do
   #
   defp check_indexes(bucket) do
 
-    case files_collection_empty?(bucket)do
-      true ->
-        _ = create_files_index({bucket, false})
-        _ = create_chunks_index({bucket, false})
-
+    case files_collection_empty?(bucket) do
+      true  -> create_indexes(bucket)
       false ->
-        bucket
-        |> check_files_index()
-        |> create_files_index()
-        |> check_chunks_index()
-        |> create_chunks_index()
+        with :ok <- check_and_create_files_index(bucket),
+             :ok <- check_and_chunks_files_index(bucket) do
+          bucket
+        end
     end
 
+  end
+
+  ##
+  # create the collection and indexes for files and chunks
+  #
+  defp create_indexes(%Bucket{topology_pid: topology_pid, opts: opts} = bucket) do
+    with :ok <- Mongo.create(topology_pid, files_collection_name(bucket), opts),
+         :ok <- Mongo.create(topology_pid, chunks_collection_name(bucket), opts),
+         :ok <- create_files_index(bucket),
+         :ok <- create_chunks_index(bucket) do
+      bucket
+    end
+  end
+
+  def check_and_create_files_index(bucket) do
+    case check_files_index(bucket) do
+      true  -> create_files_index(bucket)
+      false -> :ok
+    end
+  end
+
+  def check_and_chunks_files_index(bucket) do
+    case check_chunks_index(bucket) do
+      true  -> create_chunks_index(bucket)
+      false -> :ok
+    end
   end
 
   ##
@@ -150,25 +176,25 @@ defmodule Mongo.GridFs.Bucket do
   # db.fs.files.findOne({}, { _id : 1 })
   #
   defp files_collection_empty?(%Bucket{topology_pid: topology_pid, opts: opts} = bucket) do
-
+    coll_name = files_collection_name(bucket)
     topology_pid
-    |> Mongo.find_one(files_collection_name(bucket), %{}, Keyword.merge(opts, projection: %{_id: 1}))
+    |> Mongo.show_collections()
+    |> Enum.find(fn name -> name == coll_name end)
     |> is_nil()
-
   end
 
   ##
   # Checks the indexes for the fs.files collection
   #
   defp check_files_index(%Bucket{topology_pid: topology_pid, opts: opts} = bucket) do
-    {bucket, index_member?(topology_pid, files_collection_name(bucket), @files_index_name, opts)}
+    index_member?(topology_pid, files_collection_name(bucket), @files_index_name, opts)
   end
 
   ##
   # Checks the indexes for the fs.chunks collection
   #
   defp check_chunks_index(%Bucket{topology_pid: topology_pid, opts: opts} = bucket) do
-    {bucket, index_member?(topology_pid, chunks_collection_name(bucket), @chunks_index_name, opts)}
+    index_member?(topology_pid, chunks_collection_name(bucket), @chunks_index_name, opts)
   end
 
   # returns true if the collection contains a index with the given name
@@ -176,7 +202,7 @@ defmodule Mongo.GridFs.Bucket do
     topology_pid
     |> Mongo.list_indexes(coll, opts)
     |> Enum.map(fn
-      %{"name" => name} -> name
+     %{"name" => name} -> name
         _               -> ""
        end)
     |> Enum.member?(index)
@@ -185,34 +211,23 @@ defmodule Mongo.GridFs.Bucket do
   ##
   # Creates the indexes for the fs.chunks collection
   #
-  defp create_chunks_index({%Bucket{topology_pid: topology_pid, opts: opts} = bucket, false} ) do
-
-    cmd      = [createIndexes: chunks_collection_name(bucket), indexes: [[key: [files_id: 1, n: 1], name: @chunks_index_name, unique: true]]]
-    {:ok, _} = Mongo.issue_command(topology_pid, cmd, :write, opts)
-
-    bucket
+  defp create_chunks_index(%Bucket{topology_pid: topology_pid, opts: opts} = bucket) do
+    cmd = [createIndexes: chunks_collection_name(bucket), indexes: [[key: [files_id: 1, n: 1], name: @chunks_index_name, unique: true]]]
+    with {:ok, _} <- Mongo.issue_command(topology_pid, cmd, :write, opts) do
+      :ok
+    end
   end
-
-  ##
-  # index exists, nothing to do
-  #
-  defp create_chunks_index({bucket, true}), do: bucket
 
   ##
   # Creates the indexes for the fs.files collection
   #
-  defp create_files_index({%Bucket{topology_pid: topology_pid, opts: opts} = bucket, false}) do
-
-    cmd      = [createIndexes: files_collection_name(bucket), indexes: [[key: [filename: 1, uploadDate: 1], name: @files_index_name]]]
-    {:ok, _} = Mongo.issue_command(topology_pid, cmd, :write, opts)
-
-    bucket
+  defp create_files_index(%Bucket{topology_pid: topology_pid, opts: opts} = bucket) do
+    cmd = [createIndexes: files_collection_name(bucket), indexes: [[key: [filename: 1, uploadDate: 1], name: @files_index_name]]]
+    with {:ok, _} <- Mongo.issue_command(topology_pid, cmd, :write, opts) do
+      :ok
+    end
   end
 
-  ##
-  # index exists, nothing to do
-  #
-  defp create_files_index({bucket, true}), do: bucket
 
   defimpl Inspect, for: Bucket do
 

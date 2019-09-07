@@ -665,6 +665,35 @@ defmodule Mongo do
   end
 
   @doc """
+  Explicitly creates a collection or view.
+  """
+  @spec create(GenServer.server, collection, Keyword.t) :: :ok | {:error, Mongo.Error.t}
+  def create(topology_pid, coll, opts \\ []) do
+
+    cmd = [
+            create:              coll,
+            capped:              opts[:capped],
+            autoIndexId:         opts[:auto_index_id],
+            size:                opts[:size],
+            max:                 opts[:max],
+            storageEngine:       opts[:storage_engine],
+            validator:           opts[:validator],
+            validationLevel:     opts[:validation_level],
+            validationAction:    opts[:validation_action],
+            indexOptionDefaults: opts[:index_option_defaults],
+            viewOn:              opts[:view_on],
+            pipeline:            opts[:pipeline],
+            collation:           opts[:collation],
+            writeConcern:        write_concern(opts),
+          ] |> filter_nils()
+
+    with {:ok, _doc} <- issue_command(topology_pid, cmd, :write, opts) do
+      :ok
+    end
+
+  end
+
+  @doc """
   Insert a single document into the collection.
 
   If the document is missing the `_id` field or it is `nil`, an ObjectId
