@@ -175,7 +175,7 @@ defmodule Mongo.GridFs.Bucket do
   #
   # db.fs.files.findOne({}, { _id : 1 })
   #
-  defp files_collection_empty?(%Bucket{topology_pid: topology_pid, opts: opts} = bucket) do
+  defp files_collection_empty?(%Bucket{topology_pid: topology_pid} = bucket) do
     coll_name = files_collection_name(bucket)
     topology_pid
     |> Mongo.show_collections()

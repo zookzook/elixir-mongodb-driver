@@ -151,6 +151,14 @@ defmodule BSON.Timestamp do
   @type t :: %__MODULE__{value: integer, ordinal: integer}
   defstruct [:value, :ordinal]
 
+  def is_after(this, that) do
+    (this.value > that.value or (this.value == that.value and this.ordinal > that.ordinal))
+  end
+
+  def is_before(this, that) do
+    (this.value < that.value or (this.value == that.value and this.ordinal < that.ordinal))
+  end
+
   defimpl Inspect do
     def inspect(%BSON.Timestamp{value: value, ordinal: ordinal}, _opts) do
       "#BSON.Timestamp<#{value}:#{ordinal}>"

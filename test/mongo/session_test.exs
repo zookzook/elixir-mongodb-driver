@@ -180,6 +180,26 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  test "with_transaction_causal_consistency", top do
+
+    coll = "dogs_with_commit_transaction_causal_consistency"
+
+    Mongo.insert_one(top.pid, coll, %{name: "Wuff"})
+    Mongo.delete_many(top.pid, coll, %{})
+
+    Session.with_transaction(top.pid, fn opts ->
+     {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top.pid, coll, %{name: "Greta"}, opts)
+     assert id != nil
+     {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top.pid, coll, %{name: "Waldo"}, opts)
+     assert id != nil
+     {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top.pid, coll, %{name: "Tom"}, opts)
+     assert id != nil
+     {:ok, :ok}
+    end, w: 1, causal_consistency: true)
+    assert {:ok, 3} == Mongo.count(top.pid, coll, %{})
+  end
+
+  @tag :mongo_4_2
   test "with_transaction_abort", top do
 
     coll = "dogs_with_about_transaction"

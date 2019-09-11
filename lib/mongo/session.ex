@@ -15,6 +15,7 @@ defmodule Mongo.Session do
   alias Mongo.Session.ServerSession
   alias Mongo.Session
   alias Mongo.Topology
+  alias BSON.Timestamp
 
   require Logger
 
@@ -26,7 +27,7 @@ defmodule Mongo.Session do
   # * `server_session` the server_session data
   # * `opts` options
   # * `implicit` true or false
-  defstruct [conn: nil, server_session: nil, implicit: false, wire_version: 0, opts: []]
+  defstruct [conn: nil, server_session: nil, causal_consistency: false, operation_time: nil, implicit: false, wire_version: 0, opts: []]
 
   @impl true
   def callback_mode() do
@@ -99,6 +100,30 @@ defmodule Mongo.Session do
     :gen_statem.call(pid, {:bind_session, cmd})
   end
 
+  @doc """
+  Update the `operationTime` for causally consistent read commands
+  """
+  def update_session(pid, %{"operationTime" => operationTime} = doc, opts) do
+    case opts |> write_concern() |> acknowledged?() do
+       true  -> advance_operation_time(pid, operationTime)
+       false -> []
+    end
+    doc
+  end
+  def update_session(_pid, doc, _opts) do
+    doc
+  end
+
+  @doc """
+  Advance the `operationTime` for causally consistent read commands
+  """
+  def advance_operation_time(pid, timestamp) do
+    :gen_statem.cast(pid, {:advance_operation_time, timestamp})
+  end
+
+  @doc """
+  End implicit session
+  """
   def end_implict_session(topology_pid, session) do
     with {:ok, session_server} <- :gen_statem.call(session, {:end_implicit_session}) do
       Topology.checkin_session(topology_pid, session_server)
@@ -108,12 +133,18 @@ defmodule Mongo.Session do
     end
   end
 
+  @doc """
+  End explicit session
+  """
   def end_session(topology_pid, session) do
     with {:ok, session_server} <- :gen_statem.call(session, {:end_session}) do
       Topology.checkin_session(topology_pid, session_server)
     end
   end
 
+  @doc """
+  Convient function for running multiple write commands in a transaction
+  """
   def with_transaction(topology_pid, fun, opts \\ []) do
 
     with {:ok, session} <- Session.start_session(topology_pid, :write, opts),
@@ -127,7 +158,6 @@ defmodule Mongo.Session do
         error ->
           abort_transaction(session)
           end_session(topology_pid, session)
-          ## todo rerun
           error
       end
 
@@ -164,6 +194,7 @@ defmodule Mongo.Session do
       server_session: server_session,
       implicit: (type == :implicit),
       wire_version: wire_version,
+      causal_consistency: Keyword.get(opts, :causal_consistency, false),
       opts: opts}
     {:ok, :no_transaction, data}
   end
@@ -184,8 +215,10 @@ defmodule Mongo.Session do
         transaction,
         %Session{conn: conn,
           wire_version: wire_version,
-          server_session: %ServerSession{session_id: id}}) when wire_version >= 6 and transaction in [:no_transaction, :transaction_aborted, :transaction_committed] do
-    {:keep_state_and_data, {:reply, from, {:ok, conn, Keyword.merge(cmd, lsid: %{id: id})}}}
+          server_session: %ServerSession{session_id: id}} = data) when wire_version >= 6 and transaction in [:no_transaction, :transaction_aborted, :transaction_committed] do
+
+    cmd = Keyword.merge(cmd, lsid: %{id: id}, readConcern: read_concern(data, Keyword.get(cmd, :readConcern))) |> filter_nils()
+    {:keep_state_and_data, {:reply, from, {:ok, conn, cmd}}}
   end
 
   def handle_event({:call, from},
@@ -193,10 +226,10 @@ defmodule Mongo.Session do
         :starting_transaction,
         %Session{conn: conn,
           server_session: %ServerSession{session_id: id, txn_num: txn_num},
-          wire_version: wire_version,
-          opts: opts} = data) when wire_version >= 6 do
+          wire_version: wire_version} = data) when wire_version >= 6 do
+
     result = Keyword.merge(cmd,
-                           readConcern: Keyword.get(opts, :read_concern),
+                           readConcern: read_concern(data, Keyword.get(cmd, :readConcern)),
                            lsid: %{id: id},
                            txnNumber: %BSON.LongNumber{value: txn_num},
                            startTransaction: true,
@@ -252,6 +285,15 @@ defmodule Mongo.Session do
 
   def handle_event({:call, from}, {:server_session}, _state,  %Session{server_session: session_server, implicit: implicit}) do
     {:keep_state_and_data, {:reply, from, {:ok, session_server, implicit}}}
+  end
+  def handle_event(:cast, {:advance_operation_time, timestamp}, _state, %Session{operation_time: nil} = data) do
+    {:keep_state, %Session{data | operation_time: timestamp}}
+  end
+  def handle_event(:cast, {:advance_operation_time, timestamp}, _state, %Session{operation_time: time} = data)  do
+    case Timestamp.is_after(timestamp, time) do
+      true  -> {:keep_state, %Session{data | operation_time: timestamp}}
+      false -> :keep_state_and_data
+    end
   end
 
   @impl true
@@ -311,5 +353,24 @@ defmodule Mongo.Session do
     :ok
   end
 
+
+  ##
+  # create the readConcern options
+  #
+  defp read_concern(%Session{causal_consistency: false}, read_concern) do
+    read_concern
+  end
+  defp read_concern(%Session{causal_consistency: true, operation_time: nil}, read_concern) do
+    read_concern
+  end
+  defp read_concern(%Session{causal_consistency: true, operation_time: time}, nil) do
+    [afterClusterTime: time]
+  end
+  defp read_concern(%Session{causal_consistency: true, operation_time: time}, read_concern) when is_map(read_concern) do
+    Map.put(read_concern, :afterClusterTime, time)
+  end
+  defp read_concern(%Session{causal_consistency: true, operation_time: time}, read_concern) when is_list(read_concern) do
+    read_concern ++ [afterClusterTime: time]
+  end
 
 end

@@ -604,6 +604,7 @@ defmodule Mongo do
 
     with {:ok, conn, cmd} <- Session.bind_session(session, cmd),
          {:ok, _cmd, doc} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
+         doc              <- Session.update_session(session, doc, opts),
          {:ok, doc}       <- check_for_error(doc) do
       {:ok, doc}
     end
