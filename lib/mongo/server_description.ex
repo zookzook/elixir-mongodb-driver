@@ -22,7 +22,8 @@ defmodule Mongo.ServerDescription do
     set_version: non_neg_integer | nil,
     election_id: BSON.ObjectId.t | nil,
     primary: String.t | nil,
-    last_update_time: non_neg_integer
+    last_update_time: non_neg_integer,
+    logical_session_timeout: non_neg_integer
   }
 
   def defaults(map \\ %{}) do
@@ -44,43 +45,40 @@ defmodule Mongo.ServerDescription do
       set_version: nil,
       election_id: nil,
       primary: nil,
-      last_update_time: 0
+      last_update_time: 0,
+      logical_session_timeout: 30
     }, map)
   end
 
-  def from_is_master_error(last_server_description, error) do
+  def from_is_master_error(address, error) do
     defaults(%{
-      address: last_server_description.address,
+      address: address,
       error: error
     })
   end
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#parsing-an-ismaster-response
-  def from_is_master(last_description, rtt, finish_time, is_master_reply) do
-    last_rtt = last_description.round_trip_time || rtt
-
-    defaults(%{
-      address: last_description.address,
-      round_trip_time: round(0.2 * rtt + 0.8 * last_rtt),
+  def from_is_master(address, rtt, finish_time, is_master_reply) do
+    %{
+      address: address,
+      round_trip_time: rtt,
       type: determine_server_type(is_master_reply),
-      last_write_date: get_in(is_master_reply,
-                              ["lastWrite", "lastWriteDate"]),
+      last_write_date: get_in(is_master_reply,["lastWrite", "lastWriteDate"]),
       op_time: get_in(is_master_reply, ["lastWrite", "opTime"]),
       last_update_time: finish_time,
       min_wire_version: is_master_reply["minWireVersion"] || 0,
       max_wire_version: is_master_reply["maxWireVersion"] || 0,
       me: is_master_reply["me"],
       hosts: (is_master_reply["hosts"] || []) |> Enum.map(&String.downcase/1),
-      passives: (is_master_reply["passives"] || [])
-                |> Enum.map(&String.downcase/1),
-      arbiters: (is_master_reply["arbiters"] || [])
-                |> Enum.map(&String.downcase/1),
+      passives: (is_master_reply["passives"] || []) |> Enum.map(&String.downcase/1),
+      arbiters: (is_master_reply["arbiters"] || []) |> Enum.map(&String.downcase/1),
       tag_set: is_master_reply["tags"] || %{},
       set_name: is_master_reply["setName"],
       set_version: is_master_reply["setVersion"],
       election_id: is_master_reply["electionId"],
-      primary: is_master_reply["primary"]
-    })
+      primary: is_master_reply["primary"],
+      logical_session_timeout: is_master_reply["logicalSessionTimeoutMinutes"]
+    }
   end
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#type
@@ -89,14 +87,10 @@ defmodule Mongo.ServerDescription do
   defp determine_server_type(%{"isreplicaset" => true}), do: :rs_ghost
   defp determine_server_type(%{"setName" => set_name} = is_master_reply) when set_name != nil do
     case is_master_reply do
-      %{"ismaster" => true} ->
-        :rs_primary
-      %{"secondary" => true} ->
-        :rs_secondary
-      %{"arbiterOnly" => true} ->
-        :rs_arbiter
-      _ ->
-        :rs_other
+      %{"ismaster" => true}    -> :rs_primary
+      %{"secondary" => true}   -> :rs_secondary
+      %{"arbiterOnly" => true} -> :rs_arbiter
+      _                        -> :rs_other
     end
   end
   defp determine_server_type(_), do: :standalone

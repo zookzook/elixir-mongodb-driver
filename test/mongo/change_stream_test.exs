@@ -36,7 +36,7 @@ defmodule Mongo.ChangeStreamTest do
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Tom"})
   end
 
-  @tag :change_streams
+  @tag :mongo_3_6
   test "change stream: watch and resume_after", %{pid: top} do
 
     me = self()

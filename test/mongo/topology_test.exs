@@ -9,17 +9,15 @@ defmodule Mongo.TopologyTest do
   @modes [:secondary, :secondary_preferred, :primary, :primary_preferred]
   test "replica set selection", %{pid: mongo_pid} do
     for mode <- @modes do
-      assert {:ok, %Mongo.InsertOneResult{inserted_id: new_id}} =
-               Mongo.insert_one(mongo_pid, "test", %{topology_test: 1}, w: 3)
+      assert {:ok, %Mongo.InsertOneResult{inserted_id: new_id}} = Mongo.insert_one(mongo_pid, "test", %{topology_test: 1}, w: 3)
 
       rp = Mongo.ReadPreference.defaults(%{mode: mode})
       assert [%{"_id" => ^new_id, "topology_test" => 1}] =
                mongo_pid
-               |> Mongo.find("test", %{_id: new_id}, read_preference: rp)
+               |> Mongo.find("test", %{_id: new_id}, read_preference: rp, slave_ok: mode in [:secondary, :secondary_preferred])
                |> Enum.to_list
 
-      assert {:ok, %Mongo.DeleteResult{deleted_count: 1}} =
-               Mongo.delete_one(mongo_pid, "test", %{_id: new_id})
+      assert {:ok, %Mongo.DeleteResult{deleted_count: 1}} = Mongo.delete_one(mongo_pid, "test", %{_id: new_id})
     end
   end
 end

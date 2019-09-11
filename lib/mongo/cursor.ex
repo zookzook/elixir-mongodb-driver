@@ -9,6 +9,9 @@ defmodule Mongo.Cursor do
     determine the resume token via a function (on_resume_token). It is called when the resume token changed.
   """
 
+  alias Mongo.Session
+  alias Mongo.Cursor
+
   import Record, only: [defrecordp: 2]
 
   @type t :: %__MODULE__{
@@ -22,10 +25,10 @@ defmodule Mongo.Cursor do
 
   defimpl Enumerable do
 
-    defrecordp :change_stream, [:resume_token, :op_time, :cmd, :on_resume_token, :topology_pid]
-    defrecordp :state, [:conn, :cursor, :coll, :change_stream, :docs]
+    defrecordp :change_stream, [:resume_token, :op_time, :cmd, :on_resume_token]
+    defrecordp :state, [:topology_pid, :session, :cursor, :coll, :change_stream, :docs]
 
-    def reduce(%{topology_pid: topology_pid, cmd: cmd, on_resume_token: on_resume_token_fun, opts: opts}, acc, reduce_fun) do
+    def reduce(%Cursor{topology_pid: topology_pid, cmd: cmd, on_resume_token: on_resume_token_fun, opts: opts}, acc, reduce_fun) do
 
       start_fun = start_fun(topology_pid, cmd, on_resume_token_fun, opts)
       next_fun  = next_fun(opts)
@@ -39,14 +42,18 @@ defmodule Mongo.Cursor do
     #
     defp start_fun(topology_pid, cmd, nil, opts) do
       fn ->
-        with {:ok, conn, opts} <- select_server(topology_pid, opts),
-             {:ok, %{"ok" => ok,
-                     "cursor" => %{
-                     "id" => cursor_id,
-                     "ns" => coll,
-                     "firstBatch" => docs}}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts) do
-            state(conn: conn, cursor: cursor_id, coll: coll, docs: docs)
+
+        with cmd = Mongo.ReadPreference.add_read_preference(cmd, opts),
+             {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
+             {:ok,
+               %{"ok" => ok,
+                 "cursor" => %{
+                   "id" => cursor_id,
+                   "ns" => coll,
+                   "firstBatch" => docs}}} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
+          state(topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, docs: docs)
         end
+
       end
     end
 
@@ -66,16 +73,16 @@ defmodule Mongo.Cursor do
         state(docs: [], cursor: 0) = state ->  {:halt, state}
 
         # this is a regular cursor
-        state(docs: [], conn: conn, cursor: cursor, change_stream: nil, coll: coll) = state ->
-          case get_more(conn, only_coll(coll), cursor, nil, opts) do
+        state(docs: [], topology_pid: topology_pid, session: session, cursor: cursor, change_stream: nil, coll: coll) = state ->
+          case get_more(topology_pid, session, only_coll(coll), cursor, nil, opts) do
             {:ok, %{cursor_id: cursor_id, docs: []}}   -> {:halt, state(state, cursor: cursor_id)}
             {:ok, %{cursor_id: cursor_id, docs: docs}} -> {docs, state(state, cursor: cursor_id)}
             {:error, error}                            -> raise error
           end
 
         # this is a change stream cursor
-        state(docs: [], conn: conn, cursor: cursor, change_stream: change_stream, coll: coll) = state ->
-          case get_more(conn, only_coll(coll), cursor, change_stream, opts) do
+        state(docs: [], topology_pid: topology_pid, session: session, cursor: cursor, change_stream: change_stream, coll: coll) = state ->
+          case get_more(topology_pid, session, only_coll(coll), cursor, change_stream, opts) do
             {:ok, %{cursor_id: cursor_id,
                     docs: docs,
                     change_stream: change_stream}} -> {docs, state(state, cursor: cursor_id, change_stream: change_stream)}
@@ -89,16 +96,17 @@ defmodule Mongo.Cursor do
 
     def aggregate(topology_pid, cmd, fun, opts) do
 
-      with {:ok, conn, opts} <- select_server(topology_pid, opts),
+      with new_cmd = Mongo.ReadPreference.add_read_preference(cmd, opts),
+           {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
            {:ok, %{"ok" => ok,
              "operationTime" => op_time,
              "cursor" => %{
                "id" => cursor_id,
                "ns" => coll,
-               "firstBatch" => docs} = response}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts),
-           {:ok, wire_version} <- Mongo.wire_version(conn) do
+               "firstBatch" => docs} = response}} when ok == 1 <- Mongo.exec_command_session(session, new_cmd, opts),
+           {:ok, wire_version} <- wire_version(session) do
 
-          [%{"$changeStream" => stream_opts} | _pipeline] = Keyword.get(cmd, :pipeline) # extract the change stream options
+          [%{"$changeStream" => stream_opts} | _pipeline] = Keyword.get(new_cmd, :pipeline) # extract the change stream options
 
           # The ChangeStream MUST save the operationTime from the initial aggregate response when the following critera are met:
           #
@@ -119,9 +127,9 @@ defmodule Mongo.Cursor do
 
           fun.(resume_token)
 
-          change_stream = change_stream(resume_token: resume_token, op_time: op_time, cmd: cmd, on_resume_token: fun, topology_pid: topology_pid)
+          change_stream = change_stream(resume_token: resume_token, op_time: op_time, cmd: cmd, on_resume_token: fun)
 
-          {:ok, state(conn: conn, cursor: cursor_id, coll: coll, change_stream: change_stream, docs: docs)}
+          {:ok, state(topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, change_stream: change_stream, docs: docs)}
       end
     end
 
@@ -129,24 +137,24 @@ defmodule Mongo.Cursor do
       Calls the GetCore-Command
       See https://github.com/mongodb/specifications/blob/master/source/find_getmore_killcursors_commands.rst
     """
-    def get_more(conn, coll, cursor, nil, opts) do
+    def get_more(_topology_pid, session, coll, cursor, nil, opts) do
 
       cmd = [
-        getMore: cursor,
-        collection: coll,
-        batchSize: opts[:batch_size],
-        maxTimeMS: opts[:max_time]
-      ] |> filter_nils()
+              getMore: cursor,
+              collection: coll,
+              batchSize: opts[:batch_size],
+              maxTimeMS: opts[:max_time]
+            ] |> filter_nils()
 
-      with {:ok, %{"cursor" => %{ "id" => cursor_id, "nextBatch" => docs}, "ok" => ok}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts) do
+      with {:ok, %{"cursor" => %{ "id" => cursor_id, "nextBatch" => docs}, "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
         {:ok, %{cursor_id: cursor_id, docs: docs}}
       end
 
     end
 
-    def get_more(conn, coll, cursor_id,
+    def get_more(topology_pid, session, coll, cursor_id,
                  change_stream(resume_token: resume_token, op_time: op_time, cmd: aggregate_cmd,
-                               on_resume_token: fun, topology_pid: topology_pid) = change_stream, opts) do
+                               on_resume_token: fun) = change_stream, opts) do
 
       get_more = [
                    getMore: cursor_id,
@@ -158,7 +166,7 @@ defmodule Mongo.Cursor do
       with {:ok, %{"operationTime" => op_time,
                    "cursor" => %{"id" => new_cursor_id,
                                  "nextBatch" => docs} = cursor,
-                                 "ok" => ok}} when ok == 1 <- Mongo.exec_command(conn, get_more, opts) do
+                                 "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, get_more, opts) do
 
         old_token = change_stream(change_stream, :resume_token)
         change_stream = update_change_stream(change_stream, cursor["postBatchResumeToken"], op_time, List.last(docs))
@@ -175,14 +183,15 @@ defmodule Mongo.Cursor do
         {:error, %Mongo.Error{code: code} = not_resumable} when code == 11601 or code == 136 or code == 237 -> {:error, not_resumable}
         {:error, _error} ->
 
-          with {:ok, wire_version} <- Mongo.wire_version(conn) do
+          with {:ok, wire_version} <- wire_version(session) do
 
             [%{"$changeStream" => stream_opts} | pipeline] = Keyword.get(aggregate_cmd, :pipeline) # extract the change stream options
 
             stream_opts   = update_stream_options(stream_opts, resume_token, op_time, wire_version)
             aggregate_cmd = Keyword.update!(aggregate_cmd, :pipeline, fn _ -> [%{"$changeStream" => stream_opts} | pipeline] end)
 
-            kill_cursors(conn, coll, [cursor_id], opts)
+            # kill the cursor
+            kill_cursors(session, coll, [cursor_id], opts)
 
             # Start aggregation again...
             with {:ok, state} <- aggregate(topology_pid, aggregate_cmd, fun, opts) do
@@ -269,27 +278,18 @@ defmodule Mongo.Cursor do
       Calls the KillCursors-Command
       See https://github.com/mongodb/specifications/blob/master/source/find_getmore_killcursors_commands.rst
     """
-    def kill_cursors(conn, coll, cursor_ids, opts) do
+    def kill_cursors(session, coll, cursor_ids, opts) do
 
       cmd = [
         killCursors: coll,
         cursors: cursor_ids
-      ]
-
-      cmd = filter_nils(cmd)
+      ] |> filter_nils()
 
       with {:ok, %{"cursorsAlive" => [],
                    "cursorsNotFound" => [],
                    "cursorsUnknown" => [],
-                   "ok" => ok}} when ok == 1 <- Mongo.exec_command(conn, cmd, opts) do
+                   "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
         :ok
-      end
-    end
-
-    defp select_server(topology_pid, opts) do
-      with {:ok, conn, slave_ok, _} <- Mongo.select_server(topology_pid, :read, opts),
-           opts = Keyword.put(opts, :slave_ok, slave_ok) do
-        {:ok, conn, opts}
       end
     end
 
@@ -299,9 +299,12 @@ defmodule Mongo.Cursor do
 
     defp after_fun(opts) do
       fn
-        state(cursor: 0)                              -> :ok
-        state(cursor: cursor, coll: coll, conn: conn) -> kill_cursors(conn, only_coll(coll), [cursor], opts)
-        {:error, error} = error                       -> error
+        state(topology_pid: topology_pid, session: session, cursor: 0) -> Session.end_implict_session(topology_pid, session)
+        state(topology_pid: topology_pid, session: session, cursor: cursor, coll: coll) ->
+          with :ok <- kill_cursors(session, only_coll(coll), [cursor], opts) do
+            Session.end_implict_session(topology_pid, session)
+          end
+        error -> error
       end
     end
 
@@ -315,5 +318,13 @@ defmodule Mongo.Cursor do
     def slice(_cursor), do: { :error, __MODULE__ }
     def count(_stream), do: {:error, __MODULE__}
     def member?(_stream, _term), do: {:error, __MODULE__}
+
+    defp wire_version(session) do
+
+      session
+      |> Mongo.Session.connection()
+      |> Mongo.wire_version()
+
+    end
   end
 end

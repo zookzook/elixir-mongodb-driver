@@ -1,3 +1,16 @@
+## 0.6.0
+
+* Enhancements
+    * refactored `writeConcern`
+    * refactored `filter_nils`
+    * refactored usage of `ReadPreference`
+    * added support for sessions (`ServerSession`, `SessionPool`, `Session`)
+    * added support for transaction
+    * added Decimal128 encoder
+    * added support for transaction to gridfs and bulk operation
+    * added `create` command (explicitly creating a collection or view)
+    
+    
 ## 0.5.7
 
 * Bug Fixes

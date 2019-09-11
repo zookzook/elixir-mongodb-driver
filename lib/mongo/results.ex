@@ -108,6 +108,10 @@ defmodule Mongo.BulkWriteResult do
     %BulkWriteResult{deleted_count: count, errors: errors}
   end
 
+  def error(error) do
+    %BulkWriteResult{errors: [error]}
+  end
+
   def empty() do
     %BulkWriteResult{}
   end

@@ -7,7 +7,7 @@ defmodule Mongodb.Mixfile do
     [app: :mongodb_driver,
      version: @version,
      elixirc_paths: elixirc_paths(Mix.env),
-     elixir: "~> 1.5",
+     elixir: "~> 1.8",
      name: "mongodb-driver",
      deps: deps(),
      docs: docs(),
@@ -38,7 +38,7 @@ defmodule Mongodb.Mixfile do
     [
       {:connection,    "~> 1.0"},
       {:db_connection, "~> 2.0.6"},
-      {:decimal,       "~> 1.5"},
+      {:decimal,       "~> 1.8"},
       {:benchee,       "~> 1.0", only: :dev},
       {:jason,         "~> 1.0.0", only: :test},
       {:ex_doc,        "~> 0.20.1 ", only: :dev},

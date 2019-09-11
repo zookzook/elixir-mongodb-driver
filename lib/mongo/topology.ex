@@ -1,12 +1,16 @@
 defmodule Mongo.Topology do
   @moduledoc false
 
+  require Logger
+
   use GenServer
   alias Mongo.Events.{ServerDescriptionChangedEvent, ServerOpeningEvent, ServerClosedEvent,
                       TopologyDescriptionChangedEvent, TopologyOpeningEvent, TopologyClosedEvent}
   alias Mongo.TopologyDescription
   alias Mongo.ServerDescription
   alias Mongo.Monitor
+  alias Mongo.Session.SessionPool
+  alias Mongo.Session
 
   # https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#heartbeatfrequencyms-defaults-to-10-seconds-or-60-seconds
   @heartbeat_frequency_ms 10_000
@@ -22,35 +26,41 @@ defmodule Mongo.Topology do
     GenServer.start_link(__MODULE__, opts, gen_server_opts)
   end
 
+  @doc """
+  Update async the server_description received from the Monitor-Process
+  """
+  def update_server_description(pid, server_description) do
+    GenServer.cast(pid, {:server_description, server_description})
+  end
+
+  @doc """
+  Called from the monitor in case that a connection was established.
+  """
+  def monitor_connected(pid, monitor_pid) do
+    GenServer.cast(pid, {:connected, monitor_pid})
+  end
+
   def connection_for_address(pid, address) do
     GenServer.call(pid, {:connection, address})
   end
 
-  def wait_for_connection(pid, timeout, start_time) do
-    timeout = timeout - System.convert_time_unit(System.monotonic_time - start_time, :native, :millisecond)
-
-    wait_for_connection(pid, timeout)
-  end
-
-  defp wait_for_connection(pid, timeout) when timeout >= 0 do
-    try do
-      case GenServer.call(pid, :wait_for_connection, timeout) do
-        {:new_connection, server} ->
-          {:ok, [server]}
-        {:connected, servers} ->
-          {:ok, servers}
-      end
-    catch
-      :exit, {:timeout, _} ->
-        {:error, :selection_timeout}
-    end
-  end
-  defp wait_for_connection(pid, _timeout) do
-    wait_for_connection(pid, 0)
-  end
-
   def topology(pid) do
     GenServer.call(pid, :topology)
+  end
+
+  def select_server(pid, type, opts \\ []) do
+    GenServer.call(pid, {:select_server, type, opts})
+  end
+
+  @doc """
+
+  """
+  def checkout_session(pid, cmd_type, type, opts \\ []) do
+    GenServer.call(pid, {:checkout_session, cmd_type, type, opts})
+  end
+
+  def checkin_session(pid, server_session) do
+    GenServer.cast(pid, {:checkin_session, server_session})
   end
 
   def stop(pid) do
@@ -62,27 +72,19 @@ defmodule Mongo.Topology do
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#configuration
   @doc false
   def init(opts) do
-    #seeds = Keyword.get(opts, :seeds, [
-    #  Keyword.get(opts, :hostname, "localhost") <> ":" <> to_string(Keyword.get(opts, :port, 27017))
-    #])
-    seeds = Keyword.get(opts, :seeds, [seed(opts)])
-    type = Keyword.get(opts, :type, :unknown)
-    set_name = Keyword.get(opts, :set_name, nil)
+    seeds              = Keyword.get(opts, :seeds, [seed(opts)])
+    type               = Keyword.get(opts, :type, :unknown)
+    set_name           = Keyword.get(opts, :set_name, nil)
     local_threshold_ms = Keyword.get(opts, :local_threshold_ms, 15)
 
-    :ok = Mongo.Events.notify(%TopologyOpeningEvent{
-      topology_pid: self()
-    })
+    :ok = Mongo.Events.notify(%TopologyOpeningEvent{topology_pid: self()})
 
     cond do
-      type == :single and length(seeds) > 1 ->
-        {:stop, :single_topology_multiple_hosts}
-      set_name != nil and not(type in [:unknown, :replica_set_no_primary, :single]) ->
-        {:stop, :set_name_bad_topology}
+      type == :single and length(seeds) > 1 -> {:stop, :single_topology_multiple_hosts}
+      set_name != nil and not(type in [:unknown, :replica_set_no_primary, :single]) -> {:stop, :set_name_bad_topology}
       true ->
         servers = servers_from_seeds(seeds)
-        state =
-          %{
+        state = %{
             topology: TopologyDescription.defaults(%{
               type: type,
               set_name: set_name,
@@ -93,9 +95,10 @@ defmodule Mongo.Topology do
             opts: opts,
             monitors: %{},
             connection_pools: %{},
+            session_pool: nil,
             waiting_pids: []
           }
-          |> reconcile_servers
+          |> update_monitor()
         {:ok, state}
     end
   end
@@ -115,22 +118,6 @@ defmodule Mongo.Topology do
     })
   end
 
-  def handle_call(:topology, _from, state) do
-    {:reply, state.topology, state}
-  end
-
-  def handle_call({:connection, address}, _from, state) do
-    {:reply, Map.fetch(state.connection_pools, address), state}
-  end
-
-  def handle_call(:wait_for_connection, _from, %{connection_pools: pools} = state) when map_size(pools) > 0 do
-    servers = Enum.map(pools, fn {key, _value} -> key end)
-    {:reply, {:connected, servers}, state}
-  end
-  def handle_call(:wait_for_connection, from, %{waiting_pids: waiting} = state) do
-    {:noreply, %{state | waiting_pids: [from | waiting]}}
-  end
-
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#updating-the-topologydescription
   def handle_cast({:server_description, server_description}, state) do
     new_state = handle_server_description(state, server_description)
@@ -145,7 +132,7 @@ defmodule Mongo.Topology do
   end
 
   def handle_cast(:reconcile, state) do
-    new_state = reconcile_servers(state)
+    new_state = update_monitor(state)
     {:noreply, new_state}
   end
   def handle_cast({:disconnect, :monitor, host}, state) do
@@ -160,8 +147,7 @@ defmodule Mongo.Topology do
   def handle_cast({:connected, monitor_pid}, state) do
     monitor = Enum.find(state.monitors, fn {_key, value} -> value == monitor_pid end)
     new_state = case monitor do
-      nil ->
-        state
+      nil -> state
       {host, ^monitor_pid} ->
         arbiters = fetch_arbiters(state)
         if host in arbiters do
@@ -175,10 +161,10 @@ defmodule Mongo.Topology do
 
           {:ok, pool} = DBConnection.start_link(Mongo.MongoDBConnection, conn_opts)
           connection_pools = Map.put(state.connection_pools, host, pool)
-          Enum.each(state.waiting_pids, fn from ->
-            GenServer.reply(from, {:new_connection, host})
-          end)
-          %{ state | connection_pools: connection_pools, waiting_pids: [] }
+
+          Process.send_after(self(), {:new_connection, state.waiting_pids, host}, 1000)
+
+          %{state | connection_pools: connection_pools, waiting_pids: []}
         end
     end
     {:noreply, new_state}
@@ -196,18 +182,39 @@ defmodule Mongo.Topology do
     end
   end
 
+  ##
+  # checkin the current session
+  #
+  def handle_cast({:checkin_session, server_session}, %{:session_pool => pool} = state) do
+    SessionPool.checkin(pool, server_session)
+    {:noreply, state}
+  end
+
+  def handle_info({:new_connection, waiting_pids, host}, state) do
+    Enum.each(waiting_pids, fn from -> GenServer.reply(from, {:new_connection, host}) end)
+    {:noreply, state}
+  end
+
+  ##
+  # Update server description: in case of logical session the function creates a session pool for the `deployment`.
+  #
+  defp handle_server_description(state, %{:logical_session_timeout => logical_session_timeout} = server_description) do
+    state
+    |> get_and_update_in([:topology], &TopologyDescription.update(&1, server_description, length(state.seeds)))
+    |> process_events()
+    |> update_monitor()
+    |> update_session_pool(logical_session_timeout)
+  end
   defp handle_server_description(state, server_description) do
     state
-    |> get_and_update_in([:topology],
-                         &TopologyDescription.update(&1, server_description, length(state.seeds)))
-    |> process_events
-    |> reconcile_servers
+    |> get_and_update_in([:topology], &TopologyDescription.update(&1, server_description, length(state.seeds)))
+    |> process_events()
+    |> update_monitor()
   end
 
   defp process_events({events, state}) do
     Enum.each(events, fn
-      {:force_check, _} = message ->
-        :ok = GenServer.cast(self(), message)
+      {:force_check, _} = message -> :ok = GenServer.cast(self(), message)
       {previous, next} ->
         if previous != next do
           :ok = Mongo.Events.notify(%ServerDescriptionChangedEvent{
@@ -223,7 +230,78 @@ defmodule Mongo.Topology do
     state
   end
 
-  defp reconcile_servers(state) do
+  def handle_call(:topology, _from, state) do
+    {:reply, state.topology, state}
+  end
+
+  def handle_call({:connection, address}, _from, state) do
+    {:reply, Map.fetch(state.connection_pools, address), state}
+  end
+
+  # checkout a new session
+  def handle_call({:checkout_session, cmd_type, type, opts}, from, %{:topology => topology, :waiting_pids => waiting, connection_pools: pools} = state) do
+
+    case TopologyDescription.select_servers(topology, cmd_type, opts) do
+      :empty ->
+        Logger.debug("select_server: empty")
+        {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
+
+      {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
+        Logger.debug("select_server: found #{inspect servers}, pools: #{inspect pools}")
+
+        with {:ok, connection} <- servers
+                                  |> Enum.take_random(1)
+                                  |> get_connection(state),
+             {:ok, wire_version} <- Mongo.wire_version(connection),
+             server_session <- checkout_server_session(state),
+            {:ok, session}  <- Session.start_link(connection, server_session, type, wire_version, opts) do
+
+          Logger.debug("select_server: connection is #{inspect connection}, server_session is #{inspect server_session}")
+          {:reply, {:ok, session}, state}
+        end
+
+      error ->
+        Logger.debug("select_servers: #{inspect error}")
+        {:reply, error, state} ## in case of an error, just return the error
+    end
+  end
+
+  def handle_call({:select_server, type, opts}, from, %{:topology => topology, :waiting_pids => waiting, connection_pools: pools} = state) do
+    case TopologyDescription.select_servers(topology, type, opts) do
+      :empty ->
+        Logger.debug("select_server: empty")
+        {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
+
+      {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
+        Logger.debug("select_server: found #{inspect servers}, pools: #{inspect pools}")
+
+        with {:ok, connection} <- servers
+                                  |> Enum.take_random(1)
+                                  |> get_connection(state) do
+          Logger.debug("select_server: connection is #{inspect connection}")
+
+          {:reply, {:ok, connection}, state}
+        end
+      error ->
+        Logger.debug("select_servers: #{inspect error}")
+        {:reply, error, state} ## in case of an error, just return the error
+    end
+  end
+
+  defp checkout_server_session(%{:session_pool => session_pool}) do
+    SessionPool.checkout(session_pool)
+  end
+  defp checkout_server_session(_state) do
+    nil
+  end
+
+  defp get_connection([], _state), do: nil
+  defp get_connection([address], %{connection_pools: pools}), do: Map.fetch(pools, address)
+
+  ##
+  # update the monitor process. For new servers the function creates new monitor processes.
+  #
+  defp update_monitor(state) do
     arbiters = fetch_arbiters(state)
     old_addrs = Map.keys(state.monitors)
     # remove arbiters from connection pool as descriptions are recieved
@@ -233,22 +311,28 @@ defmodule Mongo.Topology do
     removed = old_addrs -- new_addrs
 
     state = Enum.reduce(added, state, fn (address, state) ->
+
       server_description = state.topology.servers[address]
       connopts = connect_opts_from_address(state.opts, address)
-      args = [
-        server_description,
-        self(),
-        @heartbeat_frequency_ms,
-        Keyword.put(connopts, :pool, DBConnection.ConnectionPool)
-      ]
 
-      :ok = Mongo.Events.notify(%ServerOpeningEvent{address: address, topology_pid: self()})
+      Mongo.Events.notify(%ServerOpeningEvent{address: address, topology_pid: self()})
 
+      args = [server_description.address, self(), @heartbeat_frequency_ms, Keyword.put(connopts, :pool, DBConnection.ConnectionPool)]
       {:ok, pid} = Monitor.start_link(args)
+
       %{ state | monitors: Map.put(state.monitors, address, pid) }
     end)
 
     Enum.reduce(removed, state, &remove_address/2)
+  end
+
+  defp update_session_pool(%{:session_pool => nil} = state, logical_session_timeout) do
+    Logger.debug("Creating session pool")
+    {:ok, session_pool} = SessionPool.start_link(self(), logical_session_timeout)
+    %{ state | session_pool: session_pool}
+  end
+  defp update_session_pool(state, _logical_session_timeout) do
+    state
   end
 
   defp maybe_reinit(%{monitors: monitors} = state) when map_size(monitors) > 0,
@@ -301,4 +385,5 @@ defmodule Mongo.Topology do
   defp fetch_arbiters(state) do
     Enum.flat_map(state.topology.servers, fn {_, s} -> s.arbiters end)
   end
+
 end

@@ -9,6 +9,9 @@ defmodule Mongo.Test do
   defmacro unique_name do
     {function, _arity} = __CALLER__.function
     "#{__CALLER__.module}.#{function}"
+    |> String.replace(" ", "_")
+    |> String.replace(".", "_")
+    |> String.downcase()
   end
 
   test "object_id" do
@@ -123,7 +126,7 @@ defmodule Mongo.Test do
   test "count", c do
     coll = unique_name()
 
-    assert {:ok, 0} = Mongo.count(c.pid, coll, [])
+    assert {:ok, 0} = Mongo.count(c.pid, coll, %{})
 
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 42})
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 43})
@@ -553,19 +556,50 @@ defmodule Mongo.Test do
   @tag :mongo_3_4
   test "correctly query NumberDecimal", c do
     coll = "number_decimal_test"
-    Mongo.command(c.pid,
-      [eval: "db.#{coll}.insert({number: NumberDecimal('123.456')})"]
-    )
 
-    assert %{"number" => %Decimal{coef: 123456, exp: -3}} = Mongo.find(c.pid, coll, %{}, limit: 1) |> Enum.to_list |> List.first()
+    Mongo.delete_many(c.pid, coll, %{})
+
+    values = [
+    %Decimal{coef: :qNaN},
+    %Decimal{coef: :sNaN},
+    %Decimal{sign: -1, coef: :inf},
+    %Decimal{coef: :inf},
+    %Decimal{coef: 0, exp: -611},
+    %Decimal{sign: -1, coef: 0, exp: -1},
+    %Decimal{coef: 1, exp: 3},
+    %Decimal{coef: 1234, exp: -6},
+    %Decimal{coef: 123400000, exp: -11},
+    %Decimal{coef: 1234567890123456789012345678901234, exp: -34},
+    %Decimal{coef: 1234567890123456789012345678901234, exp: 0},
+    %Decimal{coef: 9999999999999999999999999999999999, exp: -6176},
+    %Decimal{coef: 1, exp: -6176},
+    %Decimal{sign: -1, coef: 1, exp: -6176}] |> Enum.with_index()
+
+    Enum.each(values, fn {dec, i} -> Mongo.insert_one(c.pid, coll, %{number: dec, index: i}) end)
+
+    Enum.each(values, fn {dec, i} ->
+      assert %{"number" => ^dec} = Mongo.find(c.pid, coll, %{index: i}, limit: 1) |> Enum.to_list |> List.first()
+    end)
+
   end
 
   test "access multiple databases", c do
     coll = unique_name()
 
-    assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 42}, database: "mongodb_test2")
+    Mongo.delete_many(c.pid, coll, %{}, database: "mongodb_test2")
+    assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 42}, database: "mongodb_test2", verbose: true)
 
-    assert {:ok, 1} = Mongo.count(c.pid, coll, [], database: "mongodb_test2")
-    assert {:ok, 0} = Mongo.count(c.pid, coll, [])
+    assert {:ok, 1} = Mongo.count(c.pid, coll, %{}, database: "mongodb_test2", verbose: true)
+    assert {:ok, 0} = Mongo.count(c.pid, coll, %{}, verbose: true)
  end
+
+  test "create collection", c do
+
+    coll = unique_name()
+    assert nil == Mongo.show_collections(c.pid) |> Enum.find(fn c -> c == coll end)
+    assert :ok == Mongo.create(c.pid, coll)
+    assert nil != Mongo.show_collections(c.pid) |> Enum.find(fn c -> c == coll end)
+
+  end
+
 end

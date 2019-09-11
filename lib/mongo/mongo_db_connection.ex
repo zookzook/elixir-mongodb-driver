@@ -7,6 +7,10 @@ defmodule Mongo.MongoDBConnection do
   use Mongo.Messages
   alias Mongo.MongoDBConnection.Utils
 
+  import Keywords
+
+  require Logger
+
   @timeout        5_000
   @find_one_flags ~w(slave_ok exhaust partial)a
   @write_concern  ~w(w j wtimeout)a
@@ -256,7 +260,7 @@ defmodule Mongo.MongoDBConnection do
   end
   defp execute_action(:command, [cmd], opts, %{wire_version: version} = state) when version >= 6 do
 
-    cmd = cmd ++ ["$db": opts[:database] || state.database, "$readPreference": [mode: update_read_preferences(opts[:slave_ok])]]
+    cmd = cmd ++ ["$db": opts[:database] || state.database]
 
     # MongoDB 3.6 only allows certain command arguments to be provided this way. These are:
     op = case pulling_out?(cmd, :documents) || pulling_out?(cmd, :updates) || pulling_out?(cmd, :deletes) do
@@ -305,19 +309,11 @@ defmodule Mongo.MongoDBConnection do
     op_msg(flags: 0, sections: [payload_0, payload_1])
   end
 
-  def update_read_preferences(true), do: "primaryPreferred"
-  def update_read_preferences(false), do: "primary"
-  def update_read_preferences(nil), do: "primary"
-
   defp flags(flags) do
     Enum.reduce(flags, [], fn
       {flag, true},   acc -> [flag|acc]
       {_flag, false}, acc -> acc
     end)
-  end
-
-  defp filter_nils(keyword) when is_list(keyword) do
-    Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
   end
 
 end

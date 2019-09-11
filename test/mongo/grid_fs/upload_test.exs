@@ -3,6 +3,7 @@ defmodule Mongo.GridFs.UploadTest do
 
   alias Mongo.GridFs.Bucket
   alias Mongo.GridFs.Upload
+  alias Mongo.Session
 
   setup_all do
     assert {:ok, pid} = Mongo.TestConnection.connect
@@ -88,6 +89,49 @@ defmodule Mongo.GridFs.UploadTest do
 
     %{"metadata" => %{"tag" => "checked", "chk_sum" => x}} = Mongo.find_one(c.pid, Bucket.files_collection_name(bucket), %{_id: file_id})
     assert x == chksum
+  end
+
+  @tag :mongo_4_2
+  test "upload a text file, check download, length, meta-data and checksum transaction", c do
+
+    src_filename  = "./test/data/test.txt"
+    chksum        = calc_checksum(src_filename)
+    bucket        = Bucket.new(c.pid)
+
+    {:ok, upload_stream } = Session.with_transaction(c.pid, fn opt ->
+      bucket = Bucket.add_session(bucket, opt)
+      upload_stream = Upload.open_upload_stream(bucket, "my-example-file.txt", %{tag: "checked", chk_sum: chksum})
+      File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
+      {:ok, upload_stream}
+    end, w: 1)
+
+    file_id = upload_stream.id
+
+    assert file_id != nil
+
+    %{"metadata" => %{"tag" => "checked", "chk_sum" => x}} = Mongo.find_one(c.pid, Bucket.files_collection_name(bucket), %{_id: file_id})
+    assert x == chksum
+  end
+
+  @tag :mongo_4_2
+  test "upload a text file, check download, length, meta-data and checksum abort transaction", c do
+
+    src_filename  = "./test/data/test.txt"
+    chksum        = calc_checksum(src_filename)
+    bucket        = Bucket.new(c.pid)
+
+    {:error, upload_stream} = Session.with_transaction(c.pid, fn opt ->
+      bucket = Bucket.add_session(bucket, opt)
+      upload_stream = Upload.open_upload_stream(bucket, "my-example-file.txt", %{tag: "checked", chk_sum: chksum})
+      File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
+      {:error, upload_stream}
+    end, w: 1)
+
+    file_id = upload_stream.id
+
+    assert file_id != nil
+
+    assert nil == Mongo.find_one(c.pid, Bucket.files_collection_name(Bucket.new(c.pid)), %{_id: file_id})
   end
 
 end
