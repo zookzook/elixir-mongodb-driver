@@ -75,7 +75,7 @@ def application do
 end
 
 defp deps do
-  [{:mongodb_driver, "~> 0.5"}]
+  [{:mongodb_driver, "~> 0.6"}]
 end
 ```
 
@@ -250,11 +250,50 @@ importing big volume of data.
 |> Stream.run()
 ```
 
-For more information see and check the test units for examples.
+For more information see:
 * [Mongo.UnorderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.UnorderedBulk.html#content) 
 * [Mongo.OrderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.OrderedBulk.html#content) 
 * [Mongo.BulkWrite](https://hexdocs.pm/mongodb_driver/Mongo.BulkWrite.html#content) 
 * [Mongo.BulkOps](https://hexdocs.pm/mongodb_driver/Mongo.BulkOps.html#content) 
+
+and have a look at the test units as well.
+
+### Transactions
+
+Since MongoDB 4.x, transactions for multiple write operations are possible. The [Mongo.Session](https://hexdocs.pm/mongodb_driver/Mongo.Session.html#content)  is responsible for the details and you can use a convenient api for transactions:
+
+```elixir
+alias Mongo.Session
+
+{:ok, ids} = Session.with_transaction(top, fn opts ->
+{:ok, %InsertOneResult{:inserted_id => id1}} = Mongo.insert_one(top, "dogs", %{name: "Greta"}, opts)
+{:ok, %InsertOneResult{:inserted_id => id2}} = Mongo.insert_one(top, "dogs", %{name: "Waldo"}, opts)
+{:ok, %InsertOneResult{:inserted_id => id3}} = Mongo.insert_one(top, "dogs", %{name: "Tom"}, opts)
+{:ok, [id1, id2, id3]}
+end, w: 1)
+```
+
+It is also possible to get more control over the progress of the transaction:
+
+```elixir
+alias Mongo.Session
+
+{:ok, session} = Session.start_session(top, :write, [])
+:ok = Session.start_transaction(session)
+
+Mongo.insert_one(top, "dogs", %{name: "Greta"}, session: session)
+Mongo.insert_one(top, "dogs", %{name: "Waldo"}, session: session)
+Mongo.insert_one(top, "dogs", %{name: "Tom"}, session: session)
+
+:ok = Session.commit_transaction(session)
+:ok = Session.end_session(top, session)
+```
+
+For more information see:
+
+* [Mongo.Session](https://hexdocs.pm/mongodb_driver/Mongo.Session.html#content) 
+
+and have a look at the test units as well.
 
 ### Examples
 

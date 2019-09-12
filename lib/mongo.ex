@@ -319,7 +319,9 @@ defmodule Mongo do
          :ok <- Session.end_implict_session(topology_pid, session) do
       result
     else
-      {:new_connection, _server} -> issue_command(topology_pid, cmd, type, opts)
+      {:new_connection, _server} ->
+        :timer.sleep(1000)
+        issue_command(topology_pid, cmd, type, opts)
     end
   end
 

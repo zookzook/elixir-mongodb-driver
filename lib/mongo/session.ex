@@ -1,10 +1,48 @@
 defmodule Mongo.Session do
 
   @moduledoc """
+  This module implements the details of the transactions api ([see specs](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst#committransaction)).
+  It uses the `:gen_statem` behaviour ([A nice tutorial](https://andrealeopardi.com/posts/connection-managers-with-gen_statem/)) to manage the different states.
 
-  For gen_statem look here
-  * see https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst#committransaction
-  * see https://andrealeopardi.com/posts/connection-managers-with-gen_statem/
+  In case of MongoDB 3.6 or greater the driver uses sessions for each operation. If no session is created the driver will create a so-called implict session. A session is a UUID-Number which
+  is added to some operations. The sessions are used to manage the transaction state as well. In most situation you need not to create a session instance, so the interface of the driver is not changed.
+
+  In case of multiple insert statemantes you can use transaction (MongoDB 4.x) to be sure that all operations are grouped like a single operation. Prerequisites for transactions are:
+  MongoDB 4.x must be used as replica set or cluster deployment. The collection used in the operations must already exist. Some operation are not allowed (For example: create index or call count).
+
+  ## Example
+
+      alias Mongo.Session
+
+      {:ok, session} = Session.start_session(top, :write, [])
+      :ok = Session.start_transaction(session)
+
+      Mongo.insert_one(top, "dogs", %{name: "Greta"}, session: session)
+      Mongo.insert_one(top, "dogs", %{name: "Waldo"}, session: session)
+      Mongo.insert_one(top, "dogs", %{name: "Tom"}, session: session)
+
+      :ok = Session.commit_transaction(session)
+      :ok = Session.end_session(top, session)
+
+  First you start a explicit session and a transactions. Use need to use the session for each insert statement as an options with key `:session` otherwise the insert statement won't be
+  executed in the transaction. After that you commit the transaction and end the session by calling `end_session`.
+
+  ## Convenient API for Transactions
+
+  This method is responsible for starting a transaction, invoking a callback, and committing a transaction.
+  The callback is expected to execute one or more operations with the transaction; however, that is not enforced.
+  The callback is allowed to execute other operations not associated with the transaction.
+
+  ## Example
+
+      {:ok, ids} = Session.with_transaction(top, fn opts ->
+        {:ok, %InsertOneResult{:inserted_id => id1}} = Mongo.insert_one(top, "dogs", %{name: "Greta"}, opts)
+        {:ok, %InsertOneResult{:inserted_id => id2}} = Mongo.insert_one(top, "dogs", %{name: "Waldo"}, opts)
+        {:ok, %InsertOneResult{:inserted_id => id3}} = Mongo.insert_one(top, "dogs", %{name: "Tom"}, opts)
+        {:ok, [id1, id2, id3]}
+      end, w: 1)
+
+  If the callback is successfull then it returns a tupel with the keyword `:ok` and a used defined result like `{:ok, [id1, id2, id3]}`
   """
 
   @behaviour :gen_statem
@@ -27,6 +65,8 @@ defmodule Mongo.Session do
   # * `server_session` the server_session data
   # * `opts` options
   # * `implicit` true or false
+  # * `causal_consistency` true orfalse
+  # * `wire_version` current wire version to check if transactions are possible
   defstruct [conn: nil, server_session: nil, causal_consistency: false, operation_time: nil, implicit: false, wire_version: 0, opts: []]
 
   @impl true
@@ -43,6 +83,25 @@ defmodule Mongo.Session do
   end
 
   @doc """
+  Start a new session for the `topology_pid`. You need to specify the `type`: `:read` for read and `:write` for write
+  operations.
+
+  ## Example
+      {:ok, session} = Session.start_session(top, :write, [])
+
+  """
+  @spec start_session(GenServer.server, atom, keyword()) :: {:ok, Session.t} | {:error, term()}
+  def start_session(topology_pid, type, opts \\ []) do
+    with {:ok, session} <- Topology.checkout_session(topology_pid, type, :explicit, opts) do
+      {:ok, session}
+    else
+      {:new_connection, _server} ->
+        :timer.sleep(1000)
+        start_session(topology_pid, type, opts)
+    end
+  end
+
+  @doc """
   Start a new transation.
   """
   @spec start_transaction(Session.t) :: :ok | {:error, term()}
@@ -51,18 +110,8 @@ defmodule Mongo.Session do
   end
 
   @doc """
-  Start a new session
-  """
-  def start_session(topology_pid, type, opts) do
-    with {:ok, session} <- Topology.checkout_session(topology_pid, type, :explicit, opts) do
-      {:ok, session}
-    else
-      {:new_connection, _server} -> start_session(topology_pid, type, opts)
-    end
-  end
-
-  @doc """
-  Start a new implicit session only if no explicit session exists.
+  Start a new implicit session only if no explicit session exists. It returns the session in the `opts` keyword list or
+  creates a new one.
   """
   def start_implicit_session(topology_pid, type, opts) do
     case Keyword.get(opts, :session, nil) do
@@ -70,7 +119,9 @@ defmodule Mongo.Session do
          with {:ok, session} <- Topology.checkout_session(topology_pid, type, :implicit, opts) do
            {:ok, session}
          else
-           {:new_connection, _server} -> start_implicit_session(topology_pid, type, opts)
+           {:new_connection, _server} ->
+             :timer.sleep(1000)
+             start_implicit_session(topology_pid, type, opts)
          end
        session -> {:ok, session}
     end
@@ -166,9 +217,12 @@ defmodule Mongo.Session do
   end
 
 
+  ##
+  # calling the function and wrapping it to catch exceptions
+  #
   defp run_function(fun, opts) do
 
-    ## warte max 120ms, ansonsten kill
+    ## todo wait max 120s
     try do
       fun.(opts)
     rescue
@@ -177,14 +231,23 @@ defmodule Mongo.Session do
 
   end
 
+  @doc """
+  Return the connection used in the session
+  """
   def connection(pid) do
     :gen_statem.call(pid, {:connection})
   end
 
+  @doc """
+  Return the server session used in the session
+  """
   def server_session(pid) do
     :gen_statem.call(pid, {:server_session})
   end
 
+  @doc"""
+  Check if the session is alive
+  """
   def alive?(nil), do: false
   def alive?(pid), do: Process.alive?(pid)
 
@@ -352,7 +415,6 @@ defmodule Mongo.Session do
 
     :ok
   end
-
 
   ##
   # create the readConcern options
