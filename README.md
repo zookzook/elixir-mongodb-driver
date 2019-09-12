@@ -25,7 +25,6 @@ for the individual options.
   * [x] Add support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
   * [x] Add support driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
   * [ ] Add support for `op_compressed` ([See](https://github.com/mongodb/specifications/blob/master/source/compression/OP_COMPRESSED.rst))
-  * [ ] Because the driver is used in production environments, quick adjustments are necessary.
 
 ## Features
 
@@ -38,6 +37,8 @@ for the individual options.
   * Support for SCRAM-SHA-256 (MongoDB 4.x)
   * Support for change streams api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
   * Support for bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
+  * support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
+  * support driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
 
 ## Data representation
 
@@ -173,7 +174,7 @@ no exception is made, but the cursor is re-scheduled at the last successful loca
 The following example will never stop, 
 so it is a good idea to use a process for change streams. 
 
-```
+```elixir
 seeds = ["hostname1.net:27017", "hostname2.net:27017", "hostname3.net:27017"]
 {:ok, top} = Mongo.start_link(database: "my-db", seeds: seeds, appname: "getting rich")
 cursor =  Mongo.watch_collection(top, "accounts", [], fn doc -> IO.puts "New Token #{inspect doc}" end, max_time: 2_000 )  
@@ -182,7 +183,7 @@ cursor |> Enum.each(fn doc -> IO.puts inspect doc end)
 
 An example with a spawned process that sends message to the monitor process: 
 
-```  
+```elixir
 def for_ever(top, monitor) do
     cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end)
     cursor |> Enum.each(fn doc -> send(monitor, {:change, doc}) end)
@@ -345,7 +346,6 @@ Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-dri
 Copyright 2015 Eric Meadows-Jönsson and Justin Wood
 
 Copyright 2019 Michael Maier
-
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
