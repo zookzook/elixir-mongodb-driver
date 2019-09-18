@@ -5,7 +5,7 @@ defmodule BSON do
 
   @type t :: document | String.t | atom | number | boolean | BSON.Binary.t |
              BSON.ObjectId.t | BSON.Regex.t |
-             BSON.JavaScript.t | BSON.Timestamp.t | [t]
+             BSON.JavaScript.t | BSON.Timestamp.t | BSON.LongNumber.t | [t]
   @type document :: %{atom => BSON.t} | %{String.t => BSON.t} |
                     [{atom, BSON.t}] | [{String.t, BSON.t}]
 
