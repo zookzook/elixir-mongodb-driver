@@ -5,27 +5,6 @@
 [![Hex.pm](https://img.shields.io/hexpm/dw/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
 [![Hex.pm](https://img.shields.io/hexpm/dd/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
 
-This is an alternative development from the [original](https://github.com/ankhers/mongodb), which was the starting point
-and already contained very nice code.
-
-The [Documentation](https://hexdocs.pm/mongodb_driver/readme.html) is online, but currently not up to date. 
-This will be done as soon as possible. In the meantime, look in the source code. Especially 
-for the individual options.  
-
-## Motivation
-
-  * [x] I have made a number of changes to understand how the driver works. For example, I reduced cursor modules to just one cursor and
-        replaced some op code calls with command calls.
-  * [x] Simplify code: remove raw_find (raw_find called from cursors, raw_find called with "$cmd"), so raw_find is more calling a command than a find query.
-  * [x] Better support for new MongoDB version, for example the ability to use views
-  * [x] Upgraded to ([DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
-  * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
-  * [x] Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
-  * [x] Added bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
-  * [x] Add support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
-  * [x] Add support driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
-  * [ ] Add support for `op_compressed` ([See](https://github.com/mongodb/specifications/blob/master/source/compression/OP_COMPRESSED.rst))
-
 ## Features
 
   * Supports MongoDB versions 3.2, 3.4, 3.6, 4.0, 4.2
@@ -38,7 +17,7 @@ for the individual options.
   * Support for change streams api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
   * Support for bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
   * support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
-  * support driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
+  * support for driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
 
 ## Data representation
 
@@ -316,7 +295,7 @@ Using `$in`
 Mongo.find(:mongo, "users", %{email: %{"$in" => ["my@email.com", "other@email.com"]}})
 ```
 
-## Contributing
+## Testing
 
 The SSL test suite is enabled by default. You have two options. Either exclude
 the SSL tests or enable SSL on your Mongo server.
@@ -341,6 +320,27 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 
 Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-driver) for providing a free JetBrains Open Source license for their complete toolbox.
 
+This is an alternative development from the [original](https://github.com/ankhers/mongodb), which was the starting point
+and already contained very nice code.
+
+The [Documentation](https://hexdocs.pm/mongodb_driver/readme.html) is online, but currently not up to date. 
+This will be done as soon as possible. In the meantime, look in the source code. Especially 
+for the individual options.  
+
+## Motivation
+
+  * [x] I have made a number of changes to understand how the driver works. For example, I reduced cursor modules to just one cursor and
+        replaced some op code calls with command calls.
+  * [x] Simplify code: remove raw_find (raw_find called from cursors, raw_find called with "$cmd"), so raw_find is more calling a command than a find query.
+  * [x] Better support for new MongoDB version, for example the ability to use views
+  * [x] Upgraded to ([DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
+  * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
+  * [x] Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
+  * [x] Added bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
+  * [x] Add support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
+  * [x] Add support for driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
+  * [ ] Add support for `op_compressed` ([See](https://github.com/mongodb/specifications/blob/master/source/compression/OP_COMPRESSED.rst))
+  
 ## License
 
 Copyright 2015 Eric Meadows-Jönsson and Justin Wood
