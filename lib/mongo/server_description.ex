@@ -77,7 +77,7 @@ defmodule Mongo.ServerDescription do
       set_version: is_master_reply["setVersion"],
       election_id: is_master_reply["electionId"],
       primary: is_master_reply["primary"],
-      logical_session_timeout: is_master_reply["logicalSessionTimeoutMinutes"]
+      logical_session_timeout: is_master_reply["logicalSessionTimeoutMinutes"] || 30
     }
   end
 
