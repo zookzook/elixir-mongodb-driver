@@ -28,50 +28,65 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_3_6
-  test "session pool fifo", %{top: top} do
+  test "session pool fifo", _ do
 
-    {:ok, session_pool} = SessionPool.start_link(top, 30)
+    session_pool = SessionPool.new(30)
 
-    session_a = SessionPool.checkout(session_pool)
-    session_b = SessionPool.checkout(session_pool)
+    {session_a, session_pool} = SessionPool.checkout(session_pool)
+    {session_b, session_pool} = SessionPool.checkout(session_pool)
 
-    SessionPool.checkin(session_pool, session_a)
-    SessionPool.checkin(session_pool, session_b)
+    session_pool = SessionPool.checkin(session_pool, session_a)
+    session_pool = SessionPool.checkin(session_pool, session_b)
 
-    assert session_b.session_id == SessionPool.checkout(session_pool).session_id
-    assert session_a.session_id == SessionPool.checkout(session_pool).session_id
+    {session_bb, session_pool} = SessionPool.checkout(session_pool)
+    {session_aa, _session_pool} = SessionPool.checkout(session_pool)
+
+    assert session_b.session_id == session_bb.session_id
+    assert session_a.session_id == session_aa.session_id
   end
 
   @tag :mongo_3_6
-  test "session pool checkin prune", %{top: top} do
+  test "session pool checkin prune", _ do
 
-    {:ok, session_pool} = SessionPool.start_link(top, 1)
+    session_pool = SessionPool.new(1)
 
-    session_a = SessionPool.checkout(session_pool) |> make_old(-2*60)
-    session_b = SessionPool.checkout(session_pool) |> make_old(-2*60)
+    {session_a, session_pool} = SessionPool.checkout(session_pool)
+    {session_b, session_pool} = SessionPool.checkout(session_pool)
 
-    SessionPool.checkin(session_pool, session_a)
-    SessionPool.checkin(session_pool, session_b)
+    session_a = session_a |> make_old(-2*60)
+    session_b = session_b |> make_old(-2*60)
 
-    assert session_b.session_id != SessionPool.checkout(session_pool).session_id
-    assert session_a.session_id != SessionPool.checkout(session_pool).session_id
+    session_pool = SessionPool.checkin(session_pool, session_a)
+    session_pool = SessionPool.checkin(session_pool, session_b)
+
+    {session_bb, session_pool} = SessionPool.checkout(session_pool)
+    {session_aa, _session_pool} = SessionPool.checkout(session_pool)
+
+    assert session_b.session_id != session_bb.session_id
+    assert session_a.session_id != session_aa.session_id
   end
 
   @tag :mongo_3_6
-  test "session pool checkout prune", %{top: top} do
+  test "session pool checkout prune", _ do
 
-    {:ok, session_pool} = SessionPool.start_link(top, 2)
+    session_pool = SessionPool.new(2)
 
-    session_a = SessionPool.checkout(session_pool) |> make_old(-59)
-    session_b = SessionPool.checkout(session_pool) |> make_old(-59)
+    {session_a, session_pool} = SessionPool.checkout(session_pool)
+    {session_b, session_pool} = SessionPool.checkout(session_pool)
 
-    SessionPool.checkin(session_pool, session_a)
-    SessionPool.checkin(session_pool, session_b)
+    session_a = session_a|> make_old(-59)
+    session_b = session_b |> make_old(-59)
+
+    session_pool = SessionPool.checkin(session_pool, session_a)
+    session_pool = SessionPool.checkin(session_pool, session_b)
 
     Process.sleep(2000) # force to timeout
 
-    assert session_b.session_id != SessionPool.checkout(session_pool).session_id
-    assert session_a.session_id != SessionPool.checkout(session_pool).session_id
+    {session_bb, session_pool} = SessionPool.checkout(session_pool)
+    {session_aa, _session_pool} = SessionPool.checkout(session_pool)
+
+    assert session_b.session_id != session_bb.session_id
+    assert session_a.session_id != session_aa.session_id
   end
 
   def make_old(%ServerSession{last_use: last_use} = session, delta) do

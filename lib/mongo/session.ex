@@ -2,7 +2,6 @@ defmodule Mongo.Session do
 
   @moduledoc """
   This module implements the details of the transactions api ([see specs](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst#committransaction)).
-  It uses the `:gen_statem` behaviour ([a nice introduction](https://andrealeopardi.com/posts/connection-managers-with-gen_statem/)) to manage the different states.
 
   In case of MongoDB 3.6 or greater the driver uses sessions for each operation. If no session is created the driver will create a so-called implicit session. A session is a UUID-Number which
   is added to some operations. The sessions are used to manage the transaction state as well. In most situation you need not to create a session instance, so the api of the driver is not changed.
@@ -97,8 +96,6 @@ defmodule Mongo.Session do
 
   """
 
-  @behaviour :gen_statem
-
   import Keywords
   import Mongo.WriteConcern
 
@@ -106,6 +103,7 @@ defmodule Mongo.Session do
   alias Mongo.Session
   alias Mongo.Topology
   alias BSON.Timestamp
+  alias __MODULE__
 
   require Logger
 
@@ -119,19 +117,14 @@ defmodule Mongo.Session do
   # * `implicit` true or false
   # * `causal_consistency` true orfalse
   # * `wire_version` current wire version to check if transactions are possible
-  defstruct [conn: nil, server_session: nil, causal_consistency: false, operation_time: nil, implicit: false, wire_version: 0, opts: []]
-
-  @impl true
-  def callback_mode() do
-    :handle_event_function
-  end
+  defstruct [conn: nil, server_session: nil, causal_consistency: false, operation_time: nil, implicit: false, wire_version: 0, state: :no_transaction, opts: []]
 
   @doc """
   Start the generic state machine.
   """
   @spec start_link(GenServer.server, ServerSession.t, atom, integer, keyword()) :: {:ok, Session.t} | :ignore | {:error, term()}
   def start_link(conn, server_session, type, wire_version, opts) do
-    :gen_statem.start_link(__MODULE__, {conn, server_session, type, wire_version, opts}, [])
+    {:ok, spawn_link(__MODULE__, :init, [conn, server_session, type, wire_version, opts])}
   end
 
   @doc """
@@ -160,15 +153,15 @@ defmodule Mongo.Session do
   @spec start_implicit_session(GenServer.server, atom, keyword()) :: {:ok, Session.t} | {:error, term()}
   def start_implicit_session(topology_pid, type, opts) do
     case Keyword.get(opts, :session, nil) do
-       nil ->
-         with {:ok, session} <- Topology.checkout_session(topology_pid, type, :implicit, opts) do
-           {:ok, session}
-         else
-           {:new_connection, _server} ->
-             :timer.sleep(1000)
-             start_implicit_session(topology_pid, type, opts)
-         end
-       session -> {:ok, session}
+      nil ->
+        with {:ok, session} <- Topology.checkout_session(topology_pid, type, :implicit, opts) do
+          {:ok, session}
+        else
+          {:new_connection, _server} ->
+            :timer.sleep(1000)
+            start_implicit_session(topology_pid, type, opts)
+        end
+      session -> {:ok, session}
     end
   end
 
@@ -177,7 +170,7 @@ defmodule Mongo.Session do
   """
   @spec start_transaction(Session.t) :: :ok | {:error, term()}
   def start_transaction(pid) do
-    :gen_statem.call(pid, {:start_transaction})
+    call(pid, :start_transaction)
   end
 
   @doc """
@@ -185,7 +178,7 @@ defmodule Mongo.Session do
   """
   @spec commit_transaction(Session.t) :: :ok | {:error, term()}
   def commit_transaction(pid) do
-    :gen_statem.call(pid, {:commit_transaction})
+    call(pid, :commit_transaction)
   end
 
   @doc """
@@ -193,7 +186,7 @@ defmodule Mongo.Session do
   """
   @spec abort_transaction(Session.t) :: :ok | {:error, term()}
   def abort_transaction(pid) do
-    :gen_statem.call(pid, {:abort_transaction})
+    call(pid, :abort_transaction)
   end
 
   @doc """
@@ -204,7 +197,7 @@ defmodule Mongo.Session do
     cmd
   end
   def bind_session(pid, cmd) do
-    :gen_statem.call(pid, {:bind_session, cmd})
+    call(pid, {:bind_session, cmd})
   end
 
   @doc """
@@ -214,8 +207,8 @@ defmodule Mongo.Session do
   def update_session(pid, doc, opts \\ [])
   def update_session(pid, %{"operationTime" => operationTime} = doc, opts) do
     case opts |> write_concern() |> acknowledged?() do
-       true  -> advance_operation_time(pid, operationTime)
-       false -> []
+      true  -> advance_operation_time(pid, operationTime)
+      false -> []
     end
     doc
   end
@@ -228,7 +221,7 @@ defmodule Mongo.Session do
   """
   @spec advance_operation_time(Session.t, BSON.Timestamp.t) :: none()
   def advance_operation_time(pid, timestamp) do
-    :gen_statem.cast(pid, {:advance_operation_time, timestamp})
+    cast(pid, {:advance_operation_time, timestamp})
   end
 
   @doc """
@@ -236,7 +229,7 @@ defmodule Mongo.Session do
   """
   @spec end_implict_session(GenServer.server, Session.t) :: :ok | :error
   def end_implict_session(topology_pid, session) do
-    with {:ok, session_server} <- :gen_statem.call(session, {:end_implicit_session}) do
+    with {:ok, session_server} <- call(session, :end_implicit_session) do
       Topology.checkin_session(topology_pid, session_server)
     else
       :noop -> :ok
@@ -249,7 +242,7 @@ defmodule Mongo.Session do
   """
   @spec end_session(GenServer.server, Session.t) :: :ok | :error
   def end_session(topology_pid, session) do
-    with {:ok, session_server} <- :gen_statem.call(session, {:end_session}) do
+    with {:ok, session_server} <- call(session, :end_session) do
       Topology.checkin_session(topology_pid, session_server)
     end
   end
@@ -289,7 +282,6 @@ defmodule Mongo.Session do
 
   end
 
-
   ##
   # calling the function and wrapping it to catch exceptions
   #
@@ -309,7 +301,7 @@ defmodule Mongo.Session do
   """
   @spec connection(Session.t) :: pid
   def connection(pid) do
-    :gen_statem.call(pid, {:connection})
+    call(pid, :connection)
   end
 
   @doc """
@@ -317,7 +309,7 @@ defmodule Mongo.Session do
   """
   @spec server_session(Session.t) :: ServerSession.t
   def server_session(pid) do
-    :gen_statem.call(pid, {:server_session})
+    call(pid, :server_session)
   end
 
   @doc"""
@@ -327,128 +319,146 @@ defmodule Mongo.Session do
   def alive?(nil), do: false
   def alive?(pid), do: Process.alive?(pid)
 
-  @impl true
-  # Initialization of the state machine
-  def init({conn, server_session, type, wire_version, opts}) do
+  @compile {:inline, call: 2}
+  defp call(pid, arguments) do
+    #Logger.info("Calling #{inspect arguments}")
+    send(pid, {:call, self(), arguments})
+    receive do
+      {:session_result, result} -> result
+    end
+  end
+
+  @compile {:inline, cast: 2}
+  def cast(pid, arguments) do
+    send(pid, {:cast, arguments})
+  end
+
+  def init(conn, server_session, type, wire_version, opts) do
     data = %Session{conn: conn,
       server_session: server_session,
       implicit: (type == :implicit),
       wire_version: wire_version,
       causal_consistency: Keyword.get(opts, :causal_consistency, false),
+      state: :no_transaction,
       opts: opts}
-    {:ok, :no_transaction, data}
+    loop(data)
   end
 
-  @impl true
-  # start the transaction
-  def handle_event({:call, from},
-        {:start_transaction},
-        transaction,
-        %Session{server_session: session} = data) when transaction in [:no_transaction, :transaction_aborted, :transaction_committed] do
-    {:next_state, :starting_transaction, %Session{data | server_session: ServerSession.next_txn_num(session)}, {:reply, from, :ok}}
+  defp loop(nil) do
+  end
+  defp loop(%Session{state: state} = data) do
+    receive do
+      {:call, from, cmd} ->
+
+        handle_call_event(cmd, state, data)
+        |> handle_call_result(data, from)
+        |> loop()
+
+      {:cast, cmd} -> loop(handle_cast_event(cmd, state, data))
+
+      _other -> loop(nil)
+
+    end
   end
 
+  defp handle_call_result({:keep_state_and_data, result}, data, from) do
+    send(from, {:session_result, result})
+    data
+  end
+  defp handle_call_result({:next_state, new_state, result}, data, from) do
+    send(from, {:session_result, result})
+    %Session{data | state: new_state}
+  end
+  defp handle_call_result({:next_state, new_state, data, result}, _old_data, from) do
+    send(from, {:session_result, result})
+    %Session{data | state: new_state}
+  end
+  defp handle_call_result({:stop_and_reply, result}, _data, from) do
+    send(from, {:session_result, result})
+    nil
+  end
+
+  def handle_call_event(:start_transaction, transaction, %Session{server_session: session} = data) when transaction in [:no_transaction, :transaction_aborted, :transaction_committed] do
+    {:next_state, :starting_transaction, %Session{data | server_session: ServerSession.next_txn_num(session)}, :ok}
+  end
   ##
   # bind session: only if wire_version >= 6, MongoDB 3.6.x and no transaction is running: only lsid is added
   #
-  def handle_event({:call, from},
-        {:bind_session, cmd},
-        transaction,
+  def handle_call_event({:bind_session, cmd}, transaction,
         %Session{conn: conn,
           wire_version: wire_version,
           server_session: %ServerSession{session_id: id}} = data) when wire_version >= 6 and transaction in [:no_transaction, :transaction_aborted, :transaction_committed] do
 
     cmd = Keyword.merge(cmd, lsid: %{id: id}, readConcern: read_concern(data, Keyword.get(cmd, :readConcern))) |> filter_nils()
-    {:keep_state_and_data, {:reply, from, {:ok, conn, cmd}}}
+    {:keep_state_and_data, {:ok, conn, cmd}}
   end
-
-  def handle_event({:call, from},
-        {:bind_session, cmd},
-        :starting_transaction,
+  def handle_call_event({:bind_session, cmd}, :starting_transaction,
         %Session{conn: conn,
           server_session: %ServerSession{session_id: id, txn_num: txn_num},
           wire_version: wire_version} = data) when wire_version >= 6 do
 
     result = Keyword.merge(cmd,
-                           readConcern: read_concern(data, Keyword.get(cmd, :readConcern)),
-                           lsid: %{id: id},
-                           txnNumber: %BSON.LongNumber{value: txn_num},
-                           startTransaction: true,
-                           autocommit: false) |> filter_nils() |> Keyword.drop(~w(writeConcern)a)
+               readConcern: read_concern(data, Keyword.get(cmd, :readConcern)),
+               lsid: %{id: id},
+               txnNumber: %BSON.LongNumber{value: txn_num},
+               startTransaction: true,
+               autocommit: false) |> filter_nils() |> Keyword.drop(~w(writeConcern)a)
 
-    {:next_state, :transaction_in_progress, data, {:reply, from, {:ok, conn, result}}}
+    {:next_state, :transaction_in_progress, {:ok, conn, result}}
   end
-
-  def handle_event({:call, from},
-        {:bind_session, cmd},
-        :transaction_in_progress,
+  def handle_call_event({:bind_session, cmd}, :transaction_in_progress,
         %Session{conn: conn, wire_version: wire_version,
           server_session: %ServerSession{session_id: id, txn_num: txn_num}}) when wire_version >= 6 do
     result = Keyword.merge(cmd,
-                           lsid: %{id: id},
-                           txnNumber: %BSON.LongNumber{value: txn_num},
-                           autocommit: false) |> Keyword.drop(~w(writeConcern readConcern)a)
-    {:keep_state_and_data, {:reply, from, {:ok, conn, result}}}
+               lsid: %{id: id},
+               txnNumber: %BSON.LongNumber{value: txn_num},
+               autocommit: false) |> Keyword.drop(~w(writeConcern readConcern)a)
+    {:keep_state_and_data, {:ok, conn, result}}
   end
-
   # In case of wire_version < 6 we do nothing
-  def handle_event({:call, from},
-        {:bind_session, cmd},
-        _transaction,
-        %Session{conn: conn}) do
-    {:keep_state_and_data, {:reply, from, {:ok, conn, cmd}}}
+  def handle_call_event({:bind_session, cmd}, _transaction,  %Session{conn: conn}) do
+    {:keep_state_and_data, {:ok, conn, cmd}}
   end
-
-  def handle_event({:call, from}, {:commit_transaction}, :starting_transaction, data) do
-    {:next_state, :transaction_committed, data, {:reply, from, :ok}}
+  def handle_call_event(:commit_transaction, :starting_transaction, _data) do
+    {:next_state, :transaction_committed, :ok}
   end
-  def handle_event({:call, from}, {:commit_transaction}, :transaction_in_progress, data) do
-    {:next_state, :transaction_committed, data, {:reply, from, run_commit_command(data)}}
+  def handle_call_event(:commit_transaction, :transaction_in_progress, data) do
+    {:next_state, :transaction_committed, run_commit_command(data)}
   end
-  def handle_event({:call, from}, {:abort_transaction}, :starting_transaction, data) do
-    {:next_state, :transaction_aborted, data, {:reply, from, :ok}}
+  def handle_call_event(:abort_transaction, :starting_transaction, _data) do
+    {:next_state, :transaction_aborted, :ok}
   end
-  def handle_event({:call, from}, {:abort_transaction}, :transaction_in_progress, data) do
-    {:next_state, :transaction_aborted, data, {:reply, from, run_abort_command(data)}}
+  def handle_call_event(:abort_transaction, :transaction_in_progress, data) do
+    {:next_state, :transaction_aborted, run_abort_command(data)}
   end
-  def handle_event({:call, from}, {:connection}, _state,  %{conn: conn}) do
-    {:keep_state_and_data, {:reply, from, conn}}
+  def handle_call_event(:connection, _state,  %{conn: conn}) do
+    {:keep_state_and_data, conn}
   end
-  def handle_event({:call, from}, {:end_session}, _state, %Session{server_session: session_server}) do
-    {:stop_and_reply, :normal, {:reply, from, {:ok, session_server}}}
+  def handle_call_event(:end_session, _state, %Session{server_session: session_server}) do
+    {:stop_and_reply, {:ok, session_server}}
   end
-  def handle_event({:call, from}, {:end_implicit_session}, _state, %Session{server_session: session_server, implicit: true}) do
-    {:stop_and_reply, :normal, {:reply, from, {:ok, session_server}}}
+  def handle_call_event(:end_implicit_session, _state, %Session{server_session: session_server, implicit: true}) do
+    {:stop_and_reply, {:ok, session_server}}
   end
-  def handle_event({:call, from}, {:end_implicit_session}, _state, %Session{implicit: false}) do
-    {:keep_state_and_data, {:reply, from, :noop}}
+  def handle_call_event(:end_implicit_session, _state, %Session{implicit: false}) do
+    {:keep_state_and_data, :noop}
   end
-  def handle_event({:call, from}, {:server_session}, _state,  %Session{server_session: session_server, implicit: implicit}) do
-    {:keep_state_and_data, {:reply, from, {:ok, session_server, implicit}}}
+  def handle_call_event(:server_session, _state,  %Session{server_session: session_server, implicit: implicit}) do
+    {:keep_state_and_data, session_server, implicit}
   end
-  def handle_event(:cast, {:advance_operation_time, timestamp}, _state, %Session{operation_time: nil} = data) do
-    {:keep_state, %Session{data | operation_time: timestamp}}
+  def handle_cast_event({:advance_operation_time, timestamp}, _state, %Session{operation_time: nil} = data) do
+    %Session{data | operation_time: timestamp}
   end
-  def handle_event(:cast, {:advance_operation_time, timestamp}, _state, %Session{operation_time: time} = data)  do
+  def handle_cast_event({:advance_operation_time, timestamp}, _state, %Session{operation_time: time} = data)  do
     case Timestamp.is_after(timestamp, time) do
-      true  -> {:keep_state, %Session{data | operation_time: timestamp}}
-      false -> :keep_state_and_data
+      true  -> %Session{data | operation_time: timestamp}
+      false -> data
     end
   end
-
-  @impl true
-  def terminate(reason, state, data) when state in [:transaction_in_progress] do
-    Logger.debug("Terminating because of #{inspect reason}")
-    run_abort_command(data)
-  end
-  def terminate(reason, _state, _data) do
-    Logger.debug("Terminating because of #{inspect reason}")
-  end
-
   ##
   # Run the commit transaction command.
   #
-  defp run_commit_command(%{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
+  defp run_commit_command(%Session{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
 
     Logger.debug("Running commit transaction")
 
@@ -457,13 +467,13 @@ defmodule Mongo.Session do
     #}
 
     cmd = [
-      commitTransaction: 1,
-      lsid: %{id: id},
-      txnNumber: %BSON.LongNumber{value: txn_num},
-      autocommit: false,
-      writeConcern: write_concern(opts),
-      maxTimeMS: Keyword.get(opts, :max_commit_time_ms)
-      ] |> filter_nils()
+            commitTransaction: 1,
+            lsid: %{id: id},
+            txnNumber: %BSON.LongNumber{value: txn_num},
+            autocommit: false,
+            writeConcern: write_concern(opts),
+            maxTimeMS: Keyword.get(opts, :max_commit_time_ms)
+          ] |> filter_nils()
 
     _doc = Mongo.exec_command(conn, cmd, database: "admin")
 
@@ -473,17 +483,17 @@ defmodule Mongo.Session do
   ##
   # Run the abort transaction command.
   #
-  defp run_abort_command(%{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
+  defp run_abort_command(%Session{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
 
     Logger.debug("Running abort transaction")
 
     cmd = [
-      abortTransaction: 1,
-      lsid: %{id: id},
-      txnNumber: %BSON.LongNumber{value: txn_num},
-      autocommit: false,
-      writeConcern: write_concern(opts)
-    ] |> filter_nils()
+            abortTransaction: 1,
+            lsid: %{id: id},
+            txnNumber: %BSON.LongNumber{value: txn_num},
+            autocommit: false,
+            writeConcern: write_concern(opts)
+          ] |> filter_nils()
 
     _doc = Mongo.exec_command(conn, cmd, database: "admin")
 

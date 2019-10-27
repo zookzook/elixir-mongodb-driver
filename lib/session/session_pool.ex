@@ -11,21 +11,13 @@ defmodule Mongo.Session.SessionPool do
 
   alias Mongo.Session.ServerSession
 
-  use GenServer
-
-  @doc """
-  Starts the GenServer. The `logical_session_timeout` is the timeout in minutes for each server session.
-  """
-  @spec start_link(GenServer.server, integer) :: GenServer.on_start()
-  def start_link(top, logical_session_timeout) do
-
-    state = %{
-      top: top,
-      timeout: logical_session_timeout,
-      queue: []
+  def new(logical_session_timeout, opts \\ []) do
+    pool_size = Keyword.get(opts, :session_pool, 1000)
+    %{
+      timeout: logical_session_timeout * 60 - 60,
+      queue: Enum.map(1..pool_size, fn _ -> ServerSession.new() end),
+      pool_size: pool_size
     }
-
-    GenServer.start_link(__MODULE__, state)
   end
 
   @doc """
@@ -33,8 +25,10 @@ defmodule Mongo.Session.SessionPool do
   Otherwise a newly created server session is returned.
   """
   @spec checkout(GenServer.server) :: ServerSession.t
-  def checkout(pid) do
-    GenServer.call(pid, :checkout)
+  @compile {:inline, checkout: 1}
+  def checkout(%{queue: queue, timeout: timeout, pool_size: size} = pool) do
+    {session, queue} = find_session(queue, timeout, size)
+    {session, %{pool | queue: queue}}
   end
 
   @doc """
@@ -42,74 +36,35 @@ defmodule Mongo.Session.SessionPool do
   is cache for reuse, until it expires due of being cached all the time.
   """
   @spec checkin(GenServer.server, ServerSession.t) :: none()
-  def checkin(pid, session) do
-    GenServer.cast(pid, {:checkin, session})
-  end
+  @compile {:inline, checkin: 2}
+  def checkin(%{queue: queue, timeout: timeout} = pool, session) do
 
-  @doc """
-  Initiaize an empty cache.
-  """
-  def init(state) do
-    {:ok, state}
-  end
-
-  @doc """
-  Handle a checkin cast.
-  """
-  def handle_cast({:checkin, session}, %{queue: queue, timeout: timeout} = state) do
-
-    queue = prune(queue, timeout)
+    # queue = prune(queue, timeout)
 
     case ServerSession.about_to_expire?(session, timeout) do
-      true  -> {:noreply, %{state | queue: queue}}
-      false -> {:noreply, %{state | queue: [session | queue]}}
-    end
-
-  end
-
-  @doc """
-  Handle a shutdown cast.
-  """
-  def handle_cast(:shutdown, state) do
-    end_sessions(state)
-    {:noreply, %{state | queue: []}}
-  end
-
-  @doc """
-  Handle a checkout call.
-  """
-  def handle_call(:checkout, _from, %{queue: queue, timeout: timeout} = state) do
-    {session, queue} = find_session(queue, timeout)
-    {:reply, session, %{state | queue: queue}}
-  end
-
-  ##
-  # Send a end_sessions command to the server
-  #
-  defp end_sessions(%{top: top, queue: queue}) do
-    queue
-    |> Enum.chunk_every(10_000)
-    |> Enum.each(fn sessions -> end_sessions(top, sessions) end)
-  end
-
-  defp end_sessions(top, sessions) do
-    with {:ok, %{"ok" => ok}} when ok == 1 <- Mongo.command(top, [endSessions: sessions], database: "admin") do
-      :ok
+      true  -> %{pool | queue: queue}
+      false -> %{pool | queue: [session | queue]}
     end
   end
 
   ##
   # remove all old sessions
   #
-  defp prune(sessions, timeout), do: Enum.reject(sessions, fn session -> ServerSession.about_to_expire?(session, timeout) end)
+  def prune(%{queue: queue, timeout: timeout} = pool) do
+    queue = Enum.reject(queue, fn session -> ServerSession.about_to_expire?(session, timeout) end)
+    %{pool | queue: queue}
+  end
 
   ##
   # find the next valid sessions and removes all sessions that timed out
   #
-  defp find_session([], _timeout), do: {ServerSession.new(), []}
-  defp find_session([session | rest], timeout) do
+  @compile {:inline, find_session: 3}
+  defp find_session([], _timeout, size) do
+    {ServerSession.new(), Enum.map(1..size, fn _ -> ServerSession.new() end)}
+  end
+  defp find_session([session | rest], timeout, size) do
     case ServerSession.about_to_expire?(session, timeout) do
-      true  -> find_session(rest, timeout)
+      true  -> find_session(rest, timeout, size)
       false -> {session, rest}
     end
   end

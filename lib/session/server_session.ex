@@ -33,7 +33,7 @@ defmodule Mongo.Session.ServerSession do
   """
   @spec new() :: ServerSession.t
   def new() do
-    %ServerSession{session_id: uuid(), last_use: System.system_time(:second)}
+    %ServerSession{session_id: uuid(), last_use: System.monotonic_time(:second)}
   end
 
   @doc """
@@ -41,7 +41,7 @@ defmodule Mongo.Session.ServerSession do
   """
   @spec set_last_use(ServerSession.t) :: ServerSession.t
   def set_last_use(%ServerSession{} = session) do
-    %ServerSession{session | last_use: System.system_time(:second)}
+    %ServerSession{session | last_use: System.monotonic_time(:second)}
   end
 
   @doc """
@@ -58,11 +58,9 @@ defmodule Mongo.Session.ServerSession do
     can be removed from the queue.
   """
   @spec about_to_expire?(ServerSession.t, integer) :: boolean
+  @compile {:inline, about_to_expire?: 2}
   def about_to_expire?(%ServerSession{:last_use => last_use}, logical_session_timeout) do
-
-    idle_time_minutes = div((System.system_time(:second) - last_use), 60)
-    (idle_time_minutes + 1) >= logical_session_timeout
-
+    (System.monotonic_time(:second) - last_use) >= logical_session_timeout
   end
 
   defp uuid() do

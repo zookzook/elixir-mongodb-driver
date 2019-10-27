@@ -186,8 +186,7 @@ defmodule Mongo.Topology do
   # checkin the current session
   #
   def handle_cast({:checkin_session, server_session}, %{:session_pool => pool} = state) do
-    SessionPool.checkin(pool, server_session)
-    {:noreply, state}
+    {:noreply, %{state | session_pool: SessionPool.checkin(pool, server_session)}}
   end
 
   def handle_info({:new_connection, waiting_pids, host}, state) do
@@ -249,15 +248,14 @@ defmodule Mongo.Topology do
       {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
         Logger.debug("select_server: found #{inspect servers}, pools: #{inspect pools}")
 
-        with {:ok, connection} <- servers
-                                  |> Enum.take_random(1)
-                                  |> get_connection(state),
-             {:ok, wire_version} <- Mongo.wire_version(connection),
-             server_session <- checkout_server_session(state),
-            {:ok, session}  <- Session.start_link(connection, server_session, type, wire_version, opts) do
+        with host <- Enum.take_random(servers, 1),
+             {:ok, connection} <- get_connection(host, state),
+              wire_version <- max_version(topology, host),
+            {server_session, new_state} <- checkout_server_session(state),
+            {:ok, session} <- Session.start_link(connection, server_session, type, wire_version, opts) do
 
           Logger.debug("select_server: connection is #{inspect connection}, server_session is #{inspect server_session}")
-          {:reply, {:ok, session}, state}
+          {:reply, {:ok, session}, new_state}
         end
 
       error ->
@@ -288,8 +286,10 @@ defmodule Mongo.Topology do
     end
   end
 
-  defp checkout_server_session(%{:session_pool => session_pool}) do
-    SessionPool.checkout(session_pool)
+  defp checkout_server_session(%{:session_pool => session_pool} = state) do
+    with {session, pool} <- SessionPool.checkout(session_pool) do
+      {session, %{state | session_pool: pool}}
+    end
   end
   defp checkout_server_session(_state) do
     nil
@@ -297,6 +297,13 @@ defmodule Mongo.Topology do
 
   defp get_connection([], _state), do: nil
   defp get_connection([address], %{connection_pools: pools}), do: Map.fetch(pools, address)
+
+  defp max_version(topology, [host]) do
+    case Map.get(topology.servers, host) do
+      nil    -> 0
+      server -> server.max_wire_version
+    end
+  end
 
   ##
   # update the monitor process. For new servers the function creates new monitor processes.
@@ -326,10 +333,8 @@ defmodule Mongo.Topology do
     Enum.reduce(removed, state, &remove_address/2)
   end
 
-  defp update_session_pool(%{:session_pool => nil} = state, logical_session_timeout) do
-    Logger.debug("Creating session pool")
-    {:ok, session_pool} = SessionPool.start_link(self(), logical_session_timeout)
-    %{ state | session_pool: session_pool}
+  defp update_session_pool(%{session_pool:  nil, opts: opts} = state, logical_session_timeout) do
+    %{ state | session_pool: SessionPool.new(logical_session_timeout, opts)}
   end
   defp update_session_pool(state, _logical_session_timeout) do
     state

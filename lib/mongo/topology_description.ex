@@ -40,6 +40,13 @@ defmodule Mongo.TopologyDescription do
     true
   end
 
+  def max_version(topology, [host]) do
+    case Map.get(topology.servers, host) do
+       nil    -> 0
+       server -> server.max_wire_version
+    end
+  end
+
   def has_writable_server?(topology) do
     topology.type in [:single, :sharded, :replica_set_with_primary]
   end

@@ -28,8 +28,8 @@ defmodule Mongo.MongoDBConnection do
       connect_timeout: opts[:connect_timeout] || @timeout,
       database: Keyword.fetch!(opts, :database),
       write_concern: Map.new(write_concern),
-      wire_version: nil,
-      limits: nil,
+      wire_version: nil, # todo move to topolgy and topology-description
+      limits: nil, # todo  move to topolgy and topology-description
       auth_mechanism: opts[:auth_mechanism] || nil,
       connection_type: Keyword.fetch!(opts, :connection_type),
       topology_pid: Keyword.fetch!(opts, :topology_pid),
