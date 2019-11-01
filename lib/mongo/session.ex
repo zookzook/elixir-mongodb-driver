@@ -103,7 +103,6 @@ defmodule Mongo.Session do
   alias Mongo.Session
   alias Mongo.Topology
   alias BSON.Timestamp
-  alias __MODULE__
 
   require Logger
 

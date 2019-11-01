@@ -1,3 +1,8 @@
+## 0.6.1
+
+* Enhancements
+    * refactored `Mongo.Session` and `Mongo.Session.SessionPool` because of poor performance
+    
 ## 0.6.0
 
 * Enhancements
