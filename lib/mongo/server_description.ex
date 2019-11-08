@@ -23,6 +23,11 @@ defmodule Mongo.ServerDescription do
     election_id: BSON.ObjectId.t | nil,
     primary: String.t | nil,
     last_update_time: non_neg_integer,
+    max_bson_object_size: non_neg_integer,
+    max_message_size_bytes: non_neg_integer,
+    max_write_batch_size: non_neg_integer,
+    compression: String.t | nil,
+    read_only: boolean(),
     logical_session_timeout: non_neg_integer
   }
 
@@ -46,6 +51,11 @@ defmodule Mongo.ServerDescription do
       election_id: nil,
       primary: nil,
       last_update_time: 0,
+      max_bson_object_size: 16_777_216,
+      max_message_size_bytes: 48_000_000,
+      max_write_batch_size: 100_000,
+      compression: nil,
+      read_only: false,
       logical_session_timeout: 30
     }, map)
   end
@@ -77,6 +87,11 @@ defmodule Mongo.ServerDescription do
       set_version: is_master_reply["setVersion"],
       election_id: is_master_reply["electionId"],
       primary: is_master_reply["primary"],
+      max_bson_object_size: (is_master_reply["maxBsonObjectSize"] || 16_777_216),
+      max_message_size_bytes: (is_master_reply["maxMessageSizeBytes"] || 48_000_000),
+      max_write_batch_size: (is_master_reply["maxWriteBatchSize"] || 100_000),
+      compression: is_master_reply["compression"],
+      read_only: (is_master_reply["readOnly"] || false),
       logical_session_timeout: is_master_reply["logicalSessionTimeoutMinutes"] || 30
     }
   end

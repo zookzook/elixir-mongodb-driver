@@ -12,6 +12,8 @@ defmodule Mongo.Topology do
   alias Mongo.Session.SessionPool
   alias Mongo.Session
 
+  @limits [:logical_session_timeout, :max_bson_object_size, :max_message_size_bytes, :max_wire_version, :max_write_batch_size]
+
   # https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#heartbeatfrequencyms-defaults-to-10-seconds-or-60-seconds
   @heartbeat_frequency_ms 10_000
 
@@ -50,6 +52,14 @@ defmodule Mongo.Topology do
 
   def select_server(pid, type, opts \\ []) do
     GenServer.call(pid, {:select_server, type, opts})
+  end
+
+  def limits(pid) do
+    GenServer.call(pid, :limits)
+  end
+
+  def wire_version(pid) do
+    GenServer.call(pid, :wire_version)
   end
 
   @doc """
@@ -248,9 +258,9 @@ defmodule Mongo.Topology do
       {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
         Logger.debug("select_server: found #{inspect servers}, pools: #{inspect pools}")
 
-        with host <- Enum.take_random(servers, 1),
-             {:ok, connection} <- get_connection(host, state),
-              wire_version <- max_version(topology, host),
+        with address <- Enum.take_random(servers, 1),
+             {:ok, connection} <- get_connection(address, state),
+              wire_version <- wire_version(address, topology),
             {server_session, new_state} <- checkout_server_session(state),
             {:ok, session} <- Session.start_link(connection, server_session, type, wire_version, opts) do
 
@@ -264,14 +274,14 @@ defmodule Mongo.Topology do
     end
   end
 
-  def handle_call({:select_server, type, opts}, from, %{:topology => topology, :waiting_pids => waiting, connection_pools: pools} = state) do
+  def handle_call({:select_server, type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
     case TopologyDescription.select_servers(topology, type, opts) do
       :empty ->
         Logger.debug("select_server: empty")
         {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
 
       {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
-        Logger.debug("select_server: found #{inspect servers}, pools: #{inspect pools}")
+        Logger.info("select_server: found #{inspect servers}")
 
         with {:ok, connection} <- servers
                                   |> Enum.take_random(1)
@@ -279,6 +289,45 @@ defmodule Mongo.Topology do
           Logger.debug("select_server: connection is #{inspect connection}")
 
           {:reply, {:ok, connection}, state}
+        end
+      error ->
+        Logger.debug("select_servers: #{inspect error}")
+        {:reply, error, state} ## in case of an error, just return the error
+    end
+  end
+
+  def handle_call(:limits, _from, %{:topology => topology} = state) do
+    case TopologyDescription.select_servers(topology, :write, []) do
+      :empty ->
+        Logger.debug("select_server: empty")
+        {:reply, nil, state}
+
+      {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
+        Logger.debug("select_server: found #{inspect servers}")
+
+        with {:ok, limits} <- servers
+                              |> Enum.take_random(1)
+                              |> get_limits(topology) do
+          Logger.debug("select_server: connection is #{inspect limits}")
+
+          {:reply, {:ok, limits}, state}
+        end
+      error ->
+        Logger.debug("select_servers: #{inspect error}")
+        {:reply, error, state} ## in case of an error, just return the error
+    end
+  end
+
+  def handle_call(:wire_version, _from, %{:topology => topology} = state) do
+    case TopologyDescription.select_servers(topology, :write, []) do
+      :empty ->
+        Logger.debug("select_server: empty")
+        {:reply, nil, state}
+
+      {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
+        Logger.debug("select_server: found #{inspect servers}")
+        with address <- Enum.take_random(servers, 1) do
+          {:reply, {:ok, wire_version(address, topology)}, state}
         end
       error ->
         Logger.debug("select_servers: #{inspect error}")
@@ -298,10 +347,19 @@ defmodule Mongo.Topology do
   defp get_connection([], _state), do: nil
   defp get_connection([address], %{connection_pools: pools}), do: Map.fetch(pools, address)
 
-  defp max_version(topology, [host]) do
-    case Map.get(topology.servers, host) do
-      nil    -> 0
-      server -> server.max_wire_version
+  defp get_limits([], _topology), do: nil
+  defp get_limits([address], %{servers: servers}) do
+    with {:ok, desc} <- Map.fetch(servers, address) do
+      {:ok, Map.take(desc, @limits)}
+    end
+  end
+
+  defp wire_version([], _topology), do: nil
+  defp wire_version([address], topology) do
+    with {:ok, server} <- Map.fetch(topology.servers, address) do
+      server.max_wire_version
+    else
+      _other -> 0
     end
   end
 

@@ -104,7 +104,7 @@ defmodule Mongo.Cursor do
                "id" => cursor_id,
                "ns" => coll,
                "firstBatch" => docs} = response}} when ok == 1 <- Mongo.exec_command_session(session, new_cmd, opts),
-           {:ok, wire_version} <- wire_version(session) do
+           {:ok, wire_version} <- Mongo.wire_version(topology_pid) do
 
           [%{"$changeStream" => stream_opts} | _pipeline] = Keyword.get(new_cmd, :pipeline) # extract the change stream options
 
@@ -183,7 +183,7 @@ defmodule Mongo.Cursor do
         {:error, %Mongo.Error{code: code} = not_resumable} when code == 11601 or code == 136 or code == 237 -> {:error, not_resumable}
         {:error, _error} ->
 
-          with {:ok, wire_version} <- wire_version(session) do
+          with {:ok, wire_version} <- Mongo.wire_version(topology_pid) do
 
             [%{"$changeStream" => stream_opts} | pipeline] = Keyword.get(aggregate_cmd, :pipeline) # extract the change stream options
 
@@ -319,12 +319,6 @@ defmodule Mongo.Cursor do
     def count(_stream), do: {:error, __MODULE__}
     def member?(_stream, _term), do: {:error, __MODULE__}
 
-    defp wire_version(session) do
 
-      session
-      |> Mongo.Session.connection()
-      |> Mongo.wire_version()
-
-    end
   end
 end

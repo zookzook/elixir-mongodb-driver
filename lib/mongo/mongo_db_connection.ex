@@ -28,8 +28,7 @@ defmodule Mongo.MongoDBConnection do
       connect_timeout: opts[:connect_timeout] || @timeout,
       database: Keyword.fetch!(opts, :database),
       write_concern: Map.new(write_concern),
-      wire_version: nil, # todo move to topolgy and topology-description
-      limits: nil, # todo  move to topolgy and topology-description
+      wire_version: 0,
       auth_mechanism: opts[:auth_mechanism] || nil,
       connection_type: Keyword.fetch!(opts, :connection_type),
       topology_pid: Keyword.fetch!(opts, :topology_pid),
@@ -128,7 +127,7 @@ defmodule Mongo.MongoDBConnection do
     cmd = [ismaster: 1, client: client] |> filter_nils()
 
     case Utils.command(-1, cmd, state) do
-      {:ok, %{"ok" => ok, "maxWireVersion" => version} = response}  when ok == 1 -> {:ok, %{update_limits(state, response) | wire_version: version}}
+      {:ok, %{"ok" => ok, "maxWireVersion" => version}}  when ok == 1 -> {:ok, %{state | wire_version: version}}
       {:ok, %{"ok" => ok}} when ok == 1 ->  {:ok, %{state | wire_version: 0}}
       {:ok, %{"ok" => ok, "errmsg" => msg, "code" => code}} when ok == 0 ->
         err = Mongo.Error.exception(message: msg, code: code)
@@ -188,29 +187,6 @@ defmodule Mongo.MongoDBConnection do
   defp pretty_name("apple"), do: "Mac OS X"
   defp pretty_name(name), do: name
 
-  ##
-  #
-  # Updates the limits from the isMaster response:
-  #
-  # isMaster.maxBsonObjectSize / 16 * 1024 * 1024
-  # isMaster.maxMessageSizeBytes / 48000000
-  # isMaster.maxWriteBatchSize /  100,000
-  # isMaster.localTime
-  # isMaster.compression
-  # isMaster.readOnly
-  # isMaster.logicalSessionTimeoutMinutes
-  #
-  defp update_limits(state, result) do
-    limits = %{max_bson_object_size: (result["maxBsonObjectSize"] || 16_777_216),
-      max_message_size_bytes: (result["maxMessageSizeBytes"] || 48_000_000),
-      max_write_batch_size: (result["maxWriteBatchSize"] || 100_000),
-      compression: result["compression"],
-      read_only: (result["readOnly"] || false),
-      logical_session_timeout_minutes: result["logicalSessionTimeoutMinutes"]}
-
-    %{state | limits: limits}
-  end
-
   @impl true
   def checkout(state), do: {:ok, state}
   @impl true
@@ -252,12 +228,6 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp execute_action(:limits, _, _, state) do
-    {:ok, state.limits, state}
-  end
-  defp execute_action(:wire_version, _, _, state) do
-    {:ok, state.wire_version, state}
-  end
   defp execute_action(:command, [cmd], opts, %{wire_version: version} = state) when version >= 6 do
 
     cmd = cmd ++ ["$db": opts[:database] || state.database]

@@ -630,23 +630,40 @@ defmodule Mongo do
   defp check_for_error(%{"code" => code, "errmsg" => msg}), do: {:error, Mongo.Error.exception(message: msg, code: code)}
 
   @doc """
-  Returns the current wire version.
+  Returns the wire version of the database
+  ## Example
+
+      {:ok, top} = Mongo.start_link(...)
+      Mongo.wire_version(top)
+
+      {:ok, 8}
   """
   @spec wire_version(pid) :: {:ok, integer} | {:error, Mongo.Error.t}
-  def wire_version(conn) do
-    cmd = %Query{action: :wire_version}
-    with {:ok, _cmd, version} <- DBConnection.execute(conn, cmd, %{}, defaults([])) do
-      {:ok, version}
+  def wire_version(topology_pid) do
+    with {:ok, wire_version} <- Topology.wire_version(topology_pid) do
+      {:ok, wire_version}
     end
   end
 
   @doc """
   Returns the limits of the database.
+
+  ## Example
+
+      {:ok, top} = Mongo.start_link(...)
+      Mongo.limits(top)
+
+      {:ok, %{
+         logical_session_timeout: 30,
+         max_bson_object_size: 16777216,
+         max_message_size_bytes: 48000000,
+         max_wire_version: 8,
+         max_write_batch_size: 100000
+      }}
   """
   @spec limits(pid) :: {:ok, BSON.document} | {:error, Mongo.Error.t}
-  def limits(conn) do
-    cmd = %Query{action: :limits}
-    with {:ok, _cmd, limits} <- DBConnection.execute(conn, cmd, %{}, defaults([])) do
+  def limits(topology_pid) do
+    with {:ok, limits} <- Topology.limits(topology_pid) do
       {:ok, limits}
     end
   end

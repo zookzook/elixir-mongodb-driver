@@ -183,7 +183,7 @@ defmodule Mongo.BulkWrite do
   def write(topology_pid, %UnorderedBulk{} = bulk, opts) do
 
     with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
-         result         = one_bulk_write(session, bulk, opts),
+         result         = one_bulk_write(topology_pid, session, bulk, opts),
          :ok            <- Session.end_implict_session(topology_pid, session) do
       result
       else
@@ -201,7 +201,7 @@ defmodule Mongo.BulkWrite do
     empty = %BulkWriteResult{acknowledged: acknowledged?(write_concern)}
 
     with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
-         {:ok, limits} <- get_limits(session),
+         {:ok, limits} <- Mongo.limits(topology_pid),
          max_batch_size <- limits.max_write_batch_size,
          result = ops
                   |> get_op_sequence()
@@ -227,9 +227,9 @@ defmodule Mongo.BulkWrite do
   # The function returns a keyword list with the results of each operation group:
   # For the details see https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#results
   #
-  defp one_bulk_write(session, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, opts) do
+  defp one_bulk_write(topology_pid, session, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, opts) do
 
-    with {:ok, limits} <- get_limits(session),
+    with {:ok, limits} <- Mongo.limits(topology_pid),
          max_batch_size <- limits.max_write_batch_size,
          insert_result <- one_bulk_write_operation(session, :insert, coll, inserts, max_batch_size, opts),
          update_result <- one_bulk_write_operation(session, :update, coll, updates, max_batch_size, opts),
@@ -416,12 +416,6 @@ defmodule Mongo.BulkWrite do
       arrayFilters: Keyword.get(update_opts, :filters)
     ] |> filter_nils()
 
-  end
-
-  defp get_limits(session) do
-    with conn <- Session.connection(session) do
-      Mongo.limits(conn)
-    end
   end
 
 end
