@@ -12,7 +12,7 @@ defmodule Mongo.Topology do
   alias Mongo.Session.SessionPool
   alias Mongo.Session
 
-  @limits [:logical_session_timeout, :max_bson_object_size, :max_message_size_bytes, :max_wire_version, :max_write_batch_size]
+  @limits [:compression, :logical_session_timeout, :max_bson_object_size, :max_message_size_bytes, :max_wire_version, :max_write_batch_size, :read_only]
 
   # https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#heartbeatfrequencyms-defaults-to-10-seconds-or-60-seconds
   @heartbeat_frequency_ms 10_000

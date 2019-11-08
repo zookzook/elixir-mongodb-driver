@@ -654,11 +654,13 @@ defmodule Mongo do
       Mongo.limits(top)
 
       {:ok, %{
+         compression: nil,
          logical_session_timeout: 30,
          max_bson_object_size: 16777216,
          max_message_size_bytes: 48000000,
          max_wire_version: 8,
-         max_write_batch_size: 100000
+         max_write_batch_size: 100000,
+         read_only: false
       }}
   """
   @spec limits(pid) :: {:ok, BSON.document} | {:error, Mongo.Error.t}
