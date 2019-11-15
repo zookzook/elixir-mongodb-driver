@@ -1,3 +1,9 @@
+## 0.6.2
+
+* Enhancements
+    * refactored the api of `Mongo.limits` and `Mongo.wire_version` 
+    * add support for tracking recovery token from response in a sharded transaction
+    
 ## 0.6.1
 
 * Enhancements

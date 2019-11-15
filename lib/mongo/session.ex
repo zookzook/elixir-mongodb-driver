@@ -476,10 +476,6 @@ defmodule Mongo.Session do
 
     Logger.debug("Running commit transaction")
 
-    #{
-    #    recoveryToken : {...}
-    #}
-
     cmd = [
             commitTransaction: 1,
             lsid: %{id: id},
