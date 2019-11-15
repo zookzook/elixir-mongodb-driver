@@ -140,7 +140,7 @@ defmodule Mongo.Cursor do
     def get_more(_topology_pid, session, coll, cursor, nil, opts) do
 
       cmd = [
-              getMore: cursor,
+              getMore: %BSON.LongNumber{value: cursor},
               collection: coll,
               batchSize: opts[:batch_size],
               maxTimeMS: opts[:max_time]
@@ -157,7 +157,7 @@ defmodule Mongo.Cursor do
                                on_resume_token: fun) = change_stream, opts) do
 
       get_more = [
-                   getMore: cursor_id,
+                   getMore: %BSON.LongNumber{value: cursor_id},
                    collection: coll,
                    batchSize: opts[:batch_size],
                    maxTimeMS: opts[:max_time]
@@ -282,7 +282,7 @@ defmodule Mongo.Cursor do
 
       cmd = [
         killCursors: coll,
-        cursors: cursor_ids
+        cursors: cursor_ids |> Enum.map(fn id -> %BSON.LongNumber{value: id} end)
       ] |> filter_nils()
 
       with {:ok, %{"cursorsAlive" => [],
