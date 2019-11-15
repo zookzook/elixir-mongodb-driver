@@ -116,7 +116,8 @@ defmodule Mongo.Session do
   # * `implicit` true or false
   # * `causal_consistency` true orfalse
   # * `wire_version` current wire version to check if transactions are possible
-  defstruct [conn: nil, server_session: nil, causal_consistency: false, operation_time: nil, implicit: false, wire_version: 0, state: :no_transaction, opts: []]
+  # * `recovery_token` tracked recovery token from response in a sharded transaction
+  defstruct [conn: nil, recovery_token: nil, server_session: nil, causal_consistency: false, operation_time: nil, implicit: false, wire_version: 0, state: :no_transaction, opts: []]
 
   @doc """
   Start the generic state machine.
@@ -204,14 +205,12 @@ defmodule Mongo.Session do
   """
   @spec update_session(Session.t, %{key: BSON.Timestamp.t}, keyword()) :: BSON.document
   def update_session(pid, doc, opts \\ [])
-  def update_session(pid, %{"operationTime" => operationTime} = doc, opts) do
+  def update_session(pid, doc, opts) do
     case opts |> write_concern() |> acknowledged?() do
-      true  -> advance_operation_time(pid, operationTime)
+      true  -> advance_operation_time(pid, doc["operationTime"])
       false -> []
     end
-    doc
-  end
-  def update_session(_pid, doc, _opts) do
+    update_recovery_token(pid, doc["recoveryToken"])
     doc
   end
 
@@ -219,8 +218,20 @@ defmodule Mongo.Session do
   Advance the `operationTime` for causally consistent read commands
   """
   @spec advance_operation_time(Session.t, BSON.Timestamp.t) :: none()
+  def advance_operation_time(_pid, nil) do
+  end
   def advance_operation_time(pid, timestamp) do
     cast(pid, {:advance_operation_time, timestamp})
+  end
+
+  @doc """
+  Update the `recoveryToken` after each response from mongos
+  """
+  @spec update_recovery_token(Session.t, BSON.document) :: none()
+  def update_recovery_token(_pid, nil) do
+  end
+  def update_recovery_token(pid, recovery_token) do
+    cast(pid, {:update_recovery_token, recovery_token})
   end
 
   @doc """
@@ -337,6 +348,7 @@ defmodule Mongo.Session do
       server_session: server_session,
       implicit: (type == :implicit),
       wire_version: wire_version,
+      recovery_token: nil,
       causal_consistency: Keyword.get(opts, :causal_consistency, false),
       state: :no_transaction,
       opts: opts}
@@ -378,7 +390,7 @@ defmodule Mongo.Session do
   end
 
   def handle_call_event(:start_transaction, transaction, %Session{server_session: session} = data) when transaction in [:no_transaction, :transaction_aborted, :transaction_committed] do
-    {:next_state, :starting_transaction, %Session{data | server_session: ServerSession.next_txn_num(session)}, :ok}
+    {:next_state, :starting_transaction, %Session{data | recovery_token: nil, server_session: ServerSession.next_txn_num(session)}, :ok}
   end
   ##
   # bind session: only if wire_version >= 6, MongoDB 3.6.x and no transaction is running: only lsid is added
@@ -445,6 +457,9 @@ defmodule Mongo.Session do
   def handle_call_event(:server_session, _state,  %Session{server_session: session_server, implicit: implicit}) do
     {:keep_state_and_data, session_server, implicit}
   end
+  def handle_cast_event({:update_recovery_token, recovery_token}, _state, %Session{} = data) do
+    %Session{data | recovery_token: recovery_token}
+  end
   def handle_cast_event({:advance_operation_time, timestamp}, _state, %Session{operation_time: nil} = data) do
     %Session{data | operation_time: timestamp}
   end
@@ -457,7 +472,7 @@ defmodule Mongo.Session do
   ##
   # Run the commit transaction command.
   #
-  defp run_commit_command(%Session{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
+  defp run_commit_command(%Session{conn: conn, recovery_token: recovery_token, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
 
     Logger.debug("Running commit transaction")
 
@@ -471,13 +486,20 @@ defmodule Mongo.Session do
             txnNumber: %BSON.LongNumber{value: txn_num},
             autocommit: false,
             writeConcern: write_concern(opts),
-            maxTimeMS: Keyword.get(opts, :max_commit_time_ms)
+            maxTimeMS: max_time_ms(opts),
+           recoveryToken: recovery_token
           ] |> filter_nils()
 
     _doc = Mongo.exec_command(conn, cmd, database: "admin")
 
     :ok
   end
+
+  defp max_time_ms(opts) do
+    opts |> Keyword.get(:max_commit_time_ms) |> optional_int64()
+  end
+  defp optional_int64(nil), do: nil
+  defp optional_int64(value), do: %BSON.LongNumber{value: value}
 
   ##
   # Run the abort transaction command.
