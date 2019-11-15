@@ -1,9 +1,14 @@
 defmodule Mongo.UrlParser do
-  @moduledoc "Mongo connection URL parsing util"
+  @moduledoc """
+    Mongo connection URL parsing util
+
+    [See](https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options) for the complete list of options.
+
+  """
 
   @mongo_url_regex ~r/^mongodb(?<srv>\+srv)?:\/\/((?<username>[^:]+):(?<password>[^@]+)@)?(?<seeds>[^\/]+)(\/(?<database>[^?]+))?(\?(?<options>.*))?$/
 
-  # https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options
+  #https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options
   @mongo_options %{
     # Path options
     "username" => :string,
@@ -90,16 +95,21 @@ defmodule Mongo.UrlParser do
         opts
 
       value ->
-        key =
-          key
-          |> Macro.underscore()
-          |> String.to_atom()
+        key = key
+              |> Macro.underscore()
+              |> String.to_atom()
+
+        value = decode_password(key, value)
 
         Keyword.put(opts, @driver_option_map[key] || key, value)
     end
   end
 
   defp add_option(_other, acc), do: acc
+
+  defp decode_password(:username, value), do:  URI.decode_www_form(value)
+  defp decode_password(:password, value), do:  URI.decode_www_form(value)
+  defp decode_password(_other, value), do: value
 
   defp parse_query_options(opts, %{"options" => options}) when is_binary(options) do
     options

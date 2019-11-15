@@ -72,5 +72,21 @@ defmodule Mongo.UrlParserTest do
         ]
       end
     end
+
+    test "encoded password" do
+
+      real_username = "@:/skøl:@/"
+      real_password = "@æœ{}%e()}@"
+
+      encoded_username = URI.encode_www_form(real_username)
+      encoded_password = URI.encode_www_form(real_password)
+      url = "mongodb://#{encoded_username}:#{encoded_password}@mymongodbserver:27017/admin"
+      opts = UrlParser.parse_url(url: url)
+      password = Keyword.get(opts, :password)
+      username = Keyword.get(opts, :username)
+      assert password == real_password
+      assert username == real_username
+    end
+
   end
 end
