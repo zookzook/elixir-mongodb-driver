@@ -14,8 +14,8 @@ defmodule Mongo.UrlParserTest do
         "mongodb://user:password@seed1.domain.com:27017,seed2.domain.com:27017,seed3.domain.com:27017/db_name?ssl=true&replicaSet=set-name&authSource=admin&maxPoolSize=5"
 
       assert UrlParser.parse_url(url: url) == [
+               password: "*****",
                username: "user",
-               password: "password",
                database: "db_name",
                pool_size: 5,
                auth_source: "admin",
@@ -49,8 +49,8 @@ defmodule Mongo.UrlParserTest do
     test "url srv with user" do
       assert UrlParser.parse_url(url: "mongodb+srv://user:password@test5.test.build.10gen.cc") ==
                [
+                 password: "*****",
                  username: "user",
-                 password: "password",
                  ssl: true,
                  auth_source: "thisDB",
                  set_name: "repl0",
@@ -73,8 +73,7 @@ defmodule Mongo.UrlParserTest do
       end
     end
 
-    test "encoded password" do
-
+    test "encoded user" do
       real_username = "@:/skøl:@/"
       real_password = "@æœ{}%e()}@"
 
@@ -82,9 +81,7 @@ defmodule Mongo.UrlParserTest do
       encoded_password = URI.encode_www_form(real_password)
       url = "mongodb://#{encoded_username}:#{encoded_password}@mymongodbserver:27017/admin"
       opts = UrlParser.parse_url(url: url)
-      password = Keyword.get(opts, :password)
       username = Keyword.get(opts, :username)
-      assert password == real_password
       assert username == real_username
     end
 

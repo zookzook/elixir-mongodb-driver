@@ -1,6 +1,8 @@
 defmodule Mongo.Auth do
   @moduledoc false
 
+  alias Mongo.PasswordSafe
+
   def run(opts, state) do
 
     db           = opts[:database]
@@ -29,13 +31,13 @@ defmodule Mongo.Auth do
 
   defp setup(opts) do
     username = opts[:username]
-    password = opts[:password]
+    password = PasswordSafe.get_pasword()
     auth     = opts[:auth] || []
 
     auth =
       Enum.map(auth, fn opts ->
         username = opts[:username]
-        password = opts[:password]
+        password = PasswordSafe.get_pasword()
         {username, password}
       end)
 

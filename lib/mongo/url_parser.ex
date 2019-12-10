@@ -99,7 +99,7 @@ defmodule Mongo.UrlParser do
               |> Macro.underscore()
               |> String.to_atom()
 
-        value = decode_password(key, value)
+        value = decode_percent(key, value)
 
         Keyword.put(opts, @driver_option_map[key] || key, value)
     end
@@ -107,9 +107,10 @@ defmodule Mongo.UrlParser do
 
   defp add_option(_other, acc), do: acc
 
-  defp decode_password(:username, value), do:  URI.decode_www_form(value)
-  defp decode_password(:password, value), do:  URI.decode_www_form(value)
-  defp decode_password(_other, value), do: value
+  defp decode_percent(:username, value), do:  URI.decode_www_form(value)
+  defp decode_percent(:password, value), do:  URI.decode_www_form(value)
+  defp decode_percent(_other, value), do: value
+
 
   defp parse_query_options(opts, %{"options" => options}) when is_binary(options) do
     options
@@ -159,6 +160,16 @@ defmodule Mongo.UrlParser do
     {:ok, hosts}
   end
 
+  defp hide_password(opts) do
+    case Keyword.get(opts, :password) do
+      nil -> opts
+      value ->
+        with :ok <- Mongo.PasswordSafe.set_password(value) do
+          Keyword.put(opts, :password, "*****")
+        end
+    end
+  end
+
   @spec parse_url(Keyword.t()) :: Keyword.t()
   def parse_url(opts) when is_list(opts) do
     with {url, opts} when is_binary(url) <- Keyword.pop(opts, :url),
@@ -172,6 +183,7 @@ defmodule Mongo.UrlParser do
     else
       _other -> opts
     end
+    |> hide_password()
   end
 
   def parse_url(opts), do: opts
