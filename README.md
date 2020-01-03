@@ -73,6 +73,26 @@ cursor
 |> IO.inspect
 ```
 
+To specify a username and password, use the `:username`, `:password`, and `:auth_source` options.
+
+```elixir
+# Starts an unpooled connection
+{:ok, conn} = 
+    Mongo.start_link(url: "mongodb://localhost:27017/db-name", 
+                     username: "test_user", 
+                     password: "hunter2",
+                     auth_source: "admin_test")
+
+# Gets an enumerable cursor for the results
+cursor = Mongo.find(conn, "test-collection", %{})
+
+cursor
+|> Enum.to_list()
+|> IO.inspect
+```
+
+For secure requests, you may need to add some more options; see the "AWS, TLS and Erlang SSL ciphers" section below.
+
 ### Connection pooling
 The driver supports pooling by DBConnection (2.x). By default `mongodb_driver` will start a single 
 connection, but it also supports pooling with the `:pool_size` option. For 3 connections add the `pool_size: 3` option to `Mongo.start_link` and to all 
