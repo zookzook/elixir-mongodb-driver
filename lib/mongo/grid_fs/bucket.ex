@@ -156,15 +156,15 @@ defmodule Mongo.GridFs.Bucket do
 
   def check_and_create_files_index(bucket) do
     case check_files_index(bucket) do
-      true  -> create_files_index(bucket)
-      false -> :ok
+      false -> create_files_index(bucket)
+      true  -> :ok
     end
   end
 
   def check_and_chunks_files_index(bucket) do
     case check_chunks_index(bucket) do
-      true  -> create_chunks_index(bucket)
-      false -> :ok
+      false -> create_chunks_index(bucket)
+      true  -> :ok
     end
   end
 
@@ -226,23 +226,6 @@ defmodule Mongo.GridFs.Bucket do
     with {:ok, _} <- Mongo.issue_command(topology_pid, cmd, :write, opts) do
       :ok
     end
-  end
-
-
-  defimpl Inspect, for: Bucket do
-
-    def inspect(%Bucket{name: fs, chunk_size: size, topology_pid: topology_pid}, _opts) do
-      "#Bucket(" <> fs <> ", " <> to_string(size) <> ", topology_pid: " <> (inspect topology_pid) <> ")"
-    end
-
-  end
-
-  defimpl String.Chars, for: Bucket do
-
-    def to_string(%Bucket{name: fs, chunk_size: size, topology_pid: topology_pid}) do
-      "#Bucket(" <> fs <> ", " <> Kernel.to_string(size) <> ", topology_pid: " <> (inspect topology_pid) <> ")"
-    end
-
   end
 
 end

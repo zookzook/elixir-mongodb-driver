@@ -1030,6 +1030,16 @@ defmodule Mongo do
     |> Stream.map(fn %{"name" => name } -> name end)
   end
 
+  @doc """
+  Convenient function that drops the index `name` in the collection `coll`.
+  """
+  @spec drop_index(GenServer.server, String.t, String.t, Keyword.t) :: :ok | {:error, Mongo.Error.t}
+  def drop_index(topology_pid, coll, name, opts \\ []) do
+    cmd = [dropIndexes: coll, index: name]
+    with {:ok, _} <- Mongo.issue_command(topology_pid, cmd, :write, opts) do
+      :ok
+    end
+  end
 
   @doc """
   Getting Collection Names
