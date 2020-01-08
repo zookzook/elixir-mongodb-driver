@@ -16,15 +16,16 @@ before_script:
   - mkdir ${PWD}/mongodb/data
   - ${PWD}/mongodb/bin/mongod --dbpath ${PWD}/mongodb/data --logpath ${PWD}/mongodb/mongodb.log --fork
 
-script:
-  - mix local.hex --force
-  - mix local.rebar --force
-  - mix deps.get
-  - mix coveralls.travis
-
 env:
+  - MIX_ENV=test
   matrix:
     - MONGODB=3.2.20
     - MONGODB=3.4.16
     - MONGODB=3.6.6
     - MONGODB=ubuntu1604-v4.2-latest
+
+script:
+  - mix local.hex --force
+  - mix local.rebar --force
+  - mix deps.get
+  - mix coveralls.travis

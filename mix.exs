@@ -13,9 +13,9 @@ defmodule Mongodb.Mixfile do
      docs: docs(),
      description: description(),
      package: package(),
-      test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [docs: :docs, coveralls: :test, "coveralls.detail": :test, "coveralls.post": :test, "coveralls.html": :test],
-      dialyzer: [
+     test_coverage: [tool: ExCoveralls],
+     preferred_cli_env: [docs: :docs, coveralls: :test, "coveralls.detail": :test, "coveralls.post": :test, "coveralls.html": :test],
+     dialyzer: [
        flags: [:underspecs, :unknown, :unmatched_returns],
        plt_add_apps: [:logger, :connection, :db_connection, :mix, :elixir, :ssl, :public_key],
        plt_add_deps: :transitive,
