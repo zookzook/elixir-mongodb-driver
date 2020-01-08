@@ -31,13 +31,14 @@ defmodule Mongo.Auth do
 
   defp setup(opts) do
     username = opts[:username]
-    password = PasswordSafe.get_pasword()
+    pw_safe  = opts[:pw_safe]
+    password = PasswordSafe.get_pasword(pw_safe)
     auth     = opts[:auth] || []
 
     auth =
       Enum.map(auth, fn opts ->
         username = opts[:username]
-        password = PasswordSafe.get_pasword()
+        password = PasswordSafe.get_pasword(pw_safe)
         {username, password}
       end)
 

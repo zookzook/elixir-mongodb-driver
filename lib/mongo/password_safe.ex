@@ -1,34 +1,53 @@
 defmodule Mongo.PasswordSafe do
   @moduledoc """
   The password safe stores the password while parsing the url and/or the options to avoid it from logging while the sasl logger is activated.
+
+  The password is encrypted before storing in the GenServer's state. It will be encrypted before returning. This should help, that the password
+  is not stored as plain text in the memory.
   """
 
   @me __MODULE__
 
   use GenServer
 
-  def start_link(_ \\ nil) do
-    GenServer.start_link(__MODULE__, [], name: @me)
+  def new() do
+    GenServer.start_link(@me, [])
   end
 
-  def set_password(password) do
-    GenServer.cast(@me, {:set, password})
+  def set_password(pid, password) do
+    GenServer.cast(pid, {:set, password})
   end
 
-  def get_pasword() do
-    GenServer.call(@me, :get)
+  def get_pasword(nil), do: nil
+  def get_pasword(pid) do
+    GenServer.call(pid, :get)
   end
 
   def init([]) do
-    {:ok, nil}
+    {:ok, %{key: generate_key(), pw: nil}}
   end
 
-  def handle_cast({:set, password}, data) do
-    {:noreply, password}
+  def handle_cast({:set, password}, %{key: key} = data) do
+    {:noreply, %{data | pw: (password |> encrypt(key))}}
   end
 
-  def handle_call(:get, _from, password) do
-    {:reply, password, password}
+  def handle_call(:get, _from, %{key: key, pw: password} = data) do
+    {:reply, password |> decrypt(key), data}
+  end
+
+  defp encrypt(plaintext, key) do
+    iv         = :crypto.strong_rand_bytes(16) # create random Initialisation Vector
+    ciphertext = :crypto.crypto_one_time(:aes_256_ctr, key, iv, plaintext, true)
+    iv <> ciphertext # "return" iv & ciphertext
+  end
+
+  defp decrypt(ciphertext, key) do
+    <<iv::binary-16, ciphertext::binary>> = ciphertext
+    :crypto.crypto_one_time(:aes_256_ctr, key, iv, ciphertext, false)
+  end
+
+  defp generate_key() do
+    :crypto.strong_rand_bytes(32)
   end
 
 end

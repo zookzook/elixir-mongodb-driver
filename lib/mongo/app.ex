@@ -7,7 +7,6 @@ defmodule Mongo.App do
     children = [
       worker(Mongo.IdServer, []),
       worker(Mongo.PBKDF2Cache, []),
-      worker(Mongo.PasswordSafe, []),
       worker(:gen_event, [local: Mongo.Events])
     ]
 

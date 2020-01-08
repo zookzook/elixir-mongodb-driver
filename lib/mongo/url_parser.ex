@@ -164,8 +164,13 @@ defmodule Mongo.UrlParser do
     case Keyword.get(opts, :password) do
       nil -> opts
       value ->
-        with :ok <- Mongo.PasswordSafe.set_password(value) do
-          Keyword.put(opts, :password, "*****")
+
+      ## start GenServer and put id
+        with {:ok, pid} <- Mongo.PasswordSafe.new(),
+          :ok <- Mongo.PasswordSafe.set_password(pid, value) do
+          opts
+          |> Keyword.put(:password, "*****")
+          |> Keyword.put(:pw_safe, pid)
         end
     end
   end

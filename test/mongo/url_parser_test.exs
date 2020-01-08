@@ -13,7 +13,7 @@ defmodule Mongo.UrlParserTest do
       url =
         "mongodb://user:password@seed1.domain.com:27017,seed2.domain.com:27017,seed3.domain.com:27017/db_name?ssl=true&replicaSet=set-name&authSource=admin&maxPoolSize=5"
 
-      assert UrlParser.parse_url(url: url) == [
+      assert UrlParser.parse_url(url: url) |> Keyword.drop([:pw_safe]) == [
                password: "*****",
                username: "user",
                database: "db_name",
@@ -47,7 +47,7 @@ defmodule Mongo.UrlParserTest do
     end
 
     test "url srv with user" do
-      assert UrlParser.parse_url(url: "mongodb+srv://user:password@test5.test.build.10gen.cc") ==
+      assert UrlParser.parse_url(url: "mongodb+srv://user:password@test5.test.build.10gen.cc") |> Keyword.drop([:pw_safe]) ==
                [
                  password: "*****",
                  username: "user",
