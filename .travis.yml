@@ -17,7 +17,6 @@ before_script:
   - ${PWD}/mongodb/bin/mongod --dbpath ${PWD}/mongodb/data --logpath ${PWD}/mongodb/mongodb.log --fork
 
 env:
-  - MIX_ENV=test
   matrix:
     - MONGODB=3.2.20
     - MONGODB=3.4.16
@@ -28,4 +27,4 @@ script:
   - mix local.hex --force
   - mix local.rebar --force
   - mix deps.get
-  - mix coveralls.travis
+  - MIX_ENV=test mix coveralls.travis
