@@ -125,6 +125,7 @@ defmodule Mongo.GridFs.BucketTest do
     Bucket.drop(bucket)
   end
 
+  @tag :mongo_4_2
   test "explicit sessions", c do
 
     top = c.pid
