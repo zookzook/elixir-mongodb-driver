@@ -1042,6 +1042,27 @@ defmodule Mongo do
   end
 
   @doc """
+  Convenient function to creates new indexes in the collection `coll`.
+  """
+  @spec create_indexes(GenServer.server, String.t, Keyword.t, Keyword.t) :: :ok | {:error, Mongo.Error.t}
+  def create_indexes(topology_pid, coll, indexes, opts \\ []) do
+    cmd = [createIndexes: coll, indexes: indexes]
+    with {:ok, _} <- Mongo.issue_command(topology_pid, cmd, :write, opts) do
+      :ok
+    end
+  end
+
+  @doc """
+  Convenient function that drops the collection `coll`.
+  """
+  @spec drop_collection(GenServer.server, String.t, Keyword.t) :: :ok | {:error, Mongo.Error.t}
+  def drop_collection(topology_pid, coll, opts \\ []) do
+    with {:ok, _} <- Mongo.issue_command(topology_pid, [drop: coll], :write, opts) do
+      :ok
+    end
+  end
+
+  @doc """
   Getting Collection Names
   """
   @spec show_collections(GenServer.server, Keyword.t) :: cursor

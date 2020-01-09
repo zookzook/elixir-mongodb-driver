@@ -38,9 +38,6 @@ defmodule Mongo.Session.SessionPool do
   @spec checkin(GenServer.server, ServerSession.t) :: none()
   @compile {:inline, checkin: 2}
   def checkin(%{queue: queue, timeout: timeout} = pool, session) do
-
-    # queue = prune(queue, timeout)
-
     case ServerSession.about_to_expire?(session, timeout) do
       true  -> %{pool | queue: queue}
       false -> %{pool | queue: [session | queue]}
@@ -48,12 +45,12 @@ defmodule Mongo.Session.SessionPool do
   end
 
   ##
-  # remove all old sessions
+  # remove all old sessions, dead code
   #
-  def prune(%{queue: queue, timeout: timeout} = pool) do
-    queue = Enum.reject(queue, fn session -> ServerSession.about_to_expire?(session, timeout) end)
-    %{pool | queue: queue}
-  end
+  #def prune(%{queue: queue, timeout: timeout} = pool) do
+  #  queue = Enum.reject(queue, fn session -> ServerSession.about_to_expire?(session, timeout) end)
+  #  %{pool | queue: queue}
+  #end
 
   ##
   # find the next valid sessions and removes all sessions that timed out

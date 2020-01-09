@@ -74,7 +74,7 @@ defmodule Mongo.SessionTest do
     {session_a, session_pool} = SessionPool.checkout(session_pool)
     {session_b, session_pool} = SessionPool.checkout(session_pool)
 
-    session_a = session_a|> make_old(-59)
+    session_a = session_a |> make_old(-59)
     session_b = session_b |> make_old(-59)
 
     session_pool = SessionPool.checkin(session_pool, session_a)
