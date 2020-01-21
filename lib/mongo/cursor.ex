@@ -91,6 +91,7 @@ defmodule Mongo.Cursor do
           end
 
         state(docs: docs) = state -> {docs, state(state, docs: [])}
+        {:error, error}           -> raise error  ## In case of an error, we should raise the error
       end
     end
 
