@@ -98,18 +98,10 @@ defmodule BSON.Encoder do
   def document(doc) do
     {_, iodata} =
       Enum.reduce(doc, {:unknown, ""}, fn
-        {:__struct__, _value}, {:binary, _acc} ->
-          invalid_doc(doc)
-
-        {:__struct__, _value}, {_, acc} ->
-          {:atom, acc}
-
-        {key, _value}, {:binary, _acc} when is_atom(key) ->
-          invalid_doc(doc)
-
-        {key, _value}, {:atom, _acc} when is_binary(key) ->
-          invalid_doc(doc)
-
+        {:__struct__, _value}, {:binary, _acc} -> invalid_doc(doc)
+        {:__struct__, _value}, {_, acc}        -> {:atom, acc}
+        {key, _value}, {:binary, _acc} when is_atom(key) -> invalid_doc(doc)
+        {key, _value}, {:atom, _acc} when is_binary(key) -> invalid_doc(doc)
         {key, value}, {_, acc} ->
           {key_type, key} = key(key)
           type = type(value)
@@ -122,10 +114,8 @@ defmodule BSON.Encoder do
 
   defp cstring(string), do: [string, 0x00]
 
-  defp key(value) when is_atom(value),
-    do: {:atom, cstring(Atom.to_string(value))}
-  defp key(value) when is_binary(value),
-    do: {:binary, cstring(value)}
+  defp key(value) when is_atom(value), do: {:atom, cstring(Atom.to_string(value))}
+  defp key(value) when is_binary(value), do: {:binary, cstring(value)}
 
   defp array([], _ix),
     do: []

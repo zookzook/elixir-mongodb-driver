@@ -14,7 +14,10 @@ defmodule BSON do
   """
   @spec encode(document) :: iodata
   def encode(map) when is_map(map) do
-    BSON.Encoder.encode(map)
+    case Map.has_key?(map, :__struct__) do
+       true  -> BSON.Encoder.encode(Map.to_list(map))
+       false -> BSON.Encoder.encode(map)
+    end
   end
 
   def encode([{_, _}|_] = keyword) do

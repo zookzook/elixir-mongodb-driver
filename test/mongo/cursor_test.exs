@@ -18,7 +18,7 @@ defmodule Mongo.CursorTest do
     docs = Stream.cycle([%{foo: 42}]) |> Enum.take(100)
 
     assert {:ok, _} = Mongo.insert_many(c.pid, coll, docs)
-    assert [%{"foo" => 42}, %{"foo" => 42}] = Mongo.find(c.pid, coll, %{}, limit: 2) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
+    assert [%{"foo" => 42}, %{"foo" => 42}] = Mongo.find(c.pid, coll, %{}, limit: 2)|> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
   end
 
   # issue #35: Crash executing find function without enough permission
