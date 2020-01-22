@@ -1,6 +1,7 @@
 {
   "skip_files": [
     "lib/bson/utils.ex",
-    "lib/mongo/binary_utils.ex"
+    "lib/mongo/binary_utils.ex",
+    "test/"
   ]
 }

@@ -29,6 +29,7 @@ defmodule Mongo.BulkOps do
                    {atom, {BSON.document, Keyword.t}} |
                    {atom, {BSON.document, BSON.document, Keyword.t}}
 
+  import Keywords
   import Mongo.Utils
 
   @doc """

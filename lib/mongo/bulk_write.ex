@@ -154,6 +154,7 @@ defmodule Mongo.BulkWrite do
 
   """
 
+  import Keywords
   import Mongo.Utils
   import Mongo.WriteConcern
   alias Mongo.UnorderedBulk
