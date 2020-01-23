@@ -1,7 +1,3 @@
-defmodule TestUser do
-  defstruct name: "John", age: 27
-end
-
 defmodule Mongo.Test do
   use ExUnit.Case
 
