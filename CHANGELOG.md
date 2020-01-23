@@ -1,3 +1,14 @@
+## 0.6.3
+
+* Enhancements
+    * basic support for inserting structs
+    * removed duplicated code
+    * Cursor-API raises a `Mongo.Error` instead of a `FunctionClauseError`
+    
+* Bugfixes
+    * `:appname` option (typo) #38
+    * fixed index creation in `Mongo.GridFs.Bucket`
+    
 ## 0.6.2
 
 * Enhancements

@@ -1093,8 +1093,14 @@ defmodule Mongo do
   ##
   # Checks the validity of the document structure. that means either you use binaries or atoms as a key, but not in combination of both.
   #
-  #
+  # todo support for structs
   defp normalize_doc(doc) do
+
+    #doc = case Map.has_key?(doc, :__struct__) do
+    #  true  -> Map.to_list(doc)
+    #  false -> doc
+    #end
+
     Enum.reduce(doc, {:unknown, []}, fn
       {key, _value}, {:binary, _acc} when is_atom(key)   -> invalid_doc(doc)
       {key, _value}, {:atom, _acc}   when is_binary(key) -> invalid_doc(doc)

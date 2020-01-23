@@ -1,3 +1,7 @@
+defmodule TestUser do
+  defstruct name: "John", age: 27
+end
+
 defmodule Mongo.Test do
   use ExUnit.Case
 
@@ -600,6 +604,21 @@ defmodule Mongo.Test do
     assert :ok == Mongo.create(c.pid, coll)
     assert nil != Mongo.show_collections(c.pid) |> Enum.find(fn c -> c == coll end)
 
+  end
+
+  test "save struct", c do
+
+    coll = unique_name()
+    value = %TestUser{}
+    {:ok, %Mongo.InsertOneResult{inserted_id: id}} = Mongo.insert_one(c.pid, coll, value)
+    assert id != nil
+
+    user = Mongo.find_one(c.pid, coll, %{_id: id})
+           |> Enum.into(%{}, fn {key, val} -> {String.to_atom(key), val} end)
+
+    user = struct(TestUser, user)
+
+    assert value == user
   end
 
 end
