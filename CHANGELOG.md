@@ -1,3 +1,8 @@
+## 0.6.4
+
+* Bugfixes
+    * fixed bug in `Mongo.TopologyDescription` in case of a shard cluster deployment (#39)    
+    
 ## 0.6.3
 
 * Enhancements
