@@ -77,7 +77,7 @@ defmodule Mongo.TopologyDescription do
 
       :single -> topology.servers
 
-      :sharded -> {mongos_servers(topology), false, true}
+      :sharded -> mongos_servers(topology)
       _ ->
         case {type, topology.type == :replica_set_with_primary} do
           {:read, _}     -> select_replica_set_server(topology, read_preference.mode, read_preference)
