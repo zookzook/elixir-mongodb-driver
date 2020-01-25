@@ -1,6 +1,11 @@
 defmodule Mongo.GridFs.Bucket do
   @moduledoc """
 
+  This is the MongoDB Bucket struct, which specifies the underlying collections to support GridFS. There are always
+  two kind of collections used for storing files by GridFS. The `fs.files` collection contains the meta information about
+  the file and the `fs.chunks` collection contains the data of the file chunked into blocks of bytes. The names of the
+  collection and the size of the block is defined by the following options:
+
   The bucket has some configuration options:
     * `:chunk_size` - The chunk size in bytes. Defaults to `255*1024`
     * `:name` - The bucket name. Defaults to `fs`
@@ -45,6 +50,10 @@ defmodule Mongo.GridFs.Bucket do
 
   end
 
+  @doc """
+  In case of using transaction you need to add the session to the bucket. This functions adds the session pid to
+  the bucket.
+  """
   def add_session(%Bucket{opts: opts} = bucket, session_opts) do
     %Bucket{bucket | opts: opts ++ session_opts}
   end

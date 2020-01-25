@@ -15,6 +15,7 @@
   * Aggregation pipeline
   * Replica sets
   * Support for SCRAM-SHA-256 (MongoDB 4.x)
+  * Support for GridFS ([See](https://github.com/mongodb/specifications/blob/master/source/gridfs/gridfs-spec.rst))
   * Support for change streams api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
   * Support for bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
   * support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
@@ -40,9 +41,9 @@
     max key             :BSON_max
     decimal128          Decimal{}
 
-1) Since BSON documents are ordered Elixir maps cannot be used to fully represent them. This driver chose to accept both maps and lists of key-value pairs when encoding but will only decode documents to lists. This has the side-effect that it's impossible to discern empty arrays from empty documents. Additionally the driver will accept both atoms and strings for document keys but will only decode to strings.
+Since BSON documents are ordered Elixir maps cannot be used to fully represent them. This driver chose to accept both maps and lists of key-value pairs when encoding but will only decode documents to lists. This has the side-effect that it's impossible to discern empty arrays from empty documents. Additionally the driver will accept both atoms and strings for document keys but will only decode to strings.
 
-2) BSON symbols can only be decoded.
+BSON symbols can only be decoded.
 
 ## Usage
 
@@ -61,6 +62,8 @@ end
 ```
 
 Then run `mix deps.get` to fetch dependencies.
+
+### Simple connection to MongoDB
 
 ```elixir
 # Starts an unpooled connection
@@ -258,6 +261,39 @@ For more information see:
 * [Mongo.BulkOps](https://hexdocs.pm/mongodb_driver/Mongo.BulkOps.html#content) 
 
 and have a look at the test units as well.
+
+### GridFS
+
+The driver supports the GridFS specifications. You create a `Mongo.GridFs.Bucket` struct and with this struct you can
+upload and download files.
+
+### Example
+
+```elixir
+    bucket = Bucket.new(top)
+    upload_stream = Upload.open_upload_stream(bucket, "test.jpg")
+    src_filename = "./test/data/test.jpg"
+    File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
+
+    file_id = upload_stream.id
+```
+
+In the example a new bucket with default values is used to upload a file from the file system (`./test/data/test.jpg`) to the MongoDB (using the name `test.jpg`). The `upload_stream` struct contains the id of the new file which can be used to download the stored file. The following code fragments downloads the file by using the `file_id`.
+
+```elixir
+    dest_filename = "/tmp/my-test-file.jps"
+
+    with {:ok, stream} <- Mongo.GridFs.Download.open_download_stream(bucket, file_id) do
+      stream
+      |> Stream.into(File.stream!(dest_filename))
+      |> Stream.run
+    end
+```
+
+For more information see:
+ * [Mongo.GridFs.Bucket](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Bucket.html#content) 
+ * [Mongo.GridFs.Download](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Download.html#content) 
+ * [Mongo.GridFs.Upload](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Upload.html#content) 
 
 ### Transactions
 
