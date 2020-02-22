@@ -53,11 +53,25 @@ defmodule BSON.ObjectId do
        d(c16)::4, d(c17)::4, d(c18)::4, d(c19)::4,
        d(c20)::4, d(c21)::4, d(c22)::4, d(c23)::4 >>
   catch
-    :throw, :error ->
-      raise ArgumentError
+    :throw, :error -> raise ArgumentError
   else
-    value ->
-      %BSON.ObjectId{value: value}
+    value -> %BSON.ObjectId{value: value}
+  end
+
+  @doc """
+  Converts string representation of ObjectId to a BSON.ObjectId struct
+
+  ## Example
+  ```elixir
+
+    {:ok, id} <- BSON.ObjectId.decode(bson_id)
+  """
+  def decode(id) do
+    try do
+      {:ok, decode!(id)}
+    rescue
+      _ -> :error
+    end
   end
 
   @doc """
@@ -77,6 +91,22 @@ defmodule BSON.ObjectId do
   else
     value ->
       value
+  end
+
+  @doc """
+  Converts BSON.ObjectId struct to a string representation
+
+  ## Example
+  ```elixir
+
+    {:ok, bson_id} <- BSON.ObjectId.encode(id)
+  """
+  def encode(object_id) do
+    try do
+      {:ok, encode!(object_id)}
+    rescue
+     _ -> :error
+    end
   end
 
   @compile {:inline, :d, 1}

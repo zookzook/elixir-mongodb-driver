@@ -35,20 +35,20 @@ defmodule Mongo.IdServer do
 
     _ = Process.send_after(self(), :reset_counters, @reset_timer)
 
-    {:ok, opposite_on_window(:calendar.universal_time)}
+    {:ok, opposite_on_window(:calendar.universal_time())}
   end
 
   def handle_info(:reset_counters, last_reset) do
-    new_reset = opposite_on_window(:calendar.universal_time)
+    new_reset = opposite_on_window(:calendar.universal_time())
     :ets.insert(@name, gen_counters(last_reset+1..new_reset))
     Process.send_after(self(), :reset_counters, @reset_timer)
 
     {:noreply, new_reset}
   end
 
-  def new do
+  def new() do
     {machine_id, proc_id} = :ets.lookup_element(@name, :machineprocid, 2)
-    now     = :calendar.universal_time
+    now     = :calendar.universal_time()
     secs    = :calendar.datetime_to_gregorian_seconds(now) - @gs_epoch
     counter = :ets.update_counter(@name, in_window(now), 1)
     counter = rem counter, @counter_max
@@ -77,13 +77,13 @@ defmodule Mongo.IdServer do
     rem secs+half_window, window
   end
 
-  defp machine_id do
-    {:ok, hostname} = :inet.gethostname
+  defp machine_id() do
+    {:ok, hostname} = :inet.gethostname()
     <<machine_id::unsigned-big-24, _::binary>> = :crypto.hash(:md5, hostname)
     machine_id
   end
 
-  defp process_id do
-    :os.getpid |> List.to_integer
+  defp process_id() do
+    :os.getpid |> List.to_integer()
   end
 end

@@ -32,6 +32,16 @@ defmodule BSON.TypesTest do
     end
   end
 
+  test "BSON.ObjectId.encode/1" do
+    assert BSON.ObjectId.encode(@objectid) == {:ok, @string}
+    assert BSON.ObjectId.encode("") == :error
+  end
+
+  test "BSON.ObjectId.decode/1" do
+    assert BSON.ObjectId.decode(@string) == {:ok, @objectid}
+    assert BSON.ObjectId.decode("") == :error
+  end
+
   test "inspect BSON.Regex" do
     value = %BSON.Regex{pattern: "abc"}
     assert inspect(value) == "#BSON.Regex<\"abc\">"
@@ -51,6 +61,14 @@ defmodule BSON.TypesTest do
   test "inspect BSON.Timestamp" do
     value = %BSON.Timestamp{value: 1412180887, ordinal: 12}
     assert inspect(value) == "#BSON.Timestamp<1412180887:12>"
+
+    {:ok, datetime} = DateTime.now("Etc/UTC")
+    date_1 = %BSON.Timestamp{value: DateTime.to_unix(datetime), ordinal: 1}
+    date_2 = %BSON.Timestamp{value: DateTime.to_unix(DateTime.add(datetime, 10)), ordinal: 1}
+
+    assert BSON.Timestamp.is_after(date_1, date_2) == false
+    assert BSON.Timestamp.is_before(date_1, date_2) == true
+
   end
 
   test "inspect BSON.LongNumber" do

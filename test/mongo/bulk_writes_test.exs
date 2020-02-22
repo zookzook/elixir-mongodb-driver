@@ -13,7 +13,7 @@ defmodule Mongo.BulkWritesTest do
   end
 
   test "check unordered bulk", top do
-    coll = unique_name()
+    coll = "dogs" # unique_name()
 
     bulk = coll
            |> UnorderedBulk.new()
@@ -22,7 +22,7 @@ defmodule Mongo.BulkWritesTest do
            |> UnorderedBulk.insert_one(%{name: "Waldo"})
            |> UnorderedBulk.update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
            |> UnorderedBulk.update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
-           |> UnorderedBulk.update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
+           |> UnorderedBulk.replace_one(%{name: "Waldo"}, %{name: "Bello", kind: "dog"})
            |> UnorderedBulk.delete_one(%{kind: "dog"})
            |> UnorderedBulk.delete_one(%{kind: "dog"})
            |> UnorderedBulk.delete_one(%{kind: "dog"})
