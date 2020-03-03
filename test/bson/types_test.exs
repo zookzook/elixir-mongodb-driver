@@ -5,8 +5,8 @@ defmodule BSON.TypesTest do
     value = %BSON.Binary{binary: <<1, 2, 3>>}
     assert inspect(value) == "#BSON.Binary<010203>"
 
-    value = %BSON.Binary{binary: <<1, 2, 3>>, subtype: :uuid}
-    assert inspect(value) == "#BSON.Binary<010203, uuid>"
+    value = %BSON.Binary{binary: <<132, 142, 144, 233, 87, 80, 78, 10, 171, 115, 102, 172, 107, 50, 130, 66>>, subtype: :uuid}
+    assert inspect(value) == "#BSON.UUID<848e90e9-5750-4e0a-ab73-66ac6b328242>"
   end
 
   @objectid %BSON.ObjectId{value: <<29, 32, 69, 244, 101, 119, 228, 28, 61, 24, 21, 215>>}

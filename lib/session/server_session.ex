@@ -33,7 +33,7 @@ defmodule Mongo.Session.ServerSession do
   """
   @spec new() :: ServerSession.t
   def new() do
-    %ServerSession{session_id: uuid(), last_use: System.monotonic_time(:second)}
+    %ServerSession{session_id: Mongo.uuid(), last_use: System.monotonic_time(:second)}
   end
 
   @doc """
@@ -61,24 +61,6 @@ defmodule Mongo.Session.ServerSession do
   @compile {:inline, about_to_expire?: 2}
   def about_to_expire?(%ServerSession{:last_use => last_use}, logical_session_timeout) do
     (System.monotonic_time(:second) - last_use) >= logical_session_timeout
-  end
-
-  defp uuid() do
-    %BSON.Binary{binary: uuid4(), subtype: :uuid}
-  end
-
-  #
-  # From https://github.com/zyro/elixir-uuid/blob/master/lib/uuid.ex
-  # with modifications:
-  #
-  # We don't need a string version, so we use the binary directly
-  #
-  @uuid_v4   4
-  @variant10 2
-
-  defp uuid4() do
-    <<u0::48, _::4, u1::12, _::2, u2::62>> = :crypto.strong_rand_bytes(16)
-    <<u0::48, @uuid_v4::4, u1::12, @variant10::2, u2::62>>
   end
 
   defimpl Inspect, for: ServerSession do

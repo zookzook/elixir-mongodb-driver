@@ -34,7 +34,6 @@ defmodule Mongo.MongoDBConnection do
       topology_pid: Keyword.fetch!(opts, :topology_pid),
       ssl: opts[:ssl] || false
     }
-
     connect(opts, state)
   end
 
@@ -99,12 +98,13 @@ defmodule Mongo.MongoDBConnection do
   end
 
   defp tcp_connect(opts, s) do
-    host      = (opts[:hostname] || "localhost") |> to_charlist
-    port      = opts[:port] || 27017
-    sock_opts = [:binary, active: false, packet: :raw, nodelay: true]
-    ++ (opts[:socket_options] || [])
+    {host, port} = Utils.hostname_port(opts)
+    sock_opts   = [:binary, active: false, packet: :raw, nodelay: true] ++ (opts[:socket_options] || [])
 
-    s = Map.put(s, :host, "#{host}:#{port}")
+    s = case host do
+      {:local, socket} -> Map.put(s, :host, socket)
+      hostname         -> Map.put(s, :host, "#{hostname}:#{port}")
+    end
 
     case :gen_tcp.connect(host, port, sock_opts, s.connect_timeout) do
       {:ok, socket} ->

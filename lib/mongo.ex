@@ -162,6 +162,82 @@ defmodule Mongo do
     %BSON.Timestamp{value: DateTime.to_unix(datetime), ordinal: 1}
   end
 
+  @doc """
+  Converts the binary to UUID
+
+  ## Example
+      iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66ac6b328242")
+      {:ok, #BSON.UUID<848e90e9-5750-4e0a-ab73-66ac6b328242>}
+
+      iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66ac6b328242x")
+      {:error, %ArgumentError{message: "invalid UUID string"}}
+
+      iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66-c6b328242")
+      {:error, %ArgumentError{message: "non-alphabet digit found: \"-\" (byte 45)"}}
+  """
+  @spec uuid(String.t) :: {:ok, BSON.Binary.t} | {:error, %ArgumentError{}}
+  def uuid(string) when is_binary(string) and byte_size(string) == 36 do
+
+    try do
+      p1 = binary_part(string, 0, 8) |> Base.decode16!(case: :lower)
+      p2 = binary_part(string, 9, 4) |> Base.decode16!(case: :lower)
+      p3 = binary_part(string, 14, 4) |> Base.decode16!(case: :lower)
+      p4 = binary_part(string, 19, 4) |> Base.decode16!(case: :lower)
+      p5 = binary_part(string, 24, 12) |> Base.decode16!(case: :lower)
+
+      value = p1 <> p2 <> p3 <> p4 <> p5
+      {:ok, %BSON.Binary{binary: value, subtype: :uuid}}
+    rescue
+       reason -> {:error, reason}
+    end
+  end
+  def uuid(_other) do
+    {:error, %ArgumentError{message: "invalid UUID string"}}
+  end
+
+  @doc"""
+  Similar to `uuid/1` except it will unwrap the error tuple and raise
+  in case of errors.
+
+  ## Example
+
+      iex> Mongo.uuid!("848e90e9-5750-4e0a-ab73-66ac6b328242")
+      #BSON.UUID<848e90e9-5750-4e0a-ab73-66ac6b328242>
+
+      iex> Mongo.uuid!("848e90e9-5750-4e0a-ab73-66ac6b328242x")
+      ** (ArgumentError) invalid UUID string
+      (mongodb_driver 0.6.4) lib/mongo.ex:205: Mongo.uuid!/1
+  """
+  def uuid!(string) do
+    with {:ok, result} <- uuid(string) do
+      result
+    else
+      {:error, reason} -> raise reason
+    end
+  end
+
+  @doc """
+  Creates a new UUID.
+  """
+  @spec uuid(String.t) :: BSON.Binary.t
+  def uuid() do
+    %BSON.Binary{binary: uuid4(), subtype: :uuid}
+  end
+
+  #
+  # From https://github.com/zyro/elixir-uuid/blob/master/lib/uuid.ex
+  # with modifications:
+  #
+  # We don't need a string version, so we use the binary directly
+  #
+  @uuid_v4   4
+  @variant10 2
+
+  defp uuid4() do
+    <<u0::48, _::4, u1::12, _::2, u2::62>> = :crypto.strong_rand_bytes(16)
+    <<u0::48, @uuid_v4::4, u1::12, @variant10::2, u2::62>>
+  end
+
   @doc"""
   Creates a change stream cursor on collections.
 

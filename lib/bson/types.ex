@@ -13,7 +13,14 @@ defmodule BSON.Binary do
     def inspect(%BSON.Binary{binary: value, subtype: :generic}, _opts) do
       "#BSON.Binary<#{Base.encode16(value, case: :lower)}>"
     end
-
+    def inspect(%BSON.Binary{binary: value, subtype: :uuid}, _opts) do
+      p1 = binary_part(value, 0, 4)
+      p2 = binary_part(value, 4, 2)
+      p3 = binary_part(value, 6, 2)
+      p4 = binary_part(value, 8, 2)
+      p5 = binary_part(value, 10, 6)
+      "#BSON.UUID<#{Base.encode16(p1, case: :lower)}-#{Base.encode16(p2, case: :lower)}-#{Base.encode16(p3, case: :lower)}-#{Base.encode16(p4, case: :lower)}-#{Base.encode16(p5, case: :lower)}>"
+    end
     def inspect(%BSON.Binary{binary: value, subtype: subtype}, _opts) do
       "#BSON.Binary<#{Base.encode16(value, case: :lower)}, #{subtype}>"
     end
