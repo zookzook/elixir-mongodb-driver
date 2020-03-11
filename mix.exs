@@ -38,7 +38,7 @@ defmodule Mongodb.Mixfile do
 
   defp deps() do
     [
-      {:db_connection, "~> 2.1.1"},
+      {:db_connection, "~> 2.2.1"},
       {:decimal,       "~> 1.8"},
       {:excoveralls,   "~> 0.12.1", only: :test},
       {:benchee,       "~> 1.0", only: :dev},
