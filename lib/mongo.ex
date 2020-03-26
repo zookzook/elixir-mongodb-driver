@@ -255,7 +255,7 @@ defmodule Mongo do
         returning the first notification after the token. This will allow users to watch collections that have been dropped and recreated
         or newly renamed collections without missing any notifications. (since 4.0.7)
   """
-  @spec watch_collection(GenServer.server, collection, [BSON.document], fun, Keyword.it) :: cursor
+  @spec watch_collection(GenServer.server, collection | 1, [BSON.document], fun, Keyword.it) :: cursor
   def watch_collection(topology_pid, coll, pipeline, on_resume_token \\ nil, opts \\ []) do
 
     stream_opts = %{
@@ -676,7 +676,7 @@ defmodule Mongo do
   end
 
   @doc false
-  @spec exec_command_session(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
+  @spec exec_command_session(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command_session(session, cmd, opts) do
 
     Logger.debug("Executing cmd with session: #{inspect cmd}")
@@ -691,7 +691,7 @@ defmodule Mongo do
   end
 
   @doc false
-  @spec exec_command(pid, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
+  @spec exec_command(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command(conn, cmd, opts) do
 
     Logger.debug("Executing cmd: #{inspect cmd}")
@@ -715,7 +715,7 @@ defmodule Mongo do
 
       {:ok, 8}
   """
-  @spec wire_version(pid) :: {:ok, integer} | {:error, Mongo.Error.t}
+  @spec wire_version(GenServer.server) :: {:ok, integer} | {:error, Mongo.Error.t}
   def wire_version(topology_pid) do
     with {:ok, wire_version} <- Topology.wire_version(topology_pid) do
       {:ok, wire_version}
@@ -740,7 +740,7 @@ defmodule Mongo do
          read_only: false
       }}
   """
-  @spec limits(pid) :: {:ok, BSON.document} | {:error, Mongo.Error.t}
+  @spec limits(GenServer.server) :: {:ok, BSON.document} | {:error, Mongo.Error.t}
   def limits(topology_pid) do
     with {:ok, limits} <- Topology.limits(topology_pid) do
       {:ok, limits}
