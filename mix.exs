@@ -1,7 +1,7 @@
 defmodule Mongodb.Mixfile do
   use Mix.Project
 
-  @version "0.6.4"
+  @version "0.6.5"
 
   def project() do
     [app: :mongodb_driver,

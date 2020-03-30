@@ -1,3 +1,11 @@
+## 0.6.5
+
+* Enhancements
+    * updated db_connection dependency
+    * generalize inconsistent typespecs
+    * new function `BSON.ObjectId.decode/1` and `BSON.ObjectId.encode/1`
+    * new function `Mongo.uuid/1` 
+    
 ## 0.6.4
 
 * Bugfixes
