@@ -1,10 +1,11 @@
 defmodule Mongo.Error do
-  defexception [:message, :code, :host]
+  defexception [:message, :code, :host, :error_labels]
 
   @type t :: %__MODULE__{
     message: String.t,
     code: number,
-    host: String.t
+    host: String.t,
+    error_labels: [String.t] | nil
   }
 
   def message(e) do
@@ -22,6 +23,9 @@ defmodule Mongo.Error do
     %Mongo.Error{message: "#{host} ssl #{action}: #{formatted_reason} - #{inspect(reason)}", host: host}
   end
 
+  def exception(%{"code" => code, "errmsg" => msg} = doc) do
+    %Mongo.Error{message: msg, code: code, error_labels: doc["errorLabels"]}
+  end
   def exception(message: message, code: code) do
     %Mongo.Error{message: message, code: code}
   end

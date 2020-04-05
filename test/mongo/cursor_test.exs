@@ -23,10 +23,7 @@ defmodule Mongo.CursorTest do
 
   # issue #35: Crash executing find function without enough permission
   test "matching errors in the next function of the stream api", c do
-    # this is not valid, so we get an exception
-    assert_raise Mongo.Error, fn ->
-      Mongo.find(c.pid, "test", [_id: ["$gth": 1]]) |> Enum.to_list()
-    end
+    assert {:error, %Mongo.Error{code: 2, error_labels: nil, host: nil, message: "unknown operator: $gth"}} == Mongo.find(c.pid, "test", [_id: ["$gth": 1]])
   end
 
 end
