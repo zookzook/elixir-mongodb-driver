@@ -12,10 +12,6 @@ defmodule Mongo.EventHandler do
 
   def register([]) do
     register(@all)
-    with {:ok, _} <- Registry.register(:events_registry, :topology, []),
-         {:ok, _} <- Registry.register(:events_registry, :commands, []) do
-      listen()
-    end
   end
 
   def register(opts) do
