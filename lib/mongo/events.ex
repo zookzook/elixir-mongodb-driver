@@ -1,8 +1,68 @@
 defmodule Mongo.Events do
   @doc false
 
-  def notify(event) do
-    :gen_event.notify(__MODULE__, event)
+  require Logger
+
+  def notify(event, topic \\ :topology) do
+
+    Registry.dispatch(:events_registry, topic, fn entries ->
+      for {pid, _} <- entries, do: send(pid, {:broadcast, topic, event})
+    end)
+
+  end
+
+  defmodule CommandStartedEvent do
+    @moduledoc false
+    defstruct [
+      :command,         ## Returns the command.
+      :database_name,   ## Returns the database name.
+      :command_name,    ## Returns the command name.
+      :request_id,      ## Returns the driver generated request id.
+      :operation_id,    ## Returns the driver generated operation id. This is used to link events together such
+                        ## as bulk write operations. OPTIONAL.
+      :connection_id    ## Returns the connection id for the command. For languages that do not have this,
+                        ## this MUST return the driver equivalent which MUST include the server address and port.
+                        ## The name of this field is flexible to match the object that is returned from the drive
+    ]
+  end
+
+  defmodule CommandSucceededEvent do
+    @moduledoc false
+
+    defstruct [
+      :duration,     ## Returns the execution time of the event in the highest possible resolution for the platform.
+                     ## The calculated value MUST be the time to send the message and receive the reply from the server
+                     ## and MAY include BSON serialization and/or deserialization. The name can imply the units in which the
+                     ## value is returned, i.e. durationMS, durationNanos.
+      :reply,        ## Returns the command reply.
+      :command_name, ## Returns the command name.
+      :request_id,   ## Returns the driver generated request id.
+      :operation_id, ## Returns the driver generated operation id. This is used to link events together such
+                     ## as bulk write operations. OPTIONAL.
+      :connection_id ## Returns the connection id for the command. For languages that do not have this,
+                     ## this MUST return the driver equivalent which MUST include the server address and port.
+                     ## The name of this field is flexible to match the object that is returned from the driver.
+    ]
+  end
+
+  defmodule CommandFailedEvent do
+    @moduledoc false
+
+    defstruct [
+      :duration,     ## Returns the execution time of the event in the highest possible resolution for the platform.
+                     ## The calculated value MUST be the time to send the message and receive the reply from the server
+                     ## and MAY include BSON serialization and/or deserialization. The name can imply the units in which the
+                     ## value is returned, i.e. durationMS, durationNanos.
+      :command_name, ## Returns the command name.
+      :failure,      ## Returns the failure. Based on the language, this SHOULD be a message string, exception
+                     ## object, or error document.
+      :request_id,   ## Returns the driver generated request id.
+      :operation_id, ## Returns the driver generated operation id. This is used to link events together such
+                     ## as bulk write operations. OPTIONAL.
+      :connection_id ## Returns the connection id for the command. For languages that do not have this,
+                     ## this MUST return the driver equivalent which MUST include the server address and port.
+                     ## The name of this field is flexible to match the object that is returned from the driver.
+    ]
   end
 
   # Published when server description changes, but does NOT include changes to

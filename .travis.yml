@@ -4,6 +4,7 @@ language: elixir
 elixir:
   - 1.8
   - 1.9
+  - 1.10
 
 install:
   - wget http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-${MONGODB}.tgz

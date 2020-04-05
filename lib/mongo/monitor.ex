@@ -15,8 +15,6 @@ defmodule Mongo.Monitor do
 
   use GenServer
 
-  # require Logger
-
   alias Mongo.Topology
   alias Mongo.ServerDescription
   alias Mongo.Events.{ServerHeartbeatStartedEvent, ServerHeartbeatFailedEvent,ServerHeartbeatSucceededEvent}

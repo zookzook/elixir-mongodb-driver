@@ -60,6 +60,9 @@ defmodule Mongo do
   alias Mongo.UrlParser
   alias Mongo.Session
   alias Mongo.ReadPreference
+  alias Mongo.Events
+  alias Mongo.Events.CommandSucceededEvent
+  alias Mongo.Events.CommandFailedEvent
 
   @timeout 15000 # 5000
 
@@ -286,6 +289,7 @@ defmodule Mongo do
 
   end
 
+
   @doc"""
   Creates a change stream cursor all collections of the database.
 
@@ -377,6 +381,12 @@ defmodule Mongo do
         {:ok, doc["value"]}
     end
 
+  end
+
+  def admin_command(topology_pid, cmd) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, database: "admin") do
+      {:ok, doc}
+    end
   end
 
   @doc """
@@ -678,13 +688,10 @@ defmodule Mongo do
   @doc false
   @spec exec_command_session(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command_session(session, cmd, opts) do
-
-    Logger.debug("Executing cmd with session: #{inspect cmd}")
-
-    with {:ok, conn, cmd} <- Session.bind_session(session, cmd),
-         {:ok, _cmd, doc} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
-         doc              <- Session.update_session(session, doc, opts),
-         {:ok, doc}       <- check_for_error(doc) do
+    with {:ok, conn, cmd}          <- Session.bind_session(session, cmd),
+         {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
+         doc                       <- Session.update_session(session, doc, opts),
+         {:ok, doc}                <- check_for_error(doc, event) do
       {:ok, doc}
     end
 
@@ -693,18 +700,39 @@ defmodule Mongo do
   @doc false
   @spec exec_command(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command(conn, cmd, opts) do
-
-    Logger.debug("Executing cmd: #{inspect cmd}")
-
-    with {:ok, _cmd, doc} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
-         {:ok, doc} <- check_for_error(doc) do
+    with {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
+         {:ok, doc} <- check_for_error(doc, event) do
       {:ok, doc}
     end
 
   end
 
-  defp check_for_error(%{"ok" => ok} = response) when ok == 1, do: {:ok, response}
-  defp check_for_error(%{"code" => code, "errmsg" => msg}), do: {:error, Mongo.Error.exception(message: msg, code: code)}
+  defp check_for_error(%{"ok" => ok} = response, {event, duration}) when ok == 1 do
+    Events.notify(%CommandSucceededEvent{
+      reply: response,
+      duration: duration,
+      command_name: event.command_name,
+      request_id: event.request_id,
+      operation_id: event.operation_id,
+      connection_id: event.connection_id
+    }, :commands)
+    {:ok, response}
+  end
+  defp check_for_error(%{"code" => code, "errmsg" => msg}, {event, duration}) do
+
+    error = Mongo.Error.exception(message: msg, code: code)
+
+    Events.notify(%CommandFailedEvent{
+      failure: error,
+      duration: duration,
+      command_name: event.command_name,
+      request_id: event.request_id,
+      operation_id: event.operation_id,
+      connection_id: event.connection_id
+    }, :commands)
+
+    {:error, error}
+  end
 
   @doc """
   Returns the wire version of the database

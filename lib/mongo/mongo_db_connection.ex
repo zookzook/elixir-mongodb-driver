@@ -7,6 +7,9 @@ defmodule Mongo.MongoDBConnection do
   use Mongo.Messages
   alias Mongo.MongoDBConnection.Utils
 
+  alias Mongo.Events
+  alias Mongo.Events.CommandStartedEvent
+
   import Keywords
 
   require Logger
@@ -228,9 +231,19 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
+  @insecure_cmds [:authenticate, :saslStart, :saslContinue, :getnonce, :createUser, :updateUser, :copydbgetnonce, :copydbsaslstart, :copydb, :isMaster, :ismaster]
+  defp provide_cmd_data([{command_name,_}|_] = cmd) do
+    case Enum.member?(@insecure_cmds, command_name) do
+      true  -> {command_name, %{}}
+      false -> {command_name, cmd}
+    end
+  end
+
   defp execute_action(:command, [cmd], opts, %{wire_version: version} = state) when version >= 6 do
 
-    cmd = cmd ++ ["$db": opts[:database] || state.database]
+    {command_name, data} = provide_cmd_data(cmd)
+    db                   = opts[:database] || state.database
+    cmd                  = cmd ++ ["$db": db]
 
     # MongoDB 3.6 only allows certain command arguments to be provided this way. These are:
     op = case pulling_out?(cmd, :documents) || pulling_out?(cmd, :updates) || pulling_out?(cmd, :deletes) do
@@ -241,19 +254,38 @@ defmodule Mongo.MongoDBConnection do
     # overwrite temporary timeout by timeout option
     timeout = Keyword.get(opts, :timeout, state.timeout)
 
-    with {:ok, doc} <- Utils.post_request(op, state.request_id, %{state | timeout: timeout}),
+    event = %CommandStartedEvent{
+            command: data,
+            command_name: opts[:command_name] || command_name,
+            database_name: db,
+            request_id: state.request_id,
+            operation_id: opts[:operation_id],
+            connection_id: self()}
+
+    Events.notify(event, :commands)
+
+    with {duration, {:ok, doc}} <- :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end),
          state = %{state | request_id: state.request_id + 1} do
-      {:ok, doc, state}
+      {:ok, {doc, {event, duration}}, state}
     end
   end
   defp execute_action(:command, [cmd], opts, state) do
 
+    [{command_name,_}|_] = cmd
+    event = %CommandStartedEvent{
+      command: cmd,
+      command_name: opts[:command_name] || command_name,
+      database_name: opts[:database] || state.database,
+      request_id: state.request_id,
+      operation_id: opts[:operation_id],
+      connection_id: self()}
+
     flags    = Keyword.take(opts, @find_one_flags)
     op       = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: cmd, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
     timeout  = Keyword.get(opts, :timeout, state.timeout)
-    with {:ok, doc} <- Utils.post_request(op, state.request_id, %{state | timeout: timeout}),
+    with {duration, {:ok, doc}} <- :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end),
          state = %{state | request_id: state.request_id + 1}  do
-      {:ok, doc, state}
+      {:ok, {doc, {event, duration}}, state}
     end
   end
   defp execute_action(:error, _query, _opts, state) do
