@@ -289,7 +289,6 @@ defmodule Mongo do
 
   end
 
-
   @doc"""
   Creates a change stream cursor all collections of the database.
 
@@ -337,7 +336,7 @@ defmodule Mongo do
 
     opts = Keyword.drop(opts, ~w(explain allow_disk_use collation bypass_document_validation hint comment read_concern)a)
 
-    cursor(topology_pid, cmd, opts)
+    get_stream(topology_pid, cmd, opts)
   end
 
   @doc """
@@ -645,7 +644,12 @@ defmodule Mongo do
 
     drop = ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data batch_size projection comment max_time skip sort)a
     opts = Keyword.drop(opts, drop)
-    cursor(topology_pid, cmd, opts)
+    try do
+      get_stream(topology_pid, cmd, opts)
+    rescue
+      error -> {:error, error}
+    end
+
   end
 
   @doc """
@@ -668,9 +672,15 @@ defmodule Mongo do
            |> Keyword.put(:limit, 1)
            |> Keyword.put(:batch_size, 1)
 
-    topology_pid
-    |> find(coll, filter, opts)
-    |> Enum.at(0)
+    try do
+      case find(topology_pid, coll, filter, opts) do
+        {:error, error} -> {:error, error}
+        other           -> Enum.at(other, 0)
+      end
+    rescue
+      error -> {:error, error}
+    end
+
   end
 
   @doc """
@@ -1123,7 +1133,7 @@ defmodule Mongo do
   @spec list_indexes(GenServer.server, String.t, Keyword.t) :: cursor
   def list_indexes(topology_pid, coll, opts \\ []) do
     cmd = [listIndexes: coll]
-    cursor(topology_pid, cmd, opts)
+    get_stream(topology_pid, cmd, opts)
   end
 
   @doc """
@@ -1178,7 +1188,7 @@ defmodule Mongo do
     # https://github.com/mongodb/specifications/blob/f4bb783627e7ed5c4095c5554d35287956ef8970/source/enumerate-collections.rst#post-mongodb-280-rc3-versions
     #
     cmd = [listCollections: 1]
-    cursor(topology_pid, cmd, opts)
+    get_stream(topology_pid, cmd, opts)
     |> Stream.filter(fn
       %{"type" => name} -> name == "collection"
       _                 -> true
@@ -1186,12 +1196,12 @@ defmodule Mongo do
     |> Stream.map(fn coll -> coll["name"] end)
   end
 
-  defp cursor(topology_pid, cmd, opts) do
-    %Mongo.Cursor{topology_pid: topology_pid, cmd: cmd, on_resume_token: nil, opts: opts}
+  defp get_stream(topology_pid, cmd, opts) do
+    Mongo.Stream.new(topology_pid, cmd, opts)
   end
 
   defp change_stream_cursor(topology_pid, cmd, fun, opts) do
-    %Mongo.Cursor{topology_pid: topology_pid, cmd: cmd, on_resume_token: fun, opts: opts}
+    Mongo.ChangeStream.new(topology_pid,  cmd, fun, opts)
   end
 
   ##
