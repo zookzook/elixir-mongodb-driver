@@ -668,7 +668,6 @@ defmodule Mongo do
   @spec find_one(GenServer.server, collection, BSON.document, Keyword.t) :: BSON.document | nil
   def find_one(topology_pid, coll, filter, opts \\ []) do
     opts = opts
-           |> Keyword.delete(:sort)
            |> Keyword.put(:limit, 1)
            |> Keyword.put(:batch_size, 1)
 
