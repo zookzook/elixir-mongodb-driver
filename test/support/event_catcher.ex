@@ -4,6 +4,7 @@ defmodule EventCatcher do
   use GenServer
 
   alias Mongo.Events.CommandSucceededEvent
+  alias Mongo.Events.CommandFailedEvent
 
   @all [:commands, :is_master, :topology]
 
@@ -26,6 +27,10 @@ defmodule EventCatcher do
   def succeeded_events(pid) do
     GenServer.call(pid, :succeeded_events)
   end
+  def failed_events(pid) do
+    GenServer.call(pid, :failed_events)
+  end
+
   def init(topics) do
     Enum.each(topics, fn topic -> Registry.register(:events_registry, topic, []) end)
     {:ok, []}
@@ -43,6 +48,13 @@ defmodule EventCatcher do
     {:reply, state |> Enum.filter(fn
       %CommandSucceededEvent{} -> true
       _other                   -> false
+    end), state}
+  end
+
+  def handle_call(:failed_events, _from, state) do
+    {:reply, state |> Enum.filter(fn
+      %CommandFailedEvent{} -> true
+      _other                -> false
     end), state}
   end
 

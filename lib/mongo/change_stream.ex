@@ -133,7 +133,7 @@ defmodule Mongo.ChangeStream do
         {:ok, %{cursor_id: new_cursor_id, docs: docs, change_stream: change_stream}}
 
       else
-        {:error, %Mongo.Error{code: code} = not_resumable} when code == 11601 or code == 136 or code == 237 -> {:error, not_resumable}
+        {:error, %Mongo.Error{resumable: false} = not_resumable} -> {:error, not_resumable}
         {:error, _error} ->
 
           with {:ok, wire_version} <- Mongo.wire_version(topology_pid) do
