@@ -9,6 +9,7 @@ defmodule Mongo.BulkWritesTest do
 
   setup_all do
     assert {:ok, pid} = Mongo.TestConnection.connect
+    Mongo.drop_database(pid)
     {:ok, [pid: pid]}
   end
 

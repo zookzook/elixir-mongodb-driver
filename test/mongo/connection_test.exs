@@ -4,29 +4,65 @@ defmodule Mongo.ConnectionTest do
 
   import ExUnit.CaptureLog
 
+  setup_all do
+
+    assert {:ok, top} = Mongo.start_link(hostname: "localhost", database: "mongodb_test")
+
+    cmd = [
+      dropUser: "mongodb_user"
+    ]
+    Mongo.issue_command(top, cmd, :write, [])
+    cmd = [
+      dropUser: "mongodb_user2"
+    ]
+    Mongo.issue_command(top, cmd, :write, [])
+    cmd = [
+      dropUser: "mongodb_admin_user"
+    ]
+    Mongo.issue_command(top, cmd, :write, [database: "admin_test"])
+
+    cmd = [
+      createUser: "mongodb_user",
+      pwd: "mongodb_user",
+      roles: []
+    ]
+    assert {:ok, _} = Mongo.issue_command(top, cmd, :write, [])
+    cmd = [
+      createUser: "mongodb_user2",
+      pwd: "mongodb_admin_user",
+      roles: []
+    ]
+    assert {:ok, _} = Mongo.issue_command(top, cmd, :write, [])
+
+    cmd = [
+      createUser: "mongodb_admin_user",
+      pwd: "mongodb_admin_user",
+      roles: [
+        %{role: "readWrite", db: "mongodb_test"},
+        %{role: "read", db: "mongodb_test2"}]
+    ]
+    assert {:ok, _} = Mongo.issue_command(top, cmd, :write, [database: "admin_test"])
+  end
+
   defp connect do
-    assert {:ok, pid} =
-           Mongo.start_link(hostname: "localhost", database: "mongodb_test")
+    assert {:ok, pid} = Mongo.start_link(hostname: "localhost", database: "mongodb_test")
     pid
   end
 
   defp connect_auth do
-    assert {:ok, pid} =
-           Mongo.start_link(hostname: "localhost", database: "mongodb_test",
+    assert {:ok, pid} = Mongo.start_link(hostname: "localhost", database: "mongodb_test",
                                  username: "mongodb_user", password: "mongodb_user")
     pid
   end
 
   defp connect_auth_invalid do
-    assert {:ok, pid} =
-           Mongo.start_link(hostname: "localhost", database: "mongodb_test",
+    assert {:ok, pid} = Mongo.start_link(hostname: "localhost", database: "mongodb_test",
                                  username: "mongodb_user", password: "wrong_password")
     pid
   end
 
   defp connect_auth_on_db do
-    assert {:ok, pid} =
-           Mongo.start_link(hostname: "localhost", database: "mongodb_test",
+    assert {:ok, pid} = Mongo.start_link(hostname: "localhost", database: "mongodb_test",
                                  username: "mongodb_admin_user", password: "mongodb_admin_user",
                                  auth_source: "admin_test")
     pid
@@ -128,15 +164,10 @@ defmodule Mongo.ConnectionTest do
     Mongo.find(pid, coll, query, opts) |> Enum.to_list() |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
   end
 
-#  def get_cursor(pid, coll, query, select, opts) do
-#    %Mongo.Cursor{ conn: conn, coll: coll, query: query, select: select, opts: opts} = Mongo.find(pid, coll, query, opts)
-#    {:ok, %{docs: [%{"cursor" => %{"id" => cursor_id}}]}}  = Mongo.raw_find(conn, coll, query, select, opts)
-#    {:ok, cursor_id}
-#  end
-
   test "find" do
     pid = connect_auth()
     coll = unique_name()
+    Mongo.delete_many(pid, coll, %{})
 
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 42}, [])
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 43}, [])
@@ -146,49 +177,13 @@ defmodule Mongo.ConnectionTest do
 
   end
 
-#  test "find and get_more" do
-#    pid = connect_auth()
-#    coll = unique_name()
-#    {:ok, conn, _, _} = Mongo.select_server(pid, :read)
-#
-#    assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 42}, [])
-#    assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 43}, [])
-#    assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 44}, [])
-#    assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 45}, [])
-#    assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 46}, [])
-#    assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 47}, [])
-#
-#    {:ok, cursor_id} = get_cursor(pid, coll, %{}, nil, batch_size: 2)
-#
-#    assert {:ok, %{cursor_id: ^cursor_id, from: 2, docs: [%{"foo" => 44}, %{"foo" => 45}]}} =
-#           Mongo.get_more(conn, coll, cursor_id, batch_size: 2)
-#    assert {:ok, %{cursor_id: ^cursor_id, from: 4, docs: [%{"foo" => 46}, %{"foo" => 47}]}} =
-#           Mongo.get_more(conn, coll, cursor_id, batch_size: 2)
-#    assert {:ok, %{cursor_id: 0, from: 6, docs: []}} =
-#           Mongo.get_more(conn, coll, cursor_id, batch_size: 2)
-#  end
-
-#  test "kill_cursors" do
-#    pid = connect_auth()
-#    coll = unique_name()
-#    {:ok, conn, _, _} = Mongo.select_server(pid, :read)
-#
-#    assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 42}, [])
-#    assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 43}, [])
-#    assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 44}, [])
-#
-#    {:ok, cursor_id} = get_cursor(pid, coll, %{}, nil, batch_size: 2)
-#
-#    assert :ok = Mongo.kill_cursors(conn, [cursor_id], [])
-#
-#    assert {:error, %Mongo.Error{code: nil, message: "cursor not found"}} = Mongo.get_more(conn, coll, cursor_id, [])
-#  end
-
   test "big response" do
     pid    = connect_auth()
     coll   = unique_name()
     size   = 1024*1024
     binary = <<0::size(size)>>
+
+    Mongo.delete_many(pid, coll, %{})
 
     Enum.each(1..10, fn _ ->
       Mongo.insert_one(pid, coll, %{data: binary}, [w: 0])
@@ -199,16 +194,14 @@ defmodule Mongo.ConnectionTest do
 
   test "auth connection leak" do
     assert capture_log(fn ->
-      # sometimes the function tcp_count() returns 1, so the test fails.
-      # maybe it is a good idea to wait a second before counting
-      :timer.sleep(1000)
-      assert tcp_count() == 0
+      assert tcp_count() == 6
       Enum.each(1..10, fn _ ->
         connect_auth_invalid()
       end)
       :timer.sleep(1000)
-      # there should be 10 connections with connection_type: :monitor
-      assert tcp_count() == 10
+      # there should be 36 connections with connection_type: :monitor
+      # 6 of setup, and 10*3 for three nodes
+      assert tcp_count() == 36
     end)
   end
 end

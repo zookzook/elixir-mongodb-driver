@@ -727,9 +727,9 @@ defmodule Mongo do
     }, :commands)
     {:ok, response}
   end
-  defp check_for_error(%{"code" => code, "errmsg" => msg}, {event, duration}) do
+  defp check_for_error(doc, {event, duration}) do
 
-    error = Mongo.Error.exception(message: msg, code: code)
+    error = Mongo.Error.exception(doc)
 
     Events.notify(%CommandFailedEvent{
       failure: error,
@@ -1172,6 +1172,22 @@ defmodule Mongo do
   @spec drop_collection(GenServer.server, String.t, Keyword.t) :: :ok | {:error, Mongo.Error.t}
   def drop_collection(topology_pid, coll, opts \\ []) do
     with {:ok, _} <- Mongo.issue_command(topology_pid, [drop: coll], :write, opts) do
+      :ok
+    end
+  end
+
+  @doc """
+  Convenient function that drops the database `name`.
+  """
+  @spec drop_database(GenServer.server, String.t) :: :ok | {:error, Mongo.Error.t}
+  def drop_database(topology_pid, name \\ nil)
+  def drop_database(topology_pid, nil) do
+    with {:ok, _} <- Mongo.issue_command(topology_pid, [dropDatabase: 1], :write, []) do
+      :ok
+    end
+  end
+  def drop_database(topology_pid, name) do
+    with {:ok, _} <- Mongo.issue_command(topology_pid, [dropDatabase: 1], :write, [database: name]) do
       :ok
     end
   end
