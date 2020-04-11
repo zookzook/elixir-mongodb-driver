@@ -5,6 +5,7 @@ defmodule EventCatcher do
 
   alias Mongo.Events.CommandSucceededEvent
   alias Mongo.Events.CommandFailedEvent
+  alias Mongo.Events.RetryReadEvent
 
   @all [:commands, :is_master, :topology]
 
@@ -27,8 +28,13 @@ defmodule EventCatcher do
   def succeeded_events(pid) do
     GenServer.call(pid, :succeeded_events)
   end
+
   def failed_events(pid) do
     GenServer.call(pid, :failed_events)
+  end
+
+  def retryable_read_events(pid) do
+    GenServer.call(pid, :retryable_read_events)
   end
 
   def init(topics) do
@@ -57,6 +63,14 @@ defmodule EventCatcher do
       _other                -> false
     end), state}
   end
+
+  def handle_call(:retryable_read_events, _from, state) do
+    {:reply, state |> Enum.filter(fn
+      %RetryReadEvent{} -> true
+      _other            -> false
+    end), state}
+  end
+
 
   def handle_info({:broadcast, :commands, msg}, state) do
     {:noreply, [msg|state]}

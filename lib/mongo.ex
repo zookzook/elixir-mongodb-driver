@@ -63,6 +63,7 @@ defmodule Mongo do
   alias Mongo.Events
   alias Mongo.Events.CommandSucceededEvent
   alias Mongo.Events.CommandFailedEvent
+  alias Mongo.Error
 
   @timeout 15000 # 5000
 
@@ -391,23 +392,39 @@ defmodule Mongo do
   @doc """
   This function is very fundamental.
   """
-  def issue_command(topology_pid, cmd, type, opts) do
+  def issue_command(topology_pid, cmd, :read, opts) do
 
-    new_cmd = case type do
-      :read  -> ReadPreference.add_read_preference(cmd, opts)
-      :write -> cmd
-    end
+    new_cmd = ReadPreference.add_read_preference(cmd, opts)
 
-    Logger.debug("issue_command: #{inspect type} #{inspect new_cmd}")
+    ## check, if retryable reads are enabled
+    opts = Mongo.retryable_reads(opts)
 
-    with {:ok, session} <- Session.start_implicit_session(topology_pid, type, opts),
+    with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
          result <- exec_command_session(session, new_cmd, opts),
+         :ok <- Session.end_implict_session(topology_pid, session) do
+      case result do
+        {:error, error} ->
+          case Error.should_retry(error, cmd, opts) do
+            true -> issue_command(topology_pid, cmd, :read, Keyword.put(opts, :read_counter, 2))
+            false -> {:error, error}
+          end
+        _other        -> result
+      end
+    else
+      {:new_connection, _server} ->
+        :timer.sleep(1000)
+        issue_command(topology_pid, cmd, :read, opts)
+    end
+  end
+  def issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
+         result <- exec_command_session(session, cmd, opts),
          :ok <- Session.end_implict_session(topology_pid, session) do
       result
     else
       {:new_connection, _server} ->
         :timer.sleep(1000)
-        issue_command(topology_pid, cmd, type, opts)
+        issue_command(topology_pid, cmd, :write, opts)
     end
   end
 
@@ -1209,6 +1226,33 @@ defmodule Mongo do
       _                 -> true
     end)
     |> Stream.map(fn coll -> coll["name"] end)
+  end
+
+  @doc """
+  In case of retryable reads are enabled, the keyword `:read_counter` is added with the value of 1.
+
+  In other cases like
+
+  * `:retryable_reads` is false or nil
+  * `:session` is nil
+  * `:read_counter` is nil
+
+  the `opts` is unchanged
+
+  ## Example
+
+    iex> Mongo.retryable_reads([retryable_reads: true])
+    [retryable_reads: true, read_counter: 1]
+
+  """
+  def retryable_reads(opts) do
+    case opts[:read_counter] do
+      nil -> case opts[:retryable_reads] == true && opts[:session] == nil do
+              true -> opts ++ [read_counter: 1]
+              false -> opts
+             end
+      _other -> opts
+    end
   end
 
   defp get_stream(topology_pid, cmd, opts) do

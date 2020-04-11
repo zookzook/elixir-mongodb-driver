@@ -1,12 +1,17 @@
 defmodule Mongo.ChangeStream do
 
   alias Mongo.Session
+  alias Mongo.Error
 
   import Record, only: [defrecordp: 2]
 
   defstruct [:topology_pid, :session, :doc, :cmd, :on_resume_token, :opts]
 
   def new(topology_pid, cmd, on_resume_token_fun, opts) do
+
+    ## check, if retryable reads are enabled
+    opts = Mongo.retryable_reads(opts)
+
     with new_cmd = Mongo.ReadPreference.add_read_preference(cmd, opts),
          {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
          {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, new_cmd, opts) do
@@ -18,8 +23,15 @@ defmodule Mongo.ChangeStream do
         cmd: cmd,
         opts: opts
       }
+    else
+      {:error, error} ->
+        case Error.should_retry(error, cmd, opts) do
+          true -> new(topology_pid, cmd, on_resume_token_fun, Keyword.put(opts, :read_counter, 2))
+          false -> {:error, error}
+        end
     end
   end
+
   defimpl Enumerable do
 
     defrecordp :change_stream, [:resume_token, :op_time, :cmd, :on_resume_token]
@@ -63,6 +75,12 @@ defmodule Mongo.ChangeStream do
            {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, new_cmd, opts)  do
 
         aggregate(topology_pid, session, doc, cmd, fun)
+      else
+        {:error, error} ->
+          case Error.should_retry(error, cmd, opts) do
+            true -> aggregate(topology_pid, cmd, fun, Keyword.put(opts, :read_counter, 2))
+            false -> {:error, error}
+          end
       end
     end
 
@@ -101,6 +119,8 @@ defmodule Mongo.ChangeStream do
         {:ok, state(topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, change_stream: change_stream, docs: docs)}
       end
     end
+
+
 
     @doc """
       Calls the GetCore-Command

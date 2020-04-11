@@ -65,6 +65,15 @@ defmodule Mongo.Events do
     ]
   end
 
+  defmodule RetryReadEvent do
+    @moduledoc false
+
+    defstruct [
+      :command,         ## Returns the command.
+      :command_name,    ## Returns the command name.
+    ]
+  end
+
   # Published when server description changes, but does NOT include changes to
   # the RTT
   defmodule ServerDescriptionChangedEvent do
