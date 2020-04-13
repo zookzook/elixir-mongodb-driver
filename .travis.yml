@@ -2,7 +2,9 @@ sudo: required
 language: elixir
 
 elixir:
-  - 1.10.2
+  - '1.10.2'
+otp_release:
+  - '22'
 
 install:
   - wget https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu1804-4.4.0-rc0.tgz
