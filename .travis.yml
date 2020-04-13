@@ -4,6 +4,11 @@ language: elixir
 elixir: 1.10.2
 otp_release: 22.0
 
+addons:
+  apt:
+    packages:
+      - python3-pip
+
 install:
   - wget https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu1604-4.4.0-rc0.tgz
   - mkdir ${PWD}/mongodb
