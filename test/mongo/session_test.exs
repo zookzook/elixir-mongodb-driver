@@ -302,7 +302,8 @@ defmodule Mongo.SessionTest do
            |> UnorderedBulk.update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
            |> UnorderedBulk.update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
 
-    {:error, [result|_xs]} = Session.with_transaction(top, fn opts ->
+    #{:error, [result|_xs]} =
+      :error = Session.with_transaction(top, fn opts ->
 
       %BulkWriteResult{errors: errors} = result = BulkWrite.write(top, bulk, opts)
 
@@ -313,6 +314,7 @@ defmodule Mongo.SessionTest do
          false -> {:error, errors}
       end
 
+      :error
     end, w: 1)
 
     # assert 263  == result["code"]
