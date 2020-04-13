@@ -21,7 +21,7 @@ before_script:
   - pip3 install --upgrade pip
   - pip3 install mtools[all]
   - export PATH=${PWD}/mongodb/bin/:$PATH
-  - mlaunch init --replicaset --name "rs_1"
+  - mlaunch init --setParameter enableTestCommands=1 --replicaset --name "rs_1"
 
 script:
   - mix local.hex --force
