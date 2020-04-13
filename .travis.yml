@@ -15,6 +15,7 @@ install:
   - tar xzf mongodb-linux-x86_64-ubuntu1604-4.4.0-rc0.tgz --strip-components=1 -C ${PWD}/mongodb
 
 before_script:
+  - pip3 install --upgrade pip
   - pip3 install mtools[all]
   - export PATH=${PWD}/mongodb/bin/:$PATH
   - mlaunch init --replicaset --name "rs_1"
