@@ -9,6 +9,10 @@ addons:
     packages:
       - python3-pip
 
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install python3
+
 install:
   - wget https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu1604-4.4.0-rc0.tgz
   - mkdir ${PWD}/mongodb
