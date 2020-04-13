@@ -293,6 +293,8 @@ defmodule Mongo.SessionTest do
 
     coll = unique_name()
 
+    IO.puts coll
+
     bulk = coll
            |> UnorderedBulk.new()
            |> UnorderedBulk.insert_one(%{name: "Greta"})
@@ -305,6 +307,8 @@ defmodule Mongo.SessionTest do
     {:error, [result|_xs]} = Session.with_transaction(top, fn opts ->
 
       %BulkWriteResult{errors: errors} = result = BulkWrite.write(top, bulk, opts)
+
+      IO.puts inspect result
 
       case Enum.empty?(errors) do
          true  -> {:ok, result}
