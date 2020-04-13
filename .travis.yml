@@ -1,19 +1,14 @@
+dist: xenial
 sudo: required
 language: elixir
 
 elixir: 1.10.2
 otp_release: 22.0
 
-addons:
-  apt:
-    packages:
-      - python3
-      - python3-pip
-
 install:
-  - wget https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu1604-4.4.0-rc0.tgz
+  - wget https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu1804-4.4.0-rc0.tgz
   - mkdir ${PWD}/mongodb
-  - tar xzf mongodb-linux-x86_64-ubuntu1604-4.4.0-rc0.tgz --strip-components=1 -C ${PWD}/mongodb
+  - tar xzf mongodb-linux-x86_64-ubuntu1804-4.4.0-rc0.tgz --strip-components=1 -C ${PWD}/mongodb
 
 before_script:
   - pyenv global 3.6
