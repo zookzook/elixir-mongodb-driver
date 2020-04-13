@@ -26,7 +26,7 @@ defmodule Mongo.Stream do
       %Mongo.Stream{topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, docs: docs, opts: opts}
     else
       {:error, error} ->
-        case Error.should_retry(error, cmd, opts) do
+        case Error.should_retry_read(error, cmd, opts) do
           true -> new(topology_pid, cmd, Keyword.put(opts, :read_counter, 2))
           false -> {:error, error}
         end

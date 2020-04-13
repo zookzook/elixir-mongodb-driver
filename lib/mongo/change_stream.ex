@@ -25,7 +25,7 @@ defmodule Mongo.ChangeStream do
       }
     else
       {:error, error} ->
-        case Error.should_retry(error, cmd, opts) do
+        case Error.should_retry_read(error, cmd, opts) do
           true -> new(topology_pid, cmd, on_resume_token_fun, Keyword.put(opts, :read_counter, 2))
           false -> {:error, error}
         end
@@ -77,7 +77,7 @@ defmodule Mongo.ChangeStream do
         aggregate(topology_pid, session, doc, cmd, fun)
       else
         {:error, error} ->
-          case Error.should_retry(error, cmd, opts) do
+          case Error.should_retry_read(error, cmd, opts) do
             true -> aggregate(topology_pid, cmd, fun, Keyword.put(opts, :read_counter, 2))
             false -> {:error, error}
           end

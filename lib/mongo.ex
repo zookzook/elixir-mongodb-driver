@@ -50,8 +50,6 @@ defmodule Mongo do
   import Mongo.Utils
   import Mongo.WriteConcern
 
-  require Logger
-
   use Bitwise
   use Mongo.Messages
   alias Mongo.Query
@@ -384,7 +382,7 @@ defmodule Mongo do
   end
 
   def admin_command(topology_pid, cmd) do
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, database: "admin") do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, database: "admin", retryable_writes: false) do
       {:ok, doc}
     end
   end
@@ -404,8 +402,8 @@ defmodule Mongo do
          :ok <- Session.end_implict_session(topology_pid, session) do
       case result do
         {:error, error} ->
-          case Error.should_retry(error, cmd, opts) do
-            true -> issue_command(topology_pid, cmd, :read, Keyword.put(opts, :read_counter, 2))
+          case Error.should_retry_read(error, cmd, opts) do
+            true  -> issue_command(topology_pid, cmd, :read, Keyword.put(opts, :read_counter, 2))
             false -> {:error, error}
           end
         _other        -> result
@@ -417,9 +415,13 @@ defmodule Mongo do
     end
   end
   def issue_command(topology_pid, cmd, :write, opts) do
+
+    ## check, if retryable reads are enabled
+    opts = Mongo.retryable_writes(opts, acknowledged?(cmd[:writeConcerns]))
+
     with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
-         result <- exec_command_session(session, cmd, opts),
-         :ok <- Session.end_implict_session(topology_pid, session) do
+         result         <- exec_command_session(session, cmd, opts),
+         :ok            <- Session.end_implict_session(topology_pid, session) do
       result
     else
       {:new_connection, _server} ->
@@ -714,11 +716,21 @@ defmodule Mongo do
   @doc false
   @spec exec_command_session(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command_session(session, cmd, opts) do
-    with {:ok, conn, cmd}          <- Session.bind_session(session, cmd),
-         {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
+    with {:ok, conn, new_cmd}      <- Session.bind_session(session, cmd),
+         {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
          doc                       <- Session.update_session(session, doc, opts),
          {:ok, doc}                <- check_for_error(doc, event) do
       {:ok, doc}
+    else
+      {:error, error} ->
+      ## todo update Topology
+        case Error.should_retry_write(error, cmd, opts) do
+          true  ->
+          with :ok <- Session.select_server(session, opts) do
+           exec_command_session(session, cmd, Keyword.put(opts, :write_counter, 2))
+          end
+          false -> {:error, error}
+        end
     end
 
   end
@@ -1253,6 +1265,36 @@ defmodule Mongo do
              end
       _other -> opts
     end
+  end
+
+  @doc """
+  In case of retryable writes are enabled, the keyword `:write_counter` is added with the value of 1.
+
+  In other cases like
+
+  * `:retryable_writes` is false or nil
+  * `:session` is nil
+  * `:write_counter` is nil
+
+  the `opts` is unchanged
+
+  ## Example
+
+    iex> Mongo.retryable_writes([retryable_writes: true], true)
+    [retryable_writes: true, write_counter: 1]
+
+  """
+  def retryable_writes(opts, true) do
+    case opts[:write_counter] do
+      nil -> case Keyword.get(opts, :retryable_writes, true) == true && opts[:session] == nil do
+               true  -> opts ++ [write_counter: 1]
+               false -> opts
+             end
+      _other -> opts
+    end
+  end
+  def retryable_writes(opts, false) do
+    Keyword.put(opts, :retryable_writes, false)
   end
 
   defp get_stream(topology_pid, cmd, opts) do
