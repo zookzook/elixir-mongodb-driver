@@ -7,7 +7,7 @@ otp_release: 22.0
 install:
   - wget https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu1604-4.4.0-rc0.tgz
   - mkdir ${PWD}/mongodb
-  - tar xzf https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu1604-4.4.0-rc0.tgz --strip-components=1 -C ${PWD}/mongodb
+  - tar xzf mongodb-linux-x86_64-ubuntu1604-4.4.0-rc0.tgz --strip-components=1 -C ${PWD}/mongodb
 
 before_script:
   - pip3 install mtools[all]
