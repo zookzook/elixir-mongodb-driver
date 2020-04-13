@@ -11,7 +11,6 @@ install:
   - tar xzf mongodb-linux-x86_64-ubuntu1804-4.4.0-rc0.tgz --strip-components=1 -C ${PWD}/mongodb
 
 before_script:
-  - pyenv global 3.6
   - pip3 install --upgrade pip
   - pip3 install mtools[all]
   - export PATH=${PWD}/mongodb/bin/:$PATH
