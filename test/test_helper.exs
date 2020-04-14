@@ -1,4 +1,5 @@
 # Do not run the SSL tests on Travis
+
 {string, 0} = System.cmd("mongod", ~w'--version')
 ["db version v" <> version, _] = String.split(string, "\n", parts: 2)
 
@@ -29,8 +30,11 @@ defmodule MongoTest.Case do
     end
   end
 
-  defmacro unique_name do
+  defmacro unique_collection do
     {function, _arity} = __CALLER__.function
     "#{__CALLER__.module}.#{function}"
+    |> String.replace(" ", "_")
+    |> String.replace(".", "_")
+    |> String.downcase()
   end
 end

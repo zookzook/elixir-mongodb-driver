@@ -154,7 +154,7 @@ defmodule Mongo.ConnectionTest do
 
   test "insert_one flags" do
     pid = connect_auth()
-    coll = unique_name()
+    coll = unique_collection()
 
     assert {:ok, _} =
            Mongo.insert_one(pid, coll, %{foo: 42}, [continue_on_error: true])
@@ -166,7 +166,7 @@ defmodule Mongo.ConnectionTest do
 
   test "find" do
     pid = connect_auth()
-    coll = unique_name()
+    coll = unique_collection()
     Mongo.delete_many(pid, coll, %{})
 
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 42}, [])
@@ -179,7 +179,7 @@ defmodule Mongo.ConnectionTest do
 
   test "big response" do
     pid    = connect_auth()
-    coll   = unique_name()
+    coll   = unique_collection()
     size   = 1024*1024
     binary = <<0::size(size)>>
 

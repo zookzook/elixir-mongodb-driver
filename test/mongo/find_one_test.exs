@@ -1,15 +1,11 @@
 defmodule Mongo.FindOneTest do
-  use ExUnit.Case
 
-  setup_all do
-    assert {:ok, pid} = Mongo.TestConnection.connect
-    Mongo.drop_database(pid)
-    {:ok, [pid: pid]}
-  end
+  use CollectionCase
 
   test "find_one, using :sort options", %{pid: top} do
 
-    coll = "find_one_sort"
+    coll = unique_collection()
+
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})
     Mongo.insert_one(top, coll, %{name: "Tom", age: 13})
     Mongo.insert_one(top, coll, %{name: "Waldo", age: 5})

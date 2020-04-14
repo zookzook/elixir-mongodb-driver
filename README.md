@@ -352,7 +352,21 @@ Using `$in`
 Mongo.find(:mongo, "users", %{email: %{"$in" => ["my@email.com", "other@email.com"]}})
 ```
 
-## Testing
+## Testing and Travis CI
+
+The `travis.yml` file uses only the latest MongoDB. It creates a replica set of three nodes and disables the SSL test case. If you want to
+run the test cases against other MongoDB deployments or older versions, you can use the [mtools](https://github.com/rueckstiess/mtools) for deployment and run the test cases locally:
+
+### Example
+
+```bash
+pyenv global 3.6
+pip3 install --upgrade pip
+pip3 install mtools[all]
+export PATH=to-your-mongodb/bin/:$PATH
+mlaunch init --setParameter enableTestCommands=1 --replicaset --name "rs_1"
+mix test --exclude ssl --exclude socket
+``` 
 
 The SSL test suite is enabled by default. You have two options. Either exclude
 the SSL tests or enable SSL on your Mongo server.

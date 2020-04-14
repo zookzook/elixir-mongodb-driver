@@ -1,18 +1,5 @@
 defmodule Mongo.CursorTest do
-  use ExUnit.Case, async: false
-
-  setup_all do
-    assert {:ok, pid} = Mongo.TestConnection.connect
-    {:ok, [pid: pid]}
-  end
-
-  setup do
-    {:ok, catcher} = EventCatcher.start_link()
-
-    on_exit(fn -> EventCatcher.stop(catcher) end)
-
-    [catcher: catcher]
-  end
+  use CollectionCase, async: false
 
   test "checking if killCursor is called properly", c do
 

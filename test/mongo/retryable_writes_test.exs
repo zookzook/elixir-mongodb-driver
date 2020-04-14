@@ -1,25 +1,11 @@
 defmodule Mongo.RetryableWritesTest do
-  use ExUnit.Case
+  use CollectionCase
 
   alias Mongo.Error
 
-  setup_all do
-    assert {:ok, pid} = Mongo.TestConnection.connect
-    Mongo.drop_database(pid)
-    {:ok, [pid: pid]}
-  end
-
-  setup do
-    {:ok, catcher} = EventCatcher.start_link()
-
-    on_exit(fn -> EventCatcher.stop(catcher) end)
-
-    [catcher: catcher]
-  end
-
   test "retryable writes: insert one", %{pid: top, catcher: catcher} do
 
-    coll = "retryable_writes_1"
+    coll = unique_collection()
 
     cmd = [
       configureFailPoint: "failCommand",
@@ -38,7 +24,7 @@ defmodule Mongo.RetryableWritesTest do
 
   test "retryable writes: delete one", %{pid: top, catcher: catcher} do
 
-    coll = "retryable_writes_2"
+    coll = unique_collection()
 
     Mongo.insert_one(top, coll, %{"name" => "Waldo"})
 

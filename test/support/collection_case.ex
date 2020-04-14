@@ -1,0 +1,32 @@
+defmodule CollectionCase do
+  use ExUnit.CaseTemplate
+
+  @seeds ["127.0.0.1:27017", "127.0.0.1:27018", "127.0.0.1:27019"]
+
+  setup_all do
+    assert {:ok, pid} = Mongo.start_link(database: "mongodb_test", seeds: @seeds, show_sensitive_data_on_connection_error: true)
+    Mongo.drop_database(pid)
+    {:ok, [pid: pid]}
+  end
+
+  setup do
+    {:ok, catcher} = EventCatcher.start_link()
+    on_exit(fn -> EventCatcher.stop(catcher) end)
+    [catcher: catcher]
+  end
+
+  using do
+    quote do
+      import CollectionCase
+    end
+  end
+
+  defmacro unique_collection do
+    {function, _arity} = __CALLER__.function
+    "#{__CALLER__.module}.#{function}"
+    |> String.replace(" ", "_")
+    |> String.replace(".", "_")
+    |> String.replace(":", "_")
+    |> String.downcase()
+  end
+end

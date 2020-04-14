@@ -1,26 +1,13 @@
 defmodule Mongo.RetryableReadsTest do
-  use ExUnit.Case
+  use CollectionCase
 
   alias Mongo.Error
   alias Mongo.Session
 
-  setup_all do
-    assert {:ok, pid} = Mongo.TestConnection.connect
-    Mongo.drop_database(pid)
-    {:ok, [pid: pid]}
-  end
-
-  setup do
-    {:ok, catcher} = EventCatcher.start_link()
-
-    on_exit(fn -> EventCatcher.stop(catcher) end)
-
-    [catcher: catcher]
-  end
-
   test "find_one", %{pid: top, catcher: catcher} do
 
-    coll = "retryable_reads_1"
+    coll = unique_collection()
+
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})
     Mongo.insert_one(top, coll, %{name: "Tom", age: 13})
     Mongo.insert_one(top, coll, %{name: "Waldo", age: 5})
@@ -45,7 +32,7 @@ defmodule Mongo.RetryableReadsTest do
 
   test "find_one in transaction", %{pid: top, catcher: catcher} do
 
-    coll = "retryable_reads_2"
+    coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})
     Mongo.insert_one(top, coll, %{name: "Tom", age: 13})
     Mongo.insert_one(top, coll, %{name: "Waldo", age: 5})
@@ -71,7 +58,7 @@ defmodule Mongo.RetryableReadsTest do
 
   test "count", %{pid: top, catcher: catcher} do
 
-    coll = "retryable_reads_count"
+    coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})
     Mongo.insert_one(top, coll, %{name: "Tom", age: 13})
     Mongo.insert_one(top, coll, %{name: "Waldo", age: 5})

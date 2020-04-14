@@ -1,3 +1,12 @@
+## 0.7.0
+
+* Enhancements
+    * refactored event notification system
+    * added support for retryable reads and writes
+    * refactored the test cases
+    * now using mtools for a MongoDB deployment in the travis ci environment
+    * travis ci uses only the latest MongoDB version [The failCommand](https://github.com/mongodb/mongo/wiki/The-%22failCommand%22-fail-point) 
+    
 ## 0.6.5
 
 * Enhancements
