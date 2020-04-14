@@ -104,8 +104,6 @@ defmodule Mongo.Session do
   alias Mongo.Topology
   alias BSON.Timestamp
 
-  require Logger
-
   @type t :: pid()
 
   ##
@@ -117,14 +115,25 @@ defmodule Mongo.Session do
   # * `causal_consistency` true orfalse
   # * `wire_version` current wire version to check if transactions are possible
   # * `recovery_token` tracked recovery token from response in a sharded transaction
-  defstruct [conn: nil, recovery_token: nil, server_session: nil, causal_consistency: false, operation_time: nil, implicit: false, wire_version: 0, state: :no_transaction, opts: []]
+  defstruct [
+    topology: nil,
+    conn: nil,
+    recovery_token: nil,
+    server_session: nil,
+    causal_consistency: false,
+    operation_time: nil,
+    implicit: false,
+    wire_version: 0,
+    state: :no_transaction,
+    opts: []
+  ]
 
   @doc """
   Start the generic state machine.
   """
-  @spec start_link(GenServer.server, ServerSession.t, atom, integer, keyword()) :: {:ok, Session.t} | :ignore | {:error, term()}
-  def start_link(conn, server_session, type, wire_version, opts) do
-    {:ok, spawn_link(__MODULE__, :init, [conn, server_session, type, wire_version, opts])}
+  # @spec start_link(GenServer.server, ServerSession.t, atom, integer, keyword()) :: {:ok, Session.t} | :ignore | {:error, term()}
+  def start_link(topology, conn, server_session, type, wire_version, opts) do
+    {:ok, spawn_link(__MODULE__, :init, [topology, conn, server_session, type, wire_version, opts])}
   end
 
   @doc """
@@ -163,6 +172,10 @@ defmodule Mongo.Session do
         end
       session -> {:ok, session}
     end
+  end
+
+  def select_server(pid, opts) do
+    call(pid, {:select_server, opts})
   end
 
   @doc """
@@ -331,7 +344,6 @@ defmodule Mongo.Session do
 
   @compile {:inline, call: 2}
   defp call(pid, arguments) do
-    #Logger.info("Calling #{inspect arguments}")
     send(pid, {:call, self(), arguments})
     receive do
       {:session_result, result} -> result
@@ -343,8 +355,16 @@ defmodule Mongo.Session do
     send(pid, {:cast, arguments})
   end
 
-  def init(conn, server_session, type, wire_version, opts) do
-    data = %Session{conn: conn,
+  def init(topology, conn, server_session, type, wire_version, opts) do
+
+    server_session = case opts[:retryable_write] do       ## in case of `:retryable_write` we need to inc the transaction id
+      true -> ServerSession.next_txn_num(server_session)
+      _    -> server_session
+    end
+
+    data = %Session{
+      topology: topology,
+      conn: conn,
       server_session: server_session,
       implicit: (type == :implicit),
       wire_version: wire_version,
@@ -376,6 +396,10 @@ defmodule Mongo.Session do
     send(from, {:session_result, result})
     data
   end
+  defp handle_call_result({:keep_state, session}, _data, from) do
+    send(from, {:session_result, :ok})
+    session
+  end
   defp handle_call_result({:next_state, new_state, result}, data, from) do
     send(from, {:session_result, result})
     %Session{data | state: new_state}
@@ -393,14 +417,21 @@ defmodule Mongo.Session do
     {:next_state, :starting_transaction, %Session{data | recovery_token: nil, server_session: ServerSession.next_txn_num(session)}, :ok}
   end
   ##
-  # bind session: only if wire_version >= 6, MongoDB 3.6.x and no transaction is running: only lsid is added
+  # bind session: only if wire_version >= 6, MongoDB 3.6.x and no transaction is running: only lsid and the transaction-id is added
   #
   def handle_call_event({:bind_session, cmd}, transaction,
         %Session{conn: conn,
+          opts: opts,
           wire_version: wire_version,
-          server_session: %ServerSession{session_id: id}} = data) when wire_version >= 6 and transaction in [:no_transaction, :transaction_aborted, :transaction_committed] do
+          server_session: %ServerSession{session_id: id, txn_num: txn_num}} = data) when wire_version >= 6 and transaction in [:no_transaction, :transaction_aborted, :transaction_committed] do
 
-    cmd = Keyword.merge(cmd, lsid: %{id: id}, readConcern: read_concern(data, Keyword.get(cmd, :readConcern))) |> filter_nils()
+    options = case opts[:retryable_writes] do  ## only if retryable_writes are enabled!
+      true  -> [lsid: %{id: id}, txnNumber: %BSON.LongNumber{value: txn_num}, readConcern: read_concern(data, Keyword.get(cmd, :readConcern))]
+      _     -> [lsid: %{id: id}, readConcern: read_concern(data, Keyword.get(cmd, :readConcern))]
+    end
+
+    cmd = Keyword.merge(cmd, options) |> filter_nils()
+
     {:keep_state_and_data, {:ok, conn, cmd}}
   end
   def handle_call_event({:bind_session, cmd}, :starting_transaction,
@@ -457,6 +488,13 @@ defmodule Mongo.Session do
   def handle_call_event(:server_session, _state,  %Session{server_session: session_server, implicit: implicit}) do
     {:keep_state_and_data, session_server, implicit}
   end
+  def handle_call_event({:select_server, opts}, _state, %Session{topology: topology} = data) do
+    case Topology.select_server(topology, :write, opts) do
+      {:ok, conn} ->
+        {:keep_state, %Session{data | conn: conn}}
+      _           -> {:keep_state_and_data, :noop}
+    end
+  end
   def handle_cast_event({:update_recovery_token, recovery_token}, _state, %Session{} = data) do
     %Session{data | recovery_token: recovery_token}
   end
@@ -473,8 +511,6 @@ defmodule Mongo.Session do
   # Run the commit transaction command.
   #
   defp run_commit_command(%Session{conn: conn, recovery_token: recovery_token, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
-
-    Logger.debug("Running commit transaction")
 
     cmd = [
             commitTransaction: 1,
@@ -501,8 +537,6 @@ defmodule Mongo.Session do
   # Run the abort transaction command.
   #
   defp run_abort_command(%Session{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
-
-    Logger.debug("Running abort transaction")
 
     cmd = [
             abortTransaction: 1,

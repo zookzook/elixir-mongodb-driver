@@ -1,6 +1,7 @@
 defmodule Mongo.Stream do
 
   alias Mongo.Session
+  alias Mongo.Error
 
   import Record, only: [defrecordp: 2]
 
@@ -9,6 +10,10 @@ defmodule Mongo.Stream do
   alias Mongo.Session
 
   def new(topology_pid, cmd, opts) do
+
+    ## check, if retryable reads are enabled
+    opts = Mongo.retryable_reads(opts)
+
     with cmd = Mongo.ReadPreference.add_read_preference(cmd, opts),
          {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
          {:ok,
@@ -19,6 +24,12 @@ defmodule Mongo.Stream do
                "firstBatch" => docs}}} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
 
       %Mongo.Stream{topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, docs: docs, opts: opts}
+    else
+      {:error, error} ->
+        case Error.should_retry_read(error, cmd, opts) do
+          true -> new(topology_pid, cmd, Keyword.put(opts, :read_counter, 2))
+          false -> {:error, error}
+        end
     end
   end
 

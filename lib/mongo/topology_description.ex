@@ -55,7 +55,6 @@ defmodule Mongo.TopologyDescription do
     check_server_supported(topology, server_description, num_seeds)
   end
 
-
   @doc """
   Returns a tuple of three values:
   * servers: possible list of servers, maybe []

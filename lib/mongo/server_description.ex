@@ -1,6 +1,10 @@
 defmodule Mongo.ServerDescription do
   @moduledoc false
 
+  alias Mongo.Version
+
+  @retryable_wire_version Version.encode(:supports_op_msg)
+
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#serverdescription
   @type type :: :standalone | :mongos | :possible_primary | :rs_primary |
                 :rs_secondary | :rs_arbiter | :rs_other | :rs_ghost | :unknown
@@ -28,7 +32,8 @@ defmodule Mongo.ServerDescription do
     max_write_batch_size: non_neg_integer,
     compression: String.t | nil,
     read_only: boolean(),
-    logical_session_timeout: non_neg_integer
+    logical_session_timeout: non_neg_integer,
+    supports_retryable_writes: boolean()
   }
 
   def defaults(map \\ %{}) do
@@ -56,7 +61,8 @@ defmodule Mongo.ServerDescription do
       max_write_batch_size: 100_000,
       compression: nil,
       read_only: false,
-      logical_session_timeout: 30
+      logical_session_timeout: 30,
+      support_retryable_writes: false
     }, map)
   end
 
@@ -69,10 +75,13 @@ defmodule Mongo.ServerDescription do
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#parsing-an-ismaster-response
   def from_is_master(address, rtt, finish_time, is_master_reply) do
+
+    server_type      = determine_server_type(is_master_reply)
+    max_wire_version = is_master_reply["maxWireVersion"] || 0
     %{
       address: address,
       round_trip_time: rtt,
-      type: determine_server_type(is_master_reply),
+      type: server_type,
       last_write_date: get_in(is_master_reply,["lastWrite", "lastWriteDate"]),
       op_time: get_in(is_master_reply, ["lastWrite", "opTime"]),
       last_update_time: finish_time,
@@ -92,7 +101,8 @@ defmodule Mongo.ServerDescription do
       max_write_batch_size: (is_master_reply["maxWriteBatchSize"] || 100_000),
       compression: is_master_reply["compression"],
       read_only: (is_master_reply["readOnly"] || false),
-      logical_session_timeout: is_master_reply["logicalSessionTimeoutMinutes"] || 30
+      logical_session_timeout: is_master_reply["logicalSessionTimeoutMinutes"] || 30,
+      supports_retryable_writes: server_type != :standalone && max_wire_version >= @retryable_wire_version && is_master_reply["logicalSessionTimeoutMinutes"] != nil
     }
   end
 
@@ -109,4 +119,5 @@ defmodule Mongo.ServerDescription do
     end
   end
   defp determine_server_type(_), do: :standalone
+
 end

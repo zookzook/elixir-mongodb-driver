@@ -18,7 +18,7 @@ defmodule Mongo.SessionTest do
 
   @tag :mongo_3_6
   test "simple session insert", %{top: top} do
-    coll = unique_name()
+    coll = unique_collection()
 
     {:ok, session} = Session.start_session(top, :write, [])
     {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"}, session: session)
@@ -96,7 +96,7 @@ defmodule Mongo.SessionTest do
   @tag :mongo_3_6
   test "explicit_sessions", %{top: top} do
 
-    coll = unique_name()
+    coll = unique_collection()
 
     {:ok, session} = Session.start_session(top, :write, [])
     {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"}, session: session)
@@ -263,7 +263,7 @@ defmodule Mongo.SessionTest do
   @tag :mongo_4_2
   test "check unordered bulk with transaction", %{top: top} do
 
-    coll = unique_name()
+    coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Wuff"})
     Mongo.delete_many(top, coll, %{})
 
@@ -291,7 +291,7 @@ defmodule Mongo.SessionTest do
   @tag :mongo_4_2
   test "check invalid unordered bulk with transaction", %{top: top} do
 
-    coll = unique_name()
+    coll = unique_collection()
 
     bulk = coll
            |> UnorderedBulk.new()
@@ -301,6 +301,14 @@ defmodule Mongo.SessionTest do
            |> UnorderedBulk.update_one(%{name: "Greta"}, %{"$set": %{kind: "dog"}})
            |> UnorderedBulk.update_one(%{name: "Tom"}, %{"$set": %{kind: "dog"}})
            |> UnorderedBulk.update_one(%{name: "Waldo"}, %{"$set": %{kind: "dog"}})
+
+    cmd = [
+      configureFailPoint: "failCommand",
+      mode: [times: 1],
+      data: [errorCode: 3, failCommands: ["insert"]]
+    ]
+
+    assert {:ok, _} = Mongo.admin_command(top, cmd)
 
     {:error, [result|_xs]} = Session.with_transaction(top, fn opts ->
 
@@ -313,7 +321,7 @@ defmodule Mongo.SessionTest do
 
     end, w: 1)
 
-    assert 263  == result["code"]
+    assert 3  == result.code
     assert {:ok, 0} == Mongo.count(top, coll, %{})
 
   end
@@ -321,7 +329,7 @@ defmodule Mongo.SessionTest do
   @tag :mongo_4_2
   test "check streaming bulk with transaction", %{top: top} do
 
-    coll = unique_name()
+    coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Wuff"})
     Mongo.delete_many(top, coll, %{})
 
@@ -358,7 +366,7 @@ defmodule Mongo.SessionTest do
 
   @tag :mongo_4_2
   test "check ordered bulk with transaction", %{top: top} do
-    coll = unique_name()
+    coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Wuff"})
     Mongo.delete_many(top, coll, %{})
 

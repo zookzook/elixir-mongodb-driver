@@ -1,5 +1,6 @@
 defmodule Mongo.BulkWritesTest do
-  use MongoTest.Case
+
+  use CollectionCase
 
   alias Mongo.UnorderedBulk
   alias Mongo.OrderedBulk
@@ -7,13 +8,8 @@ defmodule Mongo.BulkWritesTest do
   alias Mongo.BulkOps
   alias Mongo.BulkWriteResult
 
-  setup_all do
-    assert {:ok, pid} = Mongo.TestConnection.connect
-    {:ok, [pid: pid]}
-  end
-
   test "check unordered bulk", top do
-    coll = "dogs" # unique_name()
+    coll = unique_collection()
 
     bulk = coll
            |> UnorderedBulk.new()
@@ -35,7 +31,7 @@ defmodule Mongo.BulkWritesTest do
   end
 
   test "check ordered bulk", top do
-    coll = unique_name()
+    coll = unique_collection()
 
     bulk = coll
            |> OrderedBulk.new()
@@ -58,7 +54,7 @@ defmodule Mongo.BulkWritesTest do
   end
 
   test "check ordered bulk with stream and a buffer of 25 operations", top do
-    coll = unique_name()
+    coll = unique_collection()
 
     1..1000
     |> Stream.map(fn
@@ -74,7 +70,7 @@ defmodule Mongo.BulkWritesTest do
   end
 
   test "check unordered bulk upserts", top do
-    coll = unique_name()
+    coll = unique_collection()
 
     bulk = coll
            |> UnorderedBulk.new()
@@ -94,7 +90,7 @@ defmodule Mongo.BulkWritesTest do
   end
 
   test "check ordered bulk upserts", top do
-    coll = unique_name()
+    coll = unique_collection()
 
     bulk = coll
            |> OrderedBulk.new()
@@ -115,7 +111,7 @@ defmodule Mongo.BulkWritesTest do
   end
 
   test "create one small document and one large 16mb document", top do
-    coll = unique_name()
+    coll = unique_collection()
     max_n = (16*1024*1024) - 44 # 44 bytes for 'key: "big" and v:'
 
 
@@ -144,7 +140,7 @@ defmodule Mongo.BulkWritesTest do
   end
 
   test "create one small document and one too large document", top do
-    coll = unique_name()
+    coll = unique_collection()
     max_n = (16*1024*1024)
 
     a_line_1k = Enum.reduce(1..1_024, "", fn _, acc -> acc <> "A" end)

@@ -3,6 +3,7 @@ defmodule TestUser do
 end
 
 defmodule BSONTest do
+
   use ExUnit.Case, async: true
 
   import BSON, only: [decode: 1]

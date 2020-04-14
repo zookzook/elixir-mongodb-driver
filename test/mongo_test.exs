@@ -1,8 +1,13 @@
 defmodule Mongo.Test do
   use ExUnit.Case
 
+  defmodule TestUser do
+    defstruct name: "John", age: 27
+  end
+
   setup_all do
     assert {:ok, pid} = Mongo.TestConnection.connect
+    Mongo.drop_database(pid)
     {:ok, [pid: pid]}
   end
 

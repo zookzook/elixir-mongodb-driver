@@ -9,7 +9,7 @@ for i in $(seq 1 3); do
 
   if [ $? -ne 0 -a -z "$pid" ]; then
     # >&2 echo "starting mongo server $i"
-    mongod --fork --dbpath tmp/db$i --logpath tmp/db$i/log --port 2700$i --bind_ip 127.0.0.1 \
+    mongod --fork --setParameter enableTestCommands=1 --dbpath tmp/db$i --logpath tmp/db$i/log --port 2700$i --bind_ip 127.0.0.1 \
       --replSet mongodb_test &>/dev/null
 
     if [ $? -ne 0 ]; then

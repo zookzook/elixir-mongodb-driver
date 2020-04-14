@@ -266,7 +266,7 @@ defmodule Mongo.Topology do
              {:ok, connection} <- get_connection(address, state),
               wire_version <- wire_version(address, topology),
             {server_session, new_state} <- checkout_server_session(state),
-            {:ok, session} <- Session.start_link(connection, server_session, type, wire_version, opts) do
+            {:ok, session} <- Session.start_link(self(), connection, server_session, type, wire_version, opts) do
 
           Logger.debug("select_server: connection is #{inspect connection}, server_session is #{inspect server_session}")
           {:reply, {:ok, session}, new_state}
@@ -285,7 +285,7 @@ defmodule Mongo.Topology do
         {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
 
       {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
-        Logger.info("select_server: found #{inspect servers}")
+        Logger.debug("select_server: found #{inspect servers}")
 
         with {:ok, connection} <- servers
                                   |> Enum.take_random(1)

@@ -1,12 +1,17 @@
 defmodule Mongo.ChangeStream do
 
   alias Mongo.Session
+  alias Mongo.Error
 
   import Record, only: [defrecordp: 2]
 
   defstruct [:topology_pid, :session, :doc, :cmd, :on_resume_token, :opts]
 
   def new(topology_pid, cmd, on_resume_token_fun, opts) do
+
+    ## check, if retryable reads are enabled
+    opts = Mongo.retryable_reads(opts)
+
     with new_cmd = Mongo.ReadPreference.add_read_preference(cmd, opts),
          {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
          {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, new_cmd, opts) do
@@ -18,8 +23,15 @@ defmodule Mongo.ChangeStream do
         cmd: cmd,
         opts: opts
       }
+    else
+      {:error, error} ->
+        case Error.should_retry_read(error, cmd, opts) do
+          true -> new(topology_pid, cmd, on_resume_token_fun, Keyword.put(opts, :read_counter, 2))
+          false -> {:error, error}
+        end
     end
   end
+
   defimpl Enumerable do
 
     defrecordp :change_stream, [:resume_token, :op_time, :cmd, :on_resume_token]
@@ -63,6 +75,12 @@ defmodule Mongo.ChangeStream do
            {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, new_cmd, opts)  do
 
         aggregate(topology_pid, session, doc, cmd, fun)
+      else
+        {:error, error} ->
+          case Error.should_retry_read(error, cmd, opts) do
+            true -> aggregate(topology_pid, cmd, fun, Keyword.put(opts, :read_counter, 2))
+            false -> {:error, error}
+          end
       end
     end
 
@@ -102,6 +120,8 @@ defmodule Mongo.ChangeStream do
       end
     end
 
+
+
     @doc """
       Calls the GetCore-Command
       See https://github.com/mongodb/specifications/blob/master/source/find_getmore_killcursors_commands.rst
@@ -118,9 +138,8 @@ defmodule Mongo.ChangeStream do
                  ] |> filter_nils()
 
       with {:ok, %{"operationTime" => op_time,
-        "cursor" => %{"id" => new_cursor_id,
-          "nextBatch" => docs} = cursor,
-        "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, get_more, opts) do
+                   "cursor" => %{"id" => new_cursor_id, "nextBatch" => docs} = cursor,
+                   "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, get_more, opts) do
 
         old_token = change_stream(change_stream, :resume_token)
         change_stream = update_change_stream(change_stream, cursor["postBatchResumeToken"], op_time, List.last(docs))
@@ -134,7 +153,7 @@ defmodule Mongo.ChangeStream do
         {:ok, %{cursor_id: new_cursor_id, docs: docs, change_stream: change_stream}}
 
       else
-        {:error, %Mongo.Error{code: code} = not_resumable} when code == 11601 or code == 136 or code == 237 -> {:error, not_resumable}
+        {:error, %Mongo.Error{resumable: false} = not_resumable} -> {:error, not_resumable}
         {:error, _error} ->
 
           with {:ok, wire_version} <- Mongo.wire_version(topology_pid) do

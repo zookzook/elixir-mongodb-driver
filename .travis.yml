@@ -1,27 +1,27 @@
+dist: bionic
 sudo: required
 language: elixir
 
-elixir:
-  - 1.8
-  - 1.9
+elixir: 1.10.2
+otp_release: 22.0
+
+addons:
+  apt:
+    packages:
+      - python3
+      - python3-pip
 
 install:
-  - wget http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-${MONGODB}.tgz
+  - wget https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu1804-4.4.0-rc0.tgz
   - mkdir ${PWD}/mongodb
-  - tar xzf mongodb-linux-x86_64-${MONGODB}.tgz --strip-components=1 -C ${PWD}/mongodb
+  - tar xzf mongodb-linux-x86_64-ubuntu1804-4.4.0-rc0.tgz --strip-components=1 -C ${PWD}/mongodb
 
 before_script:
+  - pyenv global 3.6
+  - pip3 install --upgrade pip
+  - pip3 install mtools[all]
   - export PATH=${PWD}/mongodb/bin/:$PATH
-  - bash ./start_mongo.bash
-  - mkdir ${PWD}/mongodb/data
-  - ${PWD}/mongodb/bin/mongod --dbpath ${PWD}/mongodb/data --logpath ${PWD}/mongodb/mongodb.log --fork
-
-env:
-  matrix:
-    - MONGODB=3.2.20
-    - MONGODB=3.4.16
-    - MONGODB=3.6.6
-    - MONGODB=ubuntu1604-v4.2-latest
+  - mlaunch init --setParameter enableTestCommands=1 --replicaset --name "rs_1"
 
 script:
   - mix local.hex --force
