@@ -194,6 +194,9 @@ defmodule Mongo.ConnectionTest do
 
   test "auth connection leak" do
     assert capture_log(fn ->
+
+      :timer.sleep(1000)
+
       assert tcp_count() == 6
       Enum.each(1..10, fn _ ->
         connect_auth_invalid()
