@@ -199,6 +199,22 @@ For more information see
 
 * [Mongo.watch_collection](https://hexdocs.pm/mongodb_driver/Mongo.html#watch_collection/5) 
 
+### Inserts
+
+To insert a single document:
+
+```elixir
+Mongo.insert_one(top, "users", %{first_name: "John", last_name: "Smith"})
+```
+
+To insert a list of documents:
+
+```elixir
+Mongo.insert_many(top, "users", [
+  %{first_name: "John", last_name: "Smith"},
+  %{first_name: "Jane", last_name: "Doe"}
+])
+```
 
 ### Bulk writes
 
