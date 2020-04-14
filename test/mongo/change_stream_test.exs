@@ -185,10 +185,8 @@ defmodule Mongo.ChangeStreamTest do
   @tag :mongo_3_6
   test "change stream: watch and resume_after", c do
 
-    top     = c.pid
-    catcher = c.catcher
-
-    me = self()
+    top = c.pid
+    me  = self()
     spawn(fn -> consumer_1(top, me) end)
     spawn(fn -> producer(top) end)
 
