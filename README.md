@@ -371,7 +371,18 @@ and have a look at the test units as well.
 
 ### Command Monitoring
 
-You can watch all events that are triggered while the driver send requests and processes responses.
+You can watch all events that are triggered while the driver send requests and processes responses. You can use the 
+`Mongo.EventHandler` as a starting point. It logs the events from the topic `:commands` (by ignoring the `:isMaster` command)
+to `Logger.info`:
+
+```elixir
+iex> Mongo.EventHandler.start()
+iex> {:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/test")
+{:ok, #PID<0.226.0>}
+iex> Mongo.find_one(conn, "test", %{})
+[info] Received command: %Mongo.Events.CommandStartedEvent{command: [find: "test", ...
+[info] Received command: %Mongo.Events.CommandSucceededEvent{command_name: :find, ...
+```
 
 ## Testing and Travis CI
 
@@ -389,10 +400,9 @@ mlaunch init --setParameter enableTestCommands=1 --replicaset --name "rs_1"
 mix test --exclude ssl --exclude socket
 ``` 
 
-The SSL test suite is enabled by default. You have two options. Either exclude
-the SSL tests or enable SSL on your Mongo server.
+The SSL test suite is disabled by default.
 
-### Disable the SSL tests
+### Enable the SSL tests
 
 `mix test --exclude ssl`
 
@@ -406,7 +416,6 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 
 * For `--sslMode` you can use one of `allowSSL` or `preferSSL`
 * You can enable any other options you want when starting `mongod`
-
 
 ## Special thanks
 

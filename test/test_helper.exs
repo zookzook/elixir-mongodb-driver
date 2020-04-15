@@ -12,7 +12,7 @@ version =
   |> List.to_tuple
 
 options = [ssl: true, socket: true]
-options = if System.get_env("CI") do [tag_sets: true] ++ options else options end
+options = if System.get_env("CI") do [tag_set: true] ++ options else options end
 options = if version < {3, 4, 0} do [mongo_3_4: true] ++ options else options end
 options = if version < {3, 6, 0} do [mongo_3_6: true] ++ options else options end
 options = if version < {4, 2, 0} do [mongo_4_2: true] ++ options else options end

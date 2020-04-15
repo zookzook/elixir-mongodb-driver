@@ -5,33 +5,39 @@ defmodule Mongo.EventHandler do
 
   @all [:commands, :topology]
 
-  def start(opts \\ [:commands]) do
-    Logger.info("Starting EventHandler")
+  def start(opts \\ [topics: [:commands]]) do
     spawn(__MODULE__, :register, [opts])
   end
 
-  def register([]) do
-    register(@all)
-  end
-
   def register(opts) do
-    with true <- opts
+    with true <- (opts[:topics] || @all)
                 |> Enum.map(fn topic -> Registry.register(:events_registry, topic, []) end)
                 |> Enum.all?(fn
                   {:ok, _} -> true
                   _other   -> false
                 end) do
-      listen()
+      listen(opts)
       :ok
     end
   end
 
-  def listen() do
-    # fun.(topic, message)
+  def listen(opts) do
     receive do
+      {:broadcast, :commands, %{command_name: cmd} = message} when cmd != :isMaster ->
+        Logger.info("Received command: " <> (inspect message))
+        listen(opts)
+
+      {:broadcast, :commands, is_master} ->
+        case opts[:is_master] do
+          true -> Logger.info("Received is master:" <> (inspect is_master))
+          _ -> []
+        end
+        listen(opts)
+
       {:broadcast, topic, message} ->
-        Logger.info("Received #{topic}-message:" <> (inspect message))
-        listen()
+        Logger.info("Received #{topic}: " <> (inspect message))
+        listen(opts)
+
       other ->
         Logger.info("Stopping EventHandler received unknown message:" <> inspect other)
     end
