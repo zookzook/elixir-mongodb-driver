@@ -3,7 +3,7 @@ defmodule Mongo.EventHandler do
 
   require Logger
 
-  @all [:commands, :is_master, :topology]
+  @all [:commands, :topology]
 
   def start(opts \\ [:commands]) do
     Logger.info("Starting EventHandler")

@@ -4,7 +4,11 @@ defmodule Mongo.TopologyDescription do
   # of the existing connection API's. It implements the Server Discovery and
   # Monitoring specification, along with the `Mongo.ServerMonitor` module.
 
-  @wire_protocol_range 0..8
+  alias Mongo.Version
+
+  @release_2_4_and_before Version.encode(:release_2_4_and_before)
+  @resumable_initial_sync Version.encode(:release_2_4_and_before)
+  @wire_protocol_range @release_2_4_and_before..@resumable_initial_sync
 
   alias Mongo.ServerDescription
   alias Mongo.ReadPreference
@@ -73,11 +77,9 @@ defmodule Mongo.TopologyDescription do
 
     servers = case topology.type do
       :unknown -> []
-
-      :single -> topology.servers
-
+      :single  -> topology.servers
       :sharded -> mongos_servers(topology)
-      _ ->
+      _        ->
         case {type, topology.type == :replica_set_with_primary} do
           {:read, _}     -> select_replica_set_server(topology, read_preference.mode, read_preference)
           {:write, true} -> select_replica_set_server(topology, :primary, ReadPreference.defaults)
@@ -92,117 +94,140 @@ defmodule Mongo.TopologyDescription do
     end
   end
 
-  defp mongos_servers(topology) do
-    Enum.filter(topology.servers, fn {_, server} -> server.type == :mongos end)
+  defp mongos_servers(%{:servers => servers}) do
+    Enum.filter(servers, fn {_, server} -> server.type == :mongos end)
+  end
+  defp primary_servers(%{:servers => servers}) do
+    Enum.filter(servers, fn {_, server} -> server.type == :rs_primary end)
+  end
+  defp secondary_servers(%{:servers => servers}) do
+    Enum.filter(servers, fn {_, server} -> server.type == :rs_secondary end)
   end
 
-  ## Private Functions
-
+  ##
+  #
+  # Select the primary without without tag_sets or maxStalenessSeconds
+  #
   defp select_replica_set_server(topology, :primary, _read_preference) do
-    Enum.filter(topology.servers, fn {_, server} ->
-      server.type == :rs_primary
-    end)
+    primary_servers(topology)
   end
 
-  defp select_replica_set_server(topology, :primary_preferred, read_preference) do
-    preferred = select_replica_set_server(topology, :primary, read_preference)
-
-    if Enum.empty?(preferred) do
-      select_replica_set_server(topology, :secondary, read_preference)
-    else
-      preferred
-    end
-  end
-
-  defp select_replica_set_server(topology, :secondary_preferred, read_preference) do
-    preferred = select_replica_set_server(topology, :secondary, read_preference)
-
-    if Enum.empty?(preferred) do
-      select_replica_set_server(topology, :primary, read_preference)
-    else
-      preferred
-    end
-  end
-
-  defp select_replica_set_server(topology, mode, read_preference)
-    when mode in [:secondary, :nearest] do
-    topology.servers
-    |> Enum.filter(fn {_, server} ->
-        server.type == :rs_secondary || mode == :nearest
-    end)
-    |> Enum.into(%{})
+  ##
+  #
+  # Select the secondary with without tag_sets or maxStalenessSeconds
+  #
+  defp select_replica_set_server(topology, :secondary, read_preference) do
+    topology
+    |> secondary_servers()
     |> filter_out_stale(topology, read_preference.max_staleness_ms)
     |> select_tag_sets(read_preference.tag_sets)
     |> filter_latency_window(topology.local_threshold_ms)
   end
 
-  defp filter_out_stale(servers, topology, max_staleness_ms) do
-    if max_staleness_ms == 0 || max_staleness_ms == nil do
-      servers
-    else
-      extra = case topology.type do
-        :replica_set_no_primary ->
-          {_, server} =
-            Enum.reduce(servers, {0, nil}, fn {_, server}, {max, max_server} ->
-              if server.last_write_date > max do
-                {server.last_write_date, server}
-              else
-                {max, max_server}
-              end
-            end)
-          server
-        :replica_set_with_primary ->
-          servers
-          |> Enum.filter(fn {_, server} ->
-            server.type == :rs_primary
-          end)
-          |> Enum.at(0)
-      end
-
-      servers
-      |> Enum.filter(fn {_, server} ->
-        case server.type do
-          :rs_secondary ->
-            case topology.type do
-              :replica_set_no_primary ->
-                staleness =
-                  extra.last_write_date + (server.last_update_time - extra.last_update_time) -
-                  server.last_write_date + topology.heartbeat_frequency_ms
-                staleness <= max_staleness_ms
-
-              :replica_set_with_primary ->
-                staleness =
-                  extra.last_write_date - server.last_write_date + topology.heartbeat_frequency_ms
-                staleness <= max_staleness_ms
-            end
-          _ ->
-            true
-        end
-      end)
-      |> Enum.into(%{})
+  ##
+  # From the specs
+  #
+  # 'primaryPreferred' is equivalent to selecting a server with read preference mode 'primary'
+  # (without tag_sets or maxStalenessSeconds), or, if that fails, falling back to selecting with read preference mode
+  # 'secondary' (with tag_sets and maxStalenessSeconds, if provided).
+  defp select_replica_set_server(topology, :primary_preferred, read_preference) do
+    case primary_servers(topology) do
+      []      -> select_replica_set_server(topology, :secondary, read_preference)
+      primary -> primary
     end
   end
 
-  defp select_tag_sets(servers, tag_sets) do
-    if Enum.empty?(tag_sets) do
-      servers
-    else
-      tag_sets
-      |> Enum.reduce_while(servers, fn (tag_set, servers) ->
-        new_servers =
-          Enum.filter(servers, fn {_, server} ->
-            tag_set_ms = MapSet.new(tag_set)
-            server_tag_set_ms = MapSet.new(server.tag_set)
-            MapSet.subset?(tag_set_ms, server_tag_set_ms)
-          end)
-        if Enum.empty?(new_servers) do
-          {:cont, servers}
-        else
-          {:halt, new_servers}
-        end
-      end)
-      |> Enum.into(%{})
+  ##
+  # From the specs
+  # 'secondaryPreferred' is the inverse: selecting with mode 'secondary' (with tag_sets and maxStalenessSeconds) and
+  # falling back to selecting with mode 'primary' (without tag_sets or maxStalenessSeconds).
+  #
+  defp select_replica_set_server(topology, :secondary_preferred, read_preference) do
+    case select_replica_set_server(topology, :secondary, read_preference) do
+      []        -> primary_servers(topology)
+      secondary -> secondary
     end
+  end
+
+  ##
+  # From the specs:
+  #
+  # The term 'nearest' is unfortunate, as it implies a choice based on geographic locality or absolute lowest latency, neither of which are true.
+  #
+  # Instead, and unlike the other read preference modes, 'nearest' does not favor either primaries or secondaries;
+  # instead all servers are candidates and are filtered by tag_sets and maxStalenessSeconds.
+  defp select_replica_set_server(%{:servers => servers} = topology, :nearest, read_preference) do
+    servers
+    |> filter_out_stale(topology, read_preference.max_staleness_ms)
+    |> select_tag_sets(read_preference.tag_sets)
+    |> filter_latency_window(topology.local_threshold_ms)
+  end
+
+  defp filter_out_stale(servers, _topology, nil), do: servers
+  defp filter_out_stale(servers, _topology, 0), do: servers
+  defp filter_out_stale(servers, topology, max_staleness_ms) do
+
+    {_, primary} = case topology.type do
+      :replica_set_no_primary   -> find_max_secondary(servers)
+      :replica_set_with_primary -> find_primary(topology.servers)
+    end
+
+    servers
+    |> Enum.filter(fn
+      {_, %{type: :rs_secondary} = secondary} -> calc_staleness(primary, secondary, topology) < max_staleness_ms
+      {_, _other}                             -> true
+    end)
+    |> Enum.into(%{})
+  end
+
+  ##
+  # find the primary server
+  #
+  defp find_primary(servers) do
+    Enum.find(servers, fn {_, %{type: type}} -> type == :rs_primary end)
+  end
+  ##
+  # find server with the max last write date!
+  #
+  defp find_max_secondary(servers) do
+    Enum.reduce(servers, {0, nil}, fn {_, server}, {max, max_server} ->
+      case server.last_write_date > max  do
+        true  -> {server.last_write_date, server}
+        false -> {max, max_server}
+      end
+    end)
+  end
+  ##
+  # Don't crash...
+  #
+  defp calc_staleness(nil, _secondary, _topology) do
+    0
+  end
+  ## When there is no known primary, a secondary S's staleness is estimated with this formula:
+  ##
+  ## SMax.lastWriteDate - S.lastWriteDate + heartbeatFrequencyMS
+  defp calc_staleness(smax, secondary, %{type: :replica_set_no_primary, heartbeat_frequency_ms: freq}) do
+    DateTime.diff(smax.last_write_date, secondary.last_write_date, :millisecond) + freq
+  end
+  ## When there is a known primary, a secondary S's staleness is estimated with this formula:
+  ##
+  ## (S.lastUpdateTime - S.lastWriteDate) - (P.lastUpdateTime - P.lastWriteDate) + heartbeatFrequencyMS
+  ##
+  defp calc_staleness(primary, secondary, %{type: :replica_set_with_primary, heartbeat_frequency_ms: freq}) do
+    DateTime.diff(secondary.last_update_time, secondary.last_write_date, :millisecond) + DateTime.diff(primary.last_update_time, primary.last_write_date, :millisecond) + freq
+  end
+
+  defp select_tag_sets(servers, []) do
+    servers
+  end
+  defp select_tag_sets(servers, tag_sets) do
+    tags = MapSet.new(tag_sets |> Enum.map(fn {key,value} -> {to_string(key), value} end))
+    Enum.reduce(servers, [], fn
+      {address, server}, acc -> case MapSet.subset?(tags, MapSet.new(server.tag_set)) do
+        true  -> [{address, server} | acc]
+        false -> acc
+       end
+    end)
   end
 
   defp filter_latency_window(servers, local_threshold_ms) do

@@ -11,8 +11,8 @@ version =
   |> Enum.map(&elem(Integer.parse(&1), 0))
   |> List.to_tuple
 
-options = []
-options = if System.get_env("CI") do [ssl: true, socket: true] ++ options else options end
+options = [ssl: true, socket: true]
+options = if System.get_env("CI") do [tag_sets: true] ++ options else options end
 options = if version < {3, 4, 0} do [mongo_3_4: true] ++ options else options end
 options = if version < {3, 6, 0} do [mongo_3_6: true] ++ options else options end
 options = if version < {4, 2, 0} do [mongo_4_2: true] ++ options else options end

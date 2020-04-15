@@ -83,6 +83,15 @@ defmodule Mongo.Events do
     ]
   end
 
+
+  ##
+  #
+  defmodule ServerSelectionEmptyEvent do
+    @moduledoc false
+    defstruct [:action, :cmd_type, :topology, :opts]
+  end
+
+
   # Published when server description changes, but does NOT include changes to
   # the RTT
   defmodule ServerDescriptionChangedEvent do

@@ -5,7 +5,8 @@ defmodule Mongo.Topology do
 
   use GenServer
   alias Mongo.Events.{ServerDescriptionChangedEvent, ServerOpeningEvent, ServerClosedEvent,
-                      TopologyDescriptionChangedEvent, TopologyOpeningEvent, TopologyClosedEvent}
+                      TopologyDescriptionChangedEvent, TopologyOpeningEvent, TopologyClosedEvent,
+                      ServerSelectionEmptyEvent}
   alias Mongo.TopologyDescription
   alias Mongo.ServerDescription
   alias Mongo.Monitor
@@ -99,7 +100,8 @@ defmodule Mongo.Topology do
               type: type,
               set_name: set_name,
               servers: servers,
-              local_threshold_ms: local_threshold_ms
+              local_threshold_ms: local_threshold_ms,
+              heartbeat_frequency_ms: @heartbeat_frequency_ms
             }),
             seeds: seeds,
             opts: opts,
@@ -252,23 +254,20 @@ defmodule Mongo.Topology do
   end
 
   # checkout a new session
-  def handle_call({:checkout_session, cmd_type, type, opts}, from, %{:topology => topology, :waiting_pids => waiting, connection_pools: pools} = state) do
+  def handle_call({:checkout_session, cmd_type, type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
 
     case TopologyDescription.select_servers(topology, cmd_type, opts) do
       :empty ->
-        Logger.debug("select_server: empty")
+        Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :checkout_session, cmd_type: cmd_type, topology: topology, opts: opts})
         {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
 
       {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
-        Logger.debug("select_server: found #{inspect servers}, pools: #{inspect pools}")
-
         with address <- Enum.take_random(servers, 1),
              {:ok, connection} <- get_connection(address, state),
               wire_version <- wire_version(address, topology),
             {server_session, new_state} <- checkout_server_session(state),
             {:ok, session} <- Session.start_link(self(), connection, server_session, type, wire_version, opts) do
 
-          Logger.debug("select_server: connection is #{inspect connection}, server_session is #{inspect server_session}")
           {:reply, {:ok, session}, new_state}
         end
 
@@ -278,24 +277,19 @@ defmodule Mongo.Topology do
     end
   end
 
-  def handle_call({:select_server, type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
-    case TopologyDescription.select_servers(topology, type, opts) do
+  def handle_call({:select_server, cmd_type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
+    case TopologyDescription.select_servers(topology, cmd_type, opts) do
       :empty ->
-        Logger.debug("select_server: empty")
+        Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :select_server, cmd_type: cmd_type, topology: topology, opts: opts})
         {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
 
       {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
-        Logger.debug("select_server: found #{inspect servers}")
-
         with {:ok, connection} <- servers
                                   |> Enum.take_random(1)
                                   |> get_connection(state) do
-          Logger.debug("select_server: connection is #{inspect connection}")
-
           {:reply, {:ok, connection}, state}
         end
       error ->
-        Logger.debug("select_servers: #{inspect error}")
         {:reply, error, state} ## in case of an error, just return the error
     end
   end
@@ -303,21 +297,15 @@ defmodule Mongo.Topology do
   def handle_call(:limits, _from, %{:topology => topology} = state) do
     case TopologyDescription.select_servers(topology, :write, []) do
       :empty ->
-        Logger.debug("select_server: empty")
+        Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :limits, cmd_type: :write, topology: topology})
         {:reply, nil, state}
-
       {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
-        Logger.debug("select_server: found #{inspect servers}")
-
         with {:ok, limits} <- servers
                               |> Enum.take_random(1)
                               |> get_limits(topology) do
-          Logger.debug("select_server: connection is #{inspect limits}")
-
           {:reply, {:ok, limits}, state}
         end
       error ->
-        Logger.debug("select_servers: #{inspect error}")
         {:reply, error, state} ## in case of an error, just return the error
     end
   end
@@ -325,16 +313,14 @@ defmodule Mongo.Topology do
   def handle_call(:wire_version, _from, %{:topology => topology} = state) do
     case TopologyDescription.select_servers(topology, :write, []) do
       :empty ->
-        Logger.debug("select_server: empty")
+        Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :wire_version, cmd_type: :write, topology: topology})
         {:reply, nil, state}
 
       {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
-        Logger.debug("select_server: found #{inspect servers}")
         with address <- Enum.take_random(servers, 1) do
           {:reply, {:ok, wire_version(address, topology)}, state}
         end
       error ->
-        Logger.debug("select_servers: #{inspect error}")
         {:reply, error, state} ## in case of an error, just return the error
     end
   end

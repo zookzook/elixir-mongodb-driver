@@ -7,8 +7,9 @@ defmodule EventCatcher do
   alias Mongo.Events.CommandFailedEvent
   alias Mongo.Events.RetryReadEvent
   alias Mongo.Events.RetryWriteEvent
+  alias Mongo.Events.ServerSelectionEmptyEvent
 
-  @all [:commands, :is_master, :topology]
+  @all [:commands, :topology]
 
   def start_link(topics \\ @all) do
     GenServer.start_link(__MODULE__, topics)
@@ -40,6 +41,10 @@ defmodule EventCatcher do
 
   def retry_write_events(pid) do
     GenServer.call(pid, :retry_write_events)
+  end
+
+  def empty_selection_events(pid) do
+    GenServer.call(pid, :empty_selection_events)
   end
 
   def init(topics) do
@@ -83,7 +88,17 @@ defmodule EventCatcher do
     end), state}
   end
 
+  def handle_call(:empty_selection_events, _from, state) do
+    {:reply, state |> Enum.filter(fn
+      %ServerSelectionEmptyEvent{} -> true
+      _other                       -> false
+    end), state}
+  end
+
   def handle_info({:broadcast, :commands, msg}, state) do
+    {:noreply, [msg|state]}
+  end
+  def handle_info({:broadcast, :topology, %ServerSelectionEmptyEvent{} = msg}, state) do
     {:noreply, [msg|state]}
   end
   def handle_info(_ignored, state) do

@@ -164,13 +164,16 @@ defmodule Mongo.Monitor do
 
   defp call_is_master_command(conn_pid, opts) do
 
-    start_time  = System.monotonic_time
-    result      = Mongo.exec_command(conn_pid, [isMaster: 1], opts)
-    finish_time = System.monotonic_time
-    rtt         = System.convert_time_unit(finish_time - start_time, :native, :millisecond)
-    finish_time = System.convert_time_unit(finish_time, :native, :millisecond)
+    {rtt, result} = :timer.tc(fn -> Mongo.exec_command(conn_pid, [isMaster: 1], opts) end)
 
-    {result, finish_time, rtt}
+    finish_time = DateTime.utc_now()
+    #start_time  = System.monotonic_time
+    #result      = Mongo.exec_command(conn_pid, [isMaster: 1], opts)
+    #finish_time = System.monotonic_time
+    #rtt         = System.convert_time_unit(finish_time - start_time, :native, :millisecond)
+    #finish_time = System.convert_time_unit(finish_time, :native, :millisecond)
+
+    {result, finish_time, div(rtt, 1000)}
   end
 
   defp notify_error(rtt, error, conn_pid) do

@@ -52,13 +52,9 @@ BSON symbols can only be decoded.
 
 ### Installation:
 
-Add `mongodb_driver` to your mix.exs `deps` and `:applications`.
+Add `mongodb_driver` to your mix.exs `deps`.
 
 ```elixir
-def application do
-  [applications: [:mongodb_driver]]
-end
-
 defp deps do
   [{:mongodb_driver, "~> 0.6"}]
 end
@@ -171,6 +167,27 @@ you'll want to add this cipher to your `ssl_opts`:
       ]
 )
 ```
+
+### Find
+
+Using `$and`
+
+```elixir
+Mongo.find(:mongo, "users", %{"$and" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
+```
+
+Using `$or`
+
+```elixir
+Mongo.find(:mongo, "users", %{"$or" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
+```
+
+Using `$in`
+
+```elixir
+Mongo.find(:mongo, "users", %{email: %{"$in" => ["my@email.com", "other@email.com"]}})
+```
+
 ### Change streams
 
 Change streams exist in replica set and cluster systems and tell you about changes to collections. 
@@ -351,25 +368,10 @@ For more information see:
 
 and have a look at the test units as well.
 
-### Examples
 
-Using `$and`
+### Command Monitoring
 
-```elixir
-Mongo.find(:mongo, "users", %{"$and" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
-```
-
-Using `$or`
-
-```elixir
-Mongo.find(:mongo, "users", %{"$or" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
-```
-
-Using `$in`
-
-```elixir
-Mongo.find(:mongo, "users", %{email: %{"$in" => ["my@email.com", "other@email.com"]}})
-```
+You can watch all events that are triggered while the driver send requests and processes responses.
 
 ## Testing and Travis CI
 
@@ -410,32 +412,17 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 
 Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-driver) for providing a free JetBrains Open Source license for their complete toolbox.
 
-This is an alternative development from the [original](https://github.com/ankhers/mongodb), which was the starting point
-and already contained very nice code.
-
 The [Documentation](https://hexdocs.pm/mongodb_driver/readme.html) is online, but currently not up to date. 
 This will be done as soon as possible. In the meantime, look in the source code. Especially 
 for the individual options.  
 
-## Motivation
-
-  * [x] I have made a number of changes to understand how the driver works. For example, I reduced cursor modules to just one cursor and
-        replaced some op code calls with command calls.
-  * [x] Simplify code: remove raw_find (raw_find called from cursors, raw_find called with "$cmd"), so raw_find is more calling a command than a find query.
-  * [x] Better support for new MongoDB version, for example the ability to use views
-  * [x] Upgraded to ([DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
-  * [x] Removed depreacated op codes ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#request-opcodes))
-  * [x] Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
-  * [x] Added bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
-  * [x] Add support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
-  * [x] Add support for driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
-  * [ ] Add support for `op_compressed` ([See](https://github.com/mongodb/specifications/blob/master/source/compression/OP_COMPRESSED.rst))
-  
+This driver is based on [original](https://github.com/ankhers/mongodb).
+ 
 ## License
 
 Copyright 2015 Eric Meadows-Jönsson and Justin Wood
 
-Copyright 2019 Michael Maier
+Copyright 2019 - 2020 Michael Maier
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
