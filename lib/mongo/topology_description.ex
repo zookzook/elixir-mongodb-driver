@@ -69,28 +69,49 @@ defmodule Mongo.TopologyDescription do
   def select_servers(%{:compatible => false}, _type, _opts) do
     {:error, :invalid_wire_version}
   end
-  def select_servers(topology, type, opts) do
+  def select_servers(topology, :write, opts) do
+    servers = case topology.type do
+      :single                   -> topology.servers
+      :sharded                  -> mongos_servers(topology)
+      :replica_set_with_primary -> primary_servers(topology)
+      _                         -> []
+    end
+
+    addr = servers
+           |> Enum.map(fn {server, _} -> server end)
+           |> Enum.take_random(1)
+
+    case addr do
+      [] -> :empty
+      _  -> {:ok, {addr, opts}}
+    end
+  end
+  def select_servers(topology, :read, opts) do
 
     read_preference = opts
                       |> Keyword.get(:read_preference)
-                      |> ReadPreference.defaults()
+                      |> ReadPreference.primary()
 
-    servers = case topology.type do
-      :unknown -> []
-      :single  -> topology.servers
-      :sharded -> mongos_servers(topology)
-      _        ->
-        case {type, topology.type == :replica_set_with_primary} do
-          {:read, _}     -> select_replica_set_server(topology, read_preference.mode, read_preference)
-          {:write, true} -> select_replica_set_server(topology, :primary, ReadPreference.defaults)
-          _              ->  []
-        end
+    {servers, read_prefs} = case topology.type do
+      :unknown -> {[], nil}
+      :single  -> {topology.servers, nil}
+      :sharded -> {mongos_servers(topology), ReadPreference.mongos(read_preference)}
+      _        -> {select_replica_set_server(topology, read_preference.mode, read_preference), nil}
     end
 
+    opts = case read_prefs do
+      nil   -> Keyword.delete(opts, :read_preference)
+      prefs -> Keyword.put(opts, :read_preference, prefs)
+    end
+
+    addr = servers
+           |> Enum.map(fn {server, _} -> server end)
+           |> Enum.take_random(1)
+
     # check now three possible cases
-    case Enum.map(servers, fn {server, _} -> server end) do
-      []        -> :empty
-      servers   -> {:ok, servers}
+    case addr do
+      [] -> :empty
+      _  -> {:ok, {addr, opts}}
     end
   end
 

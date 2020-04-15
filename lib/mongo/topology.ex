@@ -253,7 +253,9 @@ defmodule Mongo.Topology do
     {:reply, Map.fetch(state.connection_pools, address), state}
   end
 
+  ##
   # checkout a new session
+  #
   def handle_call({:checkout_session, cmd_type, type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
 
     case TopologyDescription.select_servers(topology, cmd_type, opts) do
@@ -261,13 +263,12 @@ defmodule Mongo.Topology do
         Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :checkout_session, cmd_type: cmd_type, topology: topology, opts: opts})
         {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
 
-      {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
-        with address <- Enum.take_random(servers, 1),
-             {:ok, connection} <- get_connection(address, state),
-              wire_version <- wire_version(address, topology),
-            {server_session, new_state} <- checkout_server_session(state),
-            {:ok, session} <- Session.start_link(self(), connection, server_session, type, wire_version, opts) do
-
+      ## found
+      {:ok, {address, opts}} ->
+        with {:ok, connection}           <- get_connection(address, state),
+             wire_version                <- wire_version(address, topology),
+             {server_session, new_state} <- checkout_server_session(state),
+             {:ok, session}              <- Session.start_link(self(), connection, server_session, type, wire_version, opts) do
           {:reply, {:ok, session}, new_state}
         end
 
@@ -283,10 +284,8 @@ defmodule Mongo.Topology do
         Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :select_server, cmd_type: cmd_type, topology: topology, opts: opts})
         {:noreply, %{state | waiting_pids: [from | waiting]}} ## no servers available, wait for connection
 
-      {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
-        with {:ok, connection} <- servers
-                                  |> Enum.take_random(1)
-                                  |> get_connection(state) do
+      {:ok, {address, _opts}} ->
+        with {:ok, connection} <- get_connection(address, state) do
           {:reply, {:ok, connection}, state}
         end
       error ->
@@ -299,10 +298,8 @@ defmodule Mongo.Topology do
       :empty ->
         Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :limits, cmd_type: :write, topology: topology})
         {:reply, nil, state}
-      {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
-        with {:ok, limits} <- servers
-                              |> Enum.take_random(1)
-                              |> get_limits(topology) do
+      {:ok, {address, _opts}} ->
+        with {:ok, limits} <- get_limits(address, topology) do
           {:reply, {:ok, limits}, state}
         end
       error ->
@@ -316,10 +313,8 @@ defmodule Mongo.Topology do
         Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :wire_version, cmd_type: :write, topology: topology})
         {:reply, nil, state}
 
-      {:ok, servers} ->                ## found, select randomly a server and return its connection_pool
-        with address <- Enum.take_random(servers, 1) do
-          {:reply, {:ok, wire_version(address, topology)}, state}
-        end
+      {:ok, {address, _opts}} ->
+        {:reply, {:ok, wire_version(address, topology)}, state}
       error ->
         {:reply, error, state} ## in case of an error, just return the error
     end

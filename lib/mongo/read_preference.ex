@@ -37,17 +37,17 @@ defmodule Mongo.ReadPreference do
     hedge: BSON.document
   }
 
-  @default %{
+  @primary %{
     mode: :primary,
     tag_sets: [],
     max_staleness_ms: 0
   }
 
-  def defaults(map \\ nil)
-  def defaults(map) when is_map(map) do
-    Map.merge(@default, map)
+  def primary(map \\ nil)
+  def primary(map) when is_map(map) do
+    Map.merge(@primary, map)
   end
-  def defaults(_), do: @default
+  def primary(_), do: @primary
 
   @doc """
   Add read preference to the cmd
@@ -56,7 +56,7 @@ defmodule Mongo.ReadPreference do
 
     read_preference = opts
                       |> Keyword.get(:read_preference)
-                      |> Mongo.ReadPreference.defaults()
+                      |> Mongo.ReadPreference.primary()
                       |> transform()
 
     cmd ++ ["$readPreference": read_preference]
@@ -85,5 +85,33 @@ defmodule Mongo.ReadPreference do
     |> filter_nils()
 
   end
+
+  ##
+  # Therefore, when sending queries to a mongos, the following rules apply:
+  #
+  # For mode 'primary', drivers MUST NOT set the slaveOK wire protocol flag and MUST NOT use $readPreference
+  def mongos(%{mode: :primay}) do
+    nil
+  end
+  # For mode 'secondary', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
+  def mongos(%{mode: :secondary} = config) do
+    transform(config)
+  end
+  # For mode 'primaryPreferred', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
+  def mongos(%{mode: :primary_preferred} = config) do
+    transform(config)
+  end
+  # For mode 'secondaryPreferred', drivers MUST set the slaveOK wire protocol flag. If the read preference contains a
+  # non-empty tag_sets parameter, maxStalenessSeconds is a positive integer, or the hedge parameter is non-empty,
+  # drivers MUST use $readPreference; otherwise, drivers MUST NOT use $readPreference
+  def mongos(%{mode: :secondary_preferred} = config) do
+    transform(config)
+  end
+  # For mode 'nearest', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
+  def mongos(%{mode: :nearest} = config) do
+    transform(config)
+  end
+
+
 
 end

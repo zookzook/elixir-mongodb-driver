@@ -11,7 +11,7 @@ defmodule Mongo.TopologyTest do
     for mode <- @modes do
       assert {:ok, %Mongo.InsertOneResult{inserted_id: new_id}} = Mongo.insert_one(mongo_pid, "test", %{topology_test: 1}, w: 3)
 
-      rp = Mongo.ReadPreference.defaults(%{mode: mode})
+      rp = Mongo.ReadPreference.primary(%{mode: mode})
       assert [%{"_id" => ^new_id, "topology_test" => 1}] =
                mongo_pid
                |> Mongo.find("test", %{_id: new_id}, read_preference: rp, slave_ok: mode in [:secondary, :secondary_preferred])

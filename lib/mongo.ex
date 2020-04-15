@@ -392,13 +392,11 @@ defmodule Mongo do
   """
   def issue_command(topology_pid, cmd, :read, opts) do
 
-    new_cmd = ReadPreference.add_read_preference(cmd, opts)
-
     ## check, if retryable reads are enabled
     opts = Mongo.retryable_reads(opts)
 
     with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
-         result <- exec_command_session(session, new_cmd, opts),
+         result <- exec_command_session(session, cmd, opts),
          :ok <- Session.end_implict_session(topology_pid, session) do
       case result do
         {:error, error} ->
