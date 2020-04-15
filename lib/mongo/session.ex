@@ -100,10 +100,13 @@ defmodule Mongo.Session do
   import Mongo.WriteConcern
 
   alias BSON.Timestamp
+  alias Mongo.Error
   alias Mongo.ReadPreference
   alias Mongo.Session
   alias Mongo.Session.ServerSession
   alias Mongo.Topology
+
+  @retry_timeout_seconds 120
 
   @type t :: pid()
 
@@ -291,19 +294,21 @@ defmodule Mongo.Session do
     with {:ok, session} <- Session.start_session(topology_pid, :write, opts),
          :ok            <- Session.start_transaction(session) do
 
-      with {:ok, result} <- run_function(fun, Keyword.merge(opts, session: session)) do
-        commit_transaction(session)
+      with {:ok, result} <- run_function(fun, Keyword.merge(opts, session: session)),
+           commit_result <- commit_transaction(session) do
+
         end_session(topology_pid, session)
-        {:ok, result}
+        case commit_result do
+          :ok    -> {:ok, result}
+          error -> error
+        end
       else
         error ->
           abort_transaction(session)
           end_session(topology_pid, session)
           error
       end
-
     end
-
   end
 
   ##
@@ -469,7 +474,11 @@ defmodule Mongo.Session do
     {:next_state, :transaction_committed, :ok}
   end
   def handle_call_event(:commit_transaction, :transaction_in_progress, data) do
-    {:next_state, :transaction_committed, run_commit_command(data)}
+    with :ok <- run_commit_command(data) do
+      {:next_state, :transaction_committed, :ok}
+      else
+      error -> {:keep_state_and_data, error}
+    end
   end
   def handle_call_event(:abort_transaction, :starting_transaction, _data) do
     {:next_state, :transaction_aborted, :ok}
@@ -514,21 +523,42 @@ defmodule Mongo.Session do
   ##
   # Run the commit transaction command.
   #
-  defp run_commit_command(%Session{conn: conn, recovery_token: recovery_token, server_session: %ServerSession{session_id: id, txn_num: txn_num}, opts: opts}) do
+  defp run_commit_command(session) do
+    run_commit_command(session, DateTime.utc_now(), :first)
+  end
+
+  defp run_commit_command(%Session{conn: conn,
+    recovery_token: recovery_token,
+    server_session: %ServerSession{session_id: id, txn_num: txn_num},
+    opts: opts} = session, time, n) do
+
+    ##
+    # Drivers should apply a majority write concern when retrying commitTransaction to guard against a transaction being applied twice.
+    write_concern = case n do
+      :first -> write_concern(opts)
+      _      -> Map.put(write_concern(opts) || %{}, :w, :majority)
+    end
 
     cmd = [
             commitTransaction: 1,
             lsid: %{id: id},
             txnNumber: %BSON.LongNumber{value: txn_num},
             autocommit: false,
-            writeConcern: write_concern(opts),
+            writeConcern: write_concern, ## todo: w:majority
             maxTimeMS: max_time_ms(opts),
            recoveryToken: recovery_token
           ] |> filter_nils()
 
-    _doc = Mongo.exec_command(conn, cmd, database: "admin")
-
-    :ok
+   with {:ok, _doc} <- Mongo.exec_command(conn, cmd, database: "admin") do
+     :ok
+   else
+      {:error, error} ->
+        try_again = Error.has_label(error, "UnknownTransactionCommitResult") && DateTime.diff(DateTime.utc_now(), time, :second) < @retry_timeout_seconds
+        case try_again do
+          true  -> run_commit_command(session, time, :retry)
+          false -> {:error, error}
+        end
+    end
   end
 
   defp max_time_ms(opts) do

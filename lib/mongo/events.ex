@@ -67,7 +67,6 @@ defmodule Mongo.Events do
 
   defmodule RetryReadEvent do
     @moduledoc false
-
     defstruct [
       :command,         ## Returns the command.
       :command_name,    ## Returns the command name.

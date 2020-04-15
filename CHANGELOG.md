@@ -6,6 +6,7 @@
     * refactored the test cases
     * now using mtools for a MongoDB deployment in the travis ci environment
     * travis ci uses only the latest MongoDB version [The failCommand](https://github.com/mongodb/mongo/wiki/The-%22failCommand%22-fail-point)
+    * `Session.commit_transaction` returns now `:ok` or an error `{:error, %Mongo.Error{}}`
 
 * Bugfixes
     * Using `max_staleness_ms` > 0 results in a crash

@@ -108,6 +108,11 @@ defmodule Mongo.Error do
   def should_retry_write(_error, _cmd, _opts) do
     false
   end
+
+  def has_label(%Mongo.Error{error_labels: []}, _label), do: false
+  def has_label(%Mongo.Error{error_labels: labels}, label) do
+    Enum.any?(labels, fn l -> l == label end)
+  end
 end
 
 defmodule Mongo.WriteError do
