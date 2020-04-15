@@ -19,6 +19,34 @@ defmodule Mongo.TopologyDescriptionTest do
     assert {:ok, {^single_server, _}} = TopologyDescription.select_servers(single(), :read, opts)
   end
 
+
+  test "shared server selection" do
+    sharded_server = "localhost:27017"
+
+    assert {:ok, {^sharded_server, []}} = TopologyDescription.select_servers(sharded(), :write, [])
+
+    opts = [
+      read_preference: ReadPreference.primary(%{mode: :primary})
+    ]
+    assert {:ok, {^sharded_server, []}} = TopologyDescription.select_servers(sharded(), :read, opts)
+    opts = [
+      read_preference: ReadPreference.primary(%{mode: :secondary})
+    ]
+    assert {:ok, {^sharded_server, [{:read_preference, [mode: :secondary, tag_sets: [], maxStalenessSeconds: 0]}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
+    opts = [
+      read_preference: ReadPreference.primary(%{mode: :primary_preferred})
+    ]
+    assert {:ok, {^sharded_server, [{:read_preference, [mode: :primaryPreferred, tag_sets: [], maxStalenessSeconds: 0]}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
+    opts = [
+      read_preference: ReadPreference.primary(%{mode: :secondary_preferred})
+    ]
+    assert {:ok, {^sharded_server, [{:read_preference, [mode: :secondaryPreferred, tag_sets: [], maxStalenessSeconds: 0]}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
+    opts = [
+      read_preference: ReadPreference.primary(%{mode: :nearest})
+    ]
+    assert {:ok, {^sharded_server, [{:read_preference, [mode: :nearest, tag_sets: [], maxStalenessSeconds: 0]}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
+  end
+
   test "replica set server selection" do
     all_hosts = ["localhost:27018", "localhost:27019", "localhost:27020"]
     master = "localhost:27018"

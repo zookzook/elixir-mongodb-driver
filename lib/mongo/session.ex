@@ -99,10 +99,11 @@ defmodule Mongo.Session do
   import Keywords
   import Mongo.WriteConcern
 
-  alias Mongo.Session.ServerSession
-  alias Mongo.Session
-  alias Mongo.Topology
   alias BSON.Timestamp
+  alias Mongo.ReadPreference
+  alias Mongo.Session
+  alias Mongo.Session.ServerSession
+  alias Mongo.Topology
 
   @type t :: pid()
 
@@ -430,7 +431,10 @@ defmodule Mongo.Session do
       _     -> [lsid: %{id: id}, readConcern: read_concern(data, Keyword.get(cmd, :readConcern))]
     end
 
-    cmd = Keyword.merge(cmd, options) |> filter_nils()
+    cmd = cmd
+          |> Keyword.merge(options)
+          |> ReadPreference.add_read_preference(opts)
+          |> filter_nils()
 
     {:keep_state_and_data, {:ok, conn, cmd}}
   end

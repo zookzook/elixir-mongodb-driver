@@ -96,7 +96,7 @@ defmodule Mongo.TopologyDescription do
       :unknown -> {[], nil}
       :single  -> {topology.servers, nil}
       :sharded -> {mongos_servers(topology), ReadPreference.mongos(read_preference)}
-      _        -> {select_replica_set_server(topology, read_preference.mode, read_preference), nil}
+      _        -> {select_replica_set_server(topology, read_preference.mode, read_preference), ReadPreference.slave_ok(read_preference)}
     end
 
     opts = case read_prefs do

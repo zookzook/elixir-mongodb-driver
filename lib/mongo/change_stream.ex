@@ -12,9 +12,8 @@ defmodule Mongo.ChangeStream do
     ## check, if retryable reads are enabled
     opts = Mongo.retryable_reads(opts)
 
-    with new_cmd = Mongo.ReadPreference.add_read_preference(cmd, opts),
-         {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
-         {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, new_cmd, opts) do
+    with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
+         {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
       %Mongo.ChangeStream{
         topology_pid: topology_pid,
         session: session,
@@ -70,9 +69,8 @@ defmodule Mongo.ChangeStream do
 
     def aggregate(topology_pid, cmd, fun, opts) do
 
-      with new_cmd = Mongo.ReadPreference.add_read_preference(cmd, opts),
-           {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
-           {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, new_cmd, opts)  do
+      with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
+           {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts)  do
 
         aggregate(topology_pid, session, doc, cmd, fun)
       else

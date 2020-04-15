@@ -53,13 +53,60 @@ defmodule Mongo.ReadPreference do
   Add read preference to the cmd
   """
   def add_read_preference(cmd, opts) do
+    case Keyword.get(opts, :read_preference) do
+      nil  -> cmd
+      pref -> cmd ++ ["$readPreference": pref]
+    end
+  end
 
-    read_preference = opts
-                      |> Keyword.get(:read_preference)
-                      |> Mongo.ReadPreference.primary()
-                      |> transform()
+  @doc """
+  From the specs:
 
-    cmd ++ ["$readPreference": read_preference]
+  Use of slaveOk
+
+  There are two usages of slaveOK:
+
+  * A driver query parameter that predated read preference modes and tag set lists.
+  * A wire protocol flag on OP_QUERY operations
+
+  """
+  def slave_ok(%{:mode => :primary}) do
+    %{:mode => :primary}
+  end
+  def slave_ok(config) do
+
+    mode = case config[:mode] do
+      :primary_preferred   -> :primaryPreferred
+      :secondary_preferred -> :secondaryPreferred
+      other                -> other
+    end
+
+    filter_nils([mode: mode, tag_sets: config[:tag_sets]])
+  end
+  ##
+  # Therefore, when sending queries to a mongos, the following rules apply:
+  #
+  # For mode 'primary', drivers MUST NOT set the slaveOK wire protocol flag and MUST NOT use $readPreference
+  def mongos(%{mode: :primary}) do
+    nil
+  end
+  # For mode 'secondary', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
+  def mongos(%{mode: :secondary} = config) do
+    transform(config)
+  end
+  # For mode 'primaryPreferred', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
+  def mongos(%{mode: :primary_preferred} = config) do
+    transform(config)
+  end
+  # For mode 'secondaryPreferred', drivers MUST set the slaveOK wire protocol flag. If the read preference contains a
+  # non-empty tag_sets parameter, maxStalenessSeconds is a positive integer, or the hedge parameter is non-empty,
+  # drivers MUST use $readPreference; otherwise, drivers MUST NOT use $readPreference
+  def mongos(%{mode: :secondary_preferred} = config) do
+    transform(config)
+  end
+  # For mode 'nearest', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
+  def mongos(%{mode: :nearest} = config) do
+    transform(config)
   end
 
   defp transform(%{:mode => :primary}) do
@@ -85,33 +132,5 @@ defmodule Mongo.ReadPreference do
     |> filter_nils()
 
   end
-
-  ##
-  # Therefore, when sending queries to a mongos, the following rules apply:
-  #
-  # For mode 'primary', drivers MUST NOT set the slaveOK wire protocol flag and MUST NOT use $readPreference
-  def mongos(%{mode: :primay}) do
-    nil
-  end
-  # For mode 'secondary', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
-  def mongos(%{mode: :secondary} = config) do
-    transform(config)
-  end
-  # For mode 'primaryPreferred', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
-  def mongos(%{mode: :primary_preferred} = config) do
-    transform(config)
-  end
-  # For mode 'secondaryPreferred', drivers MUST set the slaveOK wire protocol flag. If the read preference contains a
-  # non-empty tag_sets parameter, maxStalenessSeconds is a positive integer, or the hedge parameter is non-empty,
-  # drivers MUST use $readPreference; otherwise, drivers MUST NOT use $readPreference
-  def mongos(%{mode: :secondary_preferred} = config) do
-    transform(config)
-  end
-  # For mode 'nearest', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
-  def mongos(%{mode: :nearest} = config) do
-    transform(config)
-  end
-
-
 
 end

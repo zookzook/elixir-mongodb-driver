@@ -14,8 +14,7 @@ defmodule Mongo.Stream do
     ## check, if retryable reads are enabled
     opts = Mongo.retryable_reads(opts)
 
-    with cmd = Mongo.ReadPreference.add_read_preference(cmd, opts),
-         {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
+    with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
          {:ok,
            %{"ok" => ok,
              "cursor" => %{

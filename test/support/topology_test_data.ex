@@ -31,6 +31,38 @@ defmodule Mongo.TopologyTestData do
     }
   }
 
+  def sharded(), do: %{
+    set_name: nil,
+    type: :sharded,
+    compatibility_error: nil,
+    compatible: true,
+    local_threshold_ms: 15,
+    max_election_id: nil,
+    max_set_version: nil,
+    servers: %{
+      "localhost:27017" => %{
+        address: "localhost:27017",
+        arbiters: [],
+        election_id: nil,
+        error: nil,
+        hosts: [],
+        last_update_time: nil,
+        last_write_date: nil,
+        max_wire_version: 8,
+        me: nil,
+        min_wire_version: 0,
+        op_time: nil,
+        passives: [],
+        primary: nil,
+        round_trip_time: 44,
+        set_name: nil,
+        set_version: nil,
+        tag_set: %{},
+        type: :mongos
+      }
+    }
+  }
+
   def repl_set_with_master, do: %{
     compatibility_error: nil,
     compatible: true,
