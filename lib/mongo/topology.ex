@@ -329,18 +329,18 @@ defmodule Mongo.Topology do
     nil
   end
 
-  defp get_connection([], _state), do: nil
-  defp get_connection([address], %{connection_pools: pools}), do: Map.fetch(pools, address)
+  defp get_connection(nil, _state), do: nil
+  defp get_connection(address, %{connection_pools: pools}), do: Map.fetch(pools, address)
 
-  defp get_limits([], _topology), do: nil
-  defp get_limits([address], %{servers: servers}) do
+  defp get_limits(nil, _topology), do: nil
+  defp get_limits(address, %{servers: servers}) do
     with {:ok, desc} <- Map.fetch(servers, address) do
       {:ok, Map.take(desc, @limits)}
     end
   end
 
-  defp wire_version([], _topology), do: nil
-  defp wire_version([address], topology) do
+  defp wire_version(nil, _topology), do: nil
+  defp wire_version(address, topology) do
     with {:ok, server} <- Map.fetch(topology.servers, address) do
       server.max_wire_version
     else

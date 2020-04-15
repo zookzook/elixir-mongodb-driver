@@ -82,8 +82,8 @@ defmodule Mongo.TopologyDescription do
            |> Enum.take_random(1)
 
     case addr do
-      [] -> :empty
-      _  -> {:ok, {addr, opts}}
+      []        -> :empty
+      [result]  -> {:ok, {result, opts}}
     end
   end
   def select_servers(topology, :read, opts) do
@@ -110,8 +110,8 @@ defmodule Mongo.TopologyDescription do
 
     # check now three possible cases
     case addr do
-      [] -> :empty
-      _  -> {:ok, {addr, opts}}
+      []        -> :empty
+      [result]  -> {:ok, {result, opts}}
     end
   end
 
