@@ -84,6 +84,6 @@ defmodule Mongo.IdServer do
   end
 
   defp process_id() do
-    :os.getpid |> List.to_integer()
+    :os.getpid() |> List.to_integer()
   end
 end

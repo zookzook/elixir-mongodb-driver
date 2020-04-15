@@ -9,7 +9,8 @@
 
 * Bugfixes
     * Using `max_staleness_ms` > 0 results in a crash
-      
+    * Read preferences are sent to mongos
+     
 ## 0.6.5
 
 * Enhancements

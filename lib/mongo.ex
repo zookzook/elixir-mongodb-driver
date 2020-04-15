@@ -52,12 +52,11 @@ defmodule Mongo do
 
   use Bitwise
   use Mongo.Messages
+
   alias Mongo.Query
-  alias Mongo.ReadPreference
   alias Mongo.Topology
   alias Mongo.UrlParser
   alias Mongo.Session
-  alias Mongo.ReadPreference
   alias Mongo.Events
   alias Mongo.Events.CommandSucceededEvent
   alias Mongo.Events.CommandFailedEvent
@@ -144,16 +143,12 @@ defmodule Mongo do
     |> Topology.start_link()
   end
 
-  def child_spec(opts, child_opts \\ []) do
-    Supervisor.Spec.worker(Mongo, [opts], child_opts)
-  end
-
   @doc """
   Generates a new `BSON.ObjectId`.
   """
   @spec object_id :: BSON.ObjectId.t
   def object_id do
-    Mongo.IdServer.new
+    Mongo.IdServer.new()
   end
 
   @doc """

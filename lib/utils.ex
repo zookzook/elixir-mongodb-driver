@@ -22,7 +22,7 @@ defmodule Mongo.Utils do
   # Inserts an ID to the document. A distinction is made as to whether binaries or atoms are used as keys.
   #
   defp add_id(doc) do
-    id = Mongo.IdServer.new
+    id = Mongo.IdServer.new()
     {id, add_id(doc, id)}
   end
   defp add_id([{key, _}|_] = list, id) when is_atom(key), do: [{:_id, id}|list]
