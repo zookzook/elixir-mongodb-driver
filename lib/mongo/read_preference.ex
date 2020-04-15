@@ -10,20 +10,20 @@ defmodule Mongo.ReadPreference do
   If tag_sets and maxStalenessSeconds are set, they determine which candidate servers are eligible for selection.
   If hedge is set, it configures how server hedged reads are used.
 
-  The default mode is 'primary'.
+  The default mode is `:primary`.
   The default tag_sets is a list with an empty tag set: [{}].
   The default max_staleness_ms is unset.
   The default hedge is unset.
 
   ## mode
 
-  * `primary` Only an available primary is suitable.
-  * `secondary` All secondaries (and only secondaries) are candidates, but only eligible candidates (i.e. after applying tag_sets and maxStalenessSeconds) are suitable.
-  * `primaryPreferred` If a primary is available, only the primary is suitable. Otherwise, all secondaries are candidates,
-                       but only eligible secondaries are suitable.
-  * `secondaryPreferred` All secondaries are candidates. If there is at least one eligible secondary, only eligible secondaries are suitable.
-                         Otherwise, when there are no eligible secondaries, the primary is suitable.
-  * `nearest` The primary and all secondaries are candidates, but only eligible candidates are suitable.
+  * `:primary` Only an available primary is suitable.
+  * `:secondary` All secondaries (and only secondaries) are candidates, but only eligible candidates (i.e. after applying tag_sets and maxStalenessSeconds) are suitable.
+  * `:primary_preferred` If a primary is available, only the primary is suitable. Otherwise, all secondaries are candidates,
+       but only eligible secondaries are suitable.
+  * `:secondary_preferred` All secondaries are candidates. If there is at least one eligible secondary, only eligible secondaries are suitable.
+       Otherwise, when there are no eligible secondaries, the primary is suitable.
+  * `:nearest` The primary and all secondaries are candidates, but only eligible candidates are suitable.
 
   """
   @type t :: %{
@@ -86,9 +86,4 @@ defmodule Mongo.ReadPreference do
 
   end
 
-  defp is_max_staleness_valid?() do
-    #max_staleness_ms >= heartbeatFrequencyMS + idleWritePeriodMS
-    #max_staleness_ms >= smallestMaxStalenessSeconds
-
-  end
 end
