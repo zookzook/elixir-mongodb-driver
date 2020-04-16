@@ -103,4 +103,55 @@ defmodule Mongo.TransactionRetriesTest do
            end)
   end
 
+  test "with_transaction, retry commit timeout", %{pid: top, catcher: catcher} do
+
+    coll = unique_collection()
+
+    :ok = Mongo.create(top, coll)
+
+    assert {:error, %Mongo.Error{code: 6, error_labels: ["UnknownTransactionCommitResult"]}} = Session.with_transaction(top, fn opts ->
+             {:ok, _} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
+
+             cmd = [
+               configureFailPoint: "failCommand",
+               mode: "alwaysOn",
+               data: [errorCode: 6, failCommands: ["commitTransaction"], errorLabels: ["UnknownTransactionCommitResult"]]
+             ]
+
+             {:ok, _doc} = Mongo.admin_command(top, cmd)
+
+             {:ok, []}
+           end, transaction_retry_timeout_s: 2)
+
+    Mongo.admin_command(top, [configureFailPoint: "failCommand", mode: "off"])
+
+    assert [:configureFailPoint, :abortTransaction, :configureFailPoint, :insert, :create] = EventCatcher.succeeded_events(catcher) |> Enum.map(fn event -> event.command_name end)
+
+  end
+
+  test "with_transaction, retry transaction timeout", %{pid: top, catcher: catcher} do
+
+    coll = unique_collection()
+
+    :ok = Mongo.create(top, coll)
+
+    cmd = [
+      configureFailPoint: "failCommand",
+      mode: "alwaysOn",
+      data: [errorCode: 6, failCommands: ["commitTransaction"], errorLabels: ["TransientTransactionError"]]
+    ]
+
+    {:ok, _doc} = Mongo.admin_command(top, cmd)
+
+    assert {:error, %Mongo.Error{code: 6, error_labels: ["TransientTransactionError"]}} = Session.with_transaction(top, fn opts ->
+      {:ok, _} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
+      {:ok, []}
+     end, transaction_retry_timeout_s: 2)
+
+    Mongo.admin_command(top, [configureFailPoint: "failCommand", mode: "off"])
+
+    assert [:configureFailPoint, :abortTransaction, :insert, :configureFailPoint, :create] = EventCatcher.succeeded_events(catcher) |> Enum.map(fn event -> event.command_name end)
+
+  end
+
 end

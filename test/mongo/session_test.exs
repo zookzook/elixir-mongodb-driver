@@ -223,7 +223,7 @@ defmodule Mongo.SessionTest do
     Mongo.insert_one(top, coll, %{name: "Wuff"})
     Mongo.delete_many(top, coll, %{})
 
-    assert :error == Session.with_transaction(top, fn opts ->
+    assert {:error, :error} == Session.with_transaction(top, fn opts ->
 
       {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
       assert id != nil
@@ -233,6 +233,7 @@ defmodule Mongo.SessionTest do
       assert id != nil
       :error
     end, w: 1)
+
     assert {:ok, 0} == Mongo.count(top, coll, %{})
   end
 

@@ -109,9 +109,11 @@ defmodule Mongo.Error do
     false
   end
 
-  def has_label(%Mongo.Error{error_labels: []}, _label), do: false
-  def has_label(%Mongo.Error{error_labels: labels}, label) do
+  def has_label(%Mongo.Error{error_labels: labels}, label) when is_list(labels)do
     Enum.any?(labels, fn l -> l == label end)
+  end
+  def has_label(_other, _label) do
+    false
   end
 end
 

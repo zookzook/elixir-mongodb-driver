@@ -376,10 +376,21 @@ defmodule Mongo do
 
   end
 
+  @doc """
+  Executes an admin command against the `admin` database using alway the primary. Retryable writes are disabled.
+
+  ## Example
+
+    iex>  cmd = [
+      configureFailPoint: "failCommand",
+      mode: "alwaysOn",
+      data: [errorCode: 6, failCommands: ["commitTransaction"], errorLabels: ["TransientTransactionError"]]
+    ]
+
+    iex> {:ok, _doc} = Mongo.admin_command(top, cmd)
+  """
   def admin_command(topology_pid, cmd) do
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, database: "admin", retryable_writes: false) do
-      {:ok, doc}
-    end
+    issue_command(topology_pid, cmd, :write, database: "admin", retryable_writes: false)
   end
 
   @doc """

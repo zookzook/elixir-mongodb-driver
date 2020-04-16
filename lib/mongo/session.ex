@@ -193,9 +193,12 @@ defmodule Mongo.Session do
   @doc """
   Commit the current transation.
   """
-  @spec commit_transaction(Session.t) :: :ok | {:error, term()}
+  @spec commit_transaction(Session.t, DateTime.t) :: :ok | {:error, term()}
   def commit_transaction(pid) do
-    call(pid, :commit_transaction)
+    call(pid, {:commit_transaction, DateTime.utc_now()})
+  end
+  def commit_transaction(pid, start_time) do
+    call(pid, {:commit_transaction, start_time})
   end
 
   @doc """
@@ -277,7 +280,14 @@ defmodule Mongo.Session do
   @doc """
   Convenient function for running multiple write commands in a transaction.
 
+  In case of `TransientTransactionError` or `UnknownTransactionCommitResult` the function will retry the whole transaction or
+  the commit of the transaction. You can specify a timeout (`:transaction_retry_timeout_s`) to limit the time of repeating.
+  The default value is 120 seconds. If you don't wait so long, you call `with_transaction` with the
+  option `transaction_retry_timeout_s: 10`. In this case after 10 seconds of retrying, the function will return
+  an error.
+
   ## Example
+
       alias Mongo.Session
 
       {:ok, ids} = Session.with_transaction(top, fn opts ->
@@ -285,29 +295,50 @@ defmodule Mongo.Session do
       {:ok, %InsertOneResult{:inserted_id => id2}} = Mongo.insert_one(top, "dogs", %{name: "Waldo"}, opts)
       {:ok, %InsertOneResult{:inserted_id => id3}} = Mongo.insert_one(top, "dogs", %{name: "Tom"}, opts)
       {:ok, [id1, id2, id3]}
-      end, w: 1)
+      end, transaction_retry_timeout_s: 10)
+
+  From the specs:
+
+  The callback function may be executed multiple times
+
+  The implementation of `with_transaction` is based on the original examples for Retry Transactions and
+  Commit Operation from the MongoDB Manual. As such, the callback may be executed any number of times.
+  Drivers are free to encourage their users to design idempotent callbacks.
 
   """
   @spec with_transaction(Session.t, (keyword() -> {:ok, any()} | :error)) :: {:ok, any()} | :error | {:error, term}
   def with_transaction(topology_pid, fun, opts \\ []) do
-
     with {:ok, session} <- Session.start_session(topology_pid, :write, opts),
-         :ok            <- Session.start_transaction(session) do
+          result        <- run_in_transaction(topology_pid, session, fun, DateTime.utc_now(), opts),
+          :ok           <- end_session(topology_pid, session) do
+      result
+    end
+  end
+  def run_in_transaction(topology_pid, session, fun, start_time, opts) do
+    with :ok            <- Session.start_transaction(session),
+         {:ok, result}  <- run_function(fun, Keyword.merge(opts, session: session)),
+          commit_result <- commit_transaction(session, start_time) do
 
-      with {:ok, result} <- run_function(fun, Keyword.merge(opts, session: session)),
-           commit_result <- commit_transaction(session) do
-
-        end_session(topology_pid, session)
-        case commit_result do
-          :ok    -> {:ok, result}
-          error -> error
-        end
-      else
+      ## check the result
+      case commit_result do
+        :ok -> {:ok, result}          ## everything is okay
         error ->
-          abort_transaction(session)
-          end_session(topology_pid, session)
+          abort_transaction(session)  ## the rest is an error
           error
       end
+    else
+
+      {:error, error} ->
+        abort_transaction(session) ## check in case of an error while processing transaction
+        timeout = opts[:transaction_retry_timeout_s] || @retry_timeout_seconds
+        case Error.has_label(error, "TransientTransactionError") && DateTime.diff(DateTime.utc_now(), start_time, :second) < timeout do
+          true  -> run_in_transaction(topology_pid, session, fun, start_time, opts)
+          false -> {:error, error}
+        end
+
+      other ->
+        abort_transaction(session) ## everything else is an error
+        {:error, other}
     end
   end
 
@@ -316,7 +347,6 @@ defmodule Mongo.Session do
   #
   defp run_function(fun, opts) do
 
-    ## todo wait max 120s
     try do
       fun.(opts)
     rescue
@@ -470,21 +500,27 @@ defmodule Mongo.Session do
   def handle_call_event({:bind_session, cmd}, _transaction,  %Session{conn: conn}) do
     {:keep_state_and_data, {:ok, conn, cmd}}
   end
-  def handle_call_event(:commit_transaction, :starting_transaction, _data) do
+  def handle_call_event({:commit_transaction, _start_time}, :starting_transaction, _data) do
     {:next_state, :transaction_committed, :ok}
   end
-  def handle_call_event(:commit_transaction, :transaction_in_progress, data) do
-    with :ok <- run_commit_command(data) do
+  def handle_call_event({:commit_transaction, start_time}, :transaction_in_progress, data) do
+    with :ok <- run_commit_command(data, start_time) do
       {:next_state, :transaction_committed, :ok}
       else
       error -> {:keep_state_and_data, error}
     end
+  end
+  def handle_call_event({:commit_transaction, _start_time}, _state, _data) do  ## in other cases we will ignore the commit command
+    {:keep_state_and_data, :ok}
   end
   def handle_call_event(:abort_transaction, :starting_transaction, _data) do
     {:next_state, :transaction_aborted, :ok}
   end
   def handle_call_event(:abort_transaction, :transaction_in_progress, data) do
     {:next_state, :transaction_aborted, run_abort_command(data)}
+  end
+  def handle_call_event(:abort_transaction, _state, _data) do
+    {:keep_state_and_data, :ok}
   end
   def handle_call_event(:connection, _state,  %{conn: conn}) do
     {:keep_state_and_data, conn}
@@ -523,8 +559,8 @@ defmodule Mongo.Session do
   ##
   # Run the commit transaction command.
   #
-  defp run_commit_command(session) do
-    run_commit_command(session, DateTime.utc_now(), :first)
+  defp run_commit_command(session, start_time) do
+    run_commit_command(session, start_time, :first)
   end
 
   defp run_commit_command(%Session{conn: conn,
@@ -544,7 +580,7 @@ defmodule Mongo.Session do
             lsid: %{id: id},
             txnNumber: %BSON.LongNumber{value: txn_num},
             autocommit: false,
-            writeConcern: write_concern, ## todo: w:majority
+            writeConcern: write_concern,
             maxTimeMS: max_time_ms(opts),
            recoveryToken: recovery_token
           ] |> filter_nils()
@@ -553,7 +589,8 @@ defmodule Mongo.Session do
      :ok
    else
       {:error, error} ->
-        try_again = Error.has_label(error, "UnknownTransactionCommitResult") && DateTime.diff(DateTime.utc_now(), time, :second) < @retry_timeout_seconds
+        timeout = opts[:transaction_retry_timeout_s] || @retry_timeout_seconds
+        try_again = Error.has_label(error, "UnknownTransactionCommitResult") && DateTime.diff(DateTime.utc_now(), time, :second) < timeout
         case try_again do
           true  -> run_commit_command(session, time, :retry)
           false -> {:error, error}

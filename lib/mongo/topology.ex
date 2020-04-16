@@ -72,6 +72,7 @@ defmodule Mongo.Topology do
 
   def checkin_session(pid, server_session) do
     GenServer.cast(pid, {:checkin_session, server_session})
+    :ok
   end
 
   def stop(pid) do
