@@ -1,13 +1,18 @@
 defmodule Mongo.App do
   @moduledoc false
 
+  use Application
+
   def start(_type, _args) do
-    import Supervisor.Spec, warn: false
 
     children = [
       {Mongo.IdServer, []},
       {Mongo.PBKDF2Cache, []},
-      supervisor(Registry, [:duplicate, :events_registry])
+      %{
+        id: Registry,
+        start: {Registry, :start_link, [:duplicate, :events_registry]},
+        type: :supervisor
+      }
     ]
 
     opts = [strategy: :one_for_one, name: Mongo.Supervisor]

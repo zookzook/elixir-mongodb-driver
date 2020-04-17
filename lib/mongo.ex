@@ -143,6 +143,11 @@ defmodule Mongo do
     |> Topology.start_link()
   end
 
+  def child_spec(opts) do
+    %{id: Mongo,
+      start: {Mongo, :start_link, [opts]}}
+  end
+
   @doc """
   Generates a new `BSON.ObjectId`.
   """
