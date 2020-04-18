@@ -417,6 +417,12 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 * For `--sslMode` you can use one of `allowSSL` or `preferSSL`
 * You can enable any other options you want when starting `mongod`
 
+## More examples
+
+There are some basic examples in the `example` folder. But if you want to see the driver in action 
+take a look at [Vega](https://github.com/zookzook/vega), especially the [Board.ex](https://github.com/zookzook/vega/blob/master/lib/vega/board.ex) module for using the transaction api together with
+bulk operations.
+
 ## Special thanks
 
 Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-driver) for providing a free JetBrains Open Source license for their complete toolbox.
