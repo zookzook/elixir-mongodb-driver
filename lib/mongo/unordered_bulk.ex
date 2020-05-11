@@ -78,6 +78,16 @@ defmodule Mongo.UnorderedBulk do
   end
 
   @doc """
+  Adds the two unordered bulks together.
+  """
+  def add(%UnorderedBulk{coll: coll_a} = a,  %UnorderedBulk{coll: coll_b} = b) when coll_a == coll_b do
+    %UnorderedBulk{coll: coll_a,
+      inserts: a.inserts ++ b.inserts,
+      updates: a.updates ++ b.updates,
+      deletes: a.deletes ++ b.deletes}
+  end
+
+  @doc """
   Appends a bulk operation to the unordered bulk. One of the field (inserts, updates or deletes)
   will be updated.
   """

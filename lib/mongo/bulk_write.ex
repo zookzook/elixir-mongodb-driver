@@ -414,7 +414,7 @@ defmodule Mongo.BulkWrite do
       upsert: Keyword.get(update_opts, :upsert),
       multi: Keyword.get(update_opts, :multi) || false,
       collation: Keyword.get(update_opts, :collation),
-      arrayFilters: Keyword.get(update_opts, :filters)
+      arrayFilters: Keyword.get(update_opts, :array_filters)
     ] |> filter_nils()
 
   end
