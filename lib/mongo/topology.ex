@@ -332,7 +332,12 @@ defmodule Mongo.Topology do
   end
 
   defp get_connection(nil, _state), do: nil
-  defp get_connection(address, %{connection_pools: pools}), do: Map.fetch(pools, address)
+  defp get_connection(address, %{connection_pools: pools}) do
+    case Map.fetch(pools, address) do
+      :error -> {:error, Mongo.Error.exception("The server #{inspect address} is no longer available")}
+      conn   -> conn
+    end
+  end
 
   defp get_limits(nil, _topology), do: nil
   defp get_limits(address, %{servers: servers}) do
