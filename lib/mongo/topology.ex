@@ -271,10 +271,11 @@ defmodule Mongo.Topology do
              {server_session, new_state} <- checkout_server_session(state),
              {:ok, session}              <- Session.start_link(self(), connection, server_session, type, wire_version, opts) do
           {:reply, {:ok, session}, new_state}
+        else
+          error -> {:reply, error, state} ## in case of an error, just return the error
         end
 
       error ->
-        Logger.debug("select_servers: #{inspect error}")
         {:reply, error, state} ## in case of an error, just return the error
     end
   end

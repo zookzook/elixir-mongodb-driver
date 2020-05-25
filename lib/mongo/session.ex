@@ -173,6 +173,8 @@ defmodule Mongo.Session do
           {:new_connection, _server} ->
             :timer.sleep(1000)
             start_implicit_session(topology_pid, type, opts)
+          {:error, error} -> {:error, error}
+          other           -> {:error, Mongo.Error.exception("Unknow result #{inspect other} while calling Topology.checkout_session/4")}
         end
       session -> {:ok, session}
     end

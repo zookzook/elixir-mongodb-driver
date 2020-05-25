@@ -29,6 +29,7 @@ defmodule Mongo.Stream do
           true -> new(topology_pid, cmd, Keyword.put(opts, :read_counter, 2))
           false -> {:error, error}
         end
+      other -> {:error, Mongo.Error.exception("Unknow result #{inspect other} while calling Session.start_implicit_session/3")}
     end
   end
 
