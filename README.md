@@ -96,6 +96,22 @@ cursor
 
 For secure requests, you may need to add some more options; see the "AWS, TLS and Erlang SSL ciphers" section below.
 
+Failing operations return a `{:error, error}` tuple where `error` is a
+`Mongo.Error` object:
+
+```elixir
+{:error,
+ %Mongo.Error{
+   code: 13435,
+   error_labels: [],
+   host: nil,
+   message: "not master and slaveOk=false",
+   resumable: true,
+   retryable_reads: true,
+   retryable_writes: true
+ }}
+```
+
 ### Connection pooling
 The driver supports pooling by DBConnection (2.x). By default `mongodb_driver` will start a single 
 connection, but it also supports pooling with the `:pool_size` option. For 3 connections add the `pool_size: 3` option to `Mongo.start_link` and to all 
