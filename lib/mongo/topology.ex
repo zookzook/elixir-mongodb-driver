@@ -289,9 +289,10 @@ defmodule Mongo.Topology do
       {:ok, {address, _opts}} ->
         with {:ok, connection} <- get_connection(address, state) do
           {:reply, {:ok, connection}, state}
+        else
+          error -> {:reply, error, state} ## in case of an error, just return the error
         end
-      error ->
-        {:reply, error, state} ## in case of an error, just return the error
+      error -> {:reply, error, state} ## in case of an error, just return the error
     end
   end
 
