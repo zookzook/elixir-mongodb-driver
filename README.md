@@ -1,4 +1,4 @@
-# An alternative Mongodb driver for Elixir
+# An Alternative MongoDB Driver for Elixir
 [![Build Status](https://travis-ci.org/zookzook/elixir-mongodb-driver.svg?branch=master)](https://travis-ci.org/zookzook/elixir-mongodb-driver)
 [![Coverage Status](https://coveralls.io/repos/github/zookzook/elixir-mongodb-driver/badge.svg?branch=master)](https://coveralls.io/github/zookzook/elixir-mongodb-driver?branch=master)
 [![Hex.pm](https://img.shields.io/hexpm/v/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
@@ -24,7 +24,7 @@
   * support for retryable reads ([See](https://github.com/mongodb/specifications/blob/master/source/retryable-reads/retryable-reads.rst))
   * support for retryable writes ([See](https://github.com/mongodb/specifications/blob/master/source/retryable-writes/retryable-writes.rst))
 
-## Data representation
+## Data Representation
 
     BSON                Elixir
     ----------          ------
@@ -50,7 +50,7 @@ BSON symbols can only be decoded.
 
 ## Usage
 
-### Installation:
+### Installation
 
 Add `mongodb_driver` to your mix.exs `deps`.
 
@@ -62,7 +62,7 @@ end
 
 Then run `mix deps.get` to fetch dependencies.
 
-### Simple connection to MongoDB
+### Simple Connection to MongoDB
 
 ```elixir
 # Starts an unpooled connection
@@ -112,7 +112,7 @@ Failing operations return a `{:error, error}` tuple where `error` is a
  }}
 ```
 
-### Connection pooling
+### Connection Pooling
 The driver supports pooling by DBConnection (2.x). By default `mongodb_driver` will start a single 
 connection, but it also supports pooling with the `:pool_size` option. For 3 connections add the `pool_size: 3` option to `Mongo.start_link` and to all 
 function calls in `Mongo` using the pool:
@@ -158,7 +158,7 @@ of a `:hostname` and `:port` pair.
 This will allow for scenarios where the first `"hostname1.net:27017"` is unreachable for any reason 
 and will automatically try to connect to each of the following entries in the list to connect to the cluster.
 
-### Auth mechanisms
+### Auth Mechanisms
 
 For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM. 
 If you'd like to use [MONGODB-X509](https://docs.mongodb.com/manual/tutorial/configure-x509-client-authentication/#authenticate-with-a-x-509-certificate) 
@@ -168,7 +168,7 @@ authentication, you can specify that as a `start_link` option.
 {:ok, pid} = Mongo.start_link(database: "test", auth_mechanism: :x509)
 ```
 
-### AWS, TLS and Erlang SSL ciphers
+### AWS, TLS and Erlang SSL Ciphers
 
 Some MongoDB cloud providers (notably AWS) require a particular TLS cipher that isn't enabled 
 by default in the Erlang SSL module. In order to connect to these services,
@@ -204,7 +204,7 @@ Using `$in`
 Mongo.find(:mongo, "users", %{email: %{"$in" => ["my@email.com", "other@email.com"]}})
 ```
 
-### Change streams
+### Change Streams
 
 Change streams are available in replica set and sharded cluster deployments
 and tell you about changes to documents in collections. They work like endless
@@ -256,7 +256,7 @@ Mongo.insert_many(top, "users", [
 ])
 ```
 
-### Bulk writes
+### Bulk Writes
 
 The motivation for bulk writes lies in the possibility of optimization, the same operations
 to group. Here, a distinction is made between disordered and ordered bulk writes.
@@ -320,10 +320,8 @@ and have a look at the test units as well.
 
 ### GridFS
 
-The driver supports the GridFS specifications. You create a `Mongo.GridFs.Bucket` struct and with this struct you can
-upload and download files.
-
-### Example
+The driver supports the GridFS specifications. You create a `Mongo.GridFs.Bucket`
+struct and with this struct you can upload and download files. For example:
 
 ```elixir
     bucket = Bucket.new(top)
@@ -409,8 +407,6 @@ iex> Mongo.find_one(conn, "test", %{})
 The `travis.yml` file uses only the latest MongoDB. It creates a replica set of three nodes and disables the SSL test case. If you want to
 run the test cases against other MongoDB deployments or older versions, you can use the [mtools](https://github.com/rueckstiess/mtools) for deployment and run the test cases locally:
 
-### Example
-
 ```bash
 pyenv global 3.6
 pip3 install --upgrade pip
@@ -422,11 +418,11 @@ mix test --exclude ssl --exclude socket
 
 The SSL test suite is disabled by default.
 
-### Enable the SSL tests
+### Enable the SSL Tests
 
 `mix test --exclude ssl`
 
-### Enable SSL on your Mongo server
+### Enable SSL on Your MongoDB Server
 
 ```bash
 $ openssl req -newkey rsa:2048 -new -x509 -days 365 -nodes -out mongodb-cert.crt -keyout mongodb-cert.key
@@ -437,13 +433,13 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 * For `--sslMode` you can use one of `allowSSL` or `preferSSL`
 * You can enable any other options you want when starting `mongod`
 
-## More examples
+## More Examples
 
 There are some basic examples in the `example` folder. But if you want to see the driver in action 
 take a look at [Vega](https://github.com/zookzook/vega), especially the [Board.ex](https://github.com/zookzook/vega/blob/master/lib/vega/board.ex) module for using the transaction api together with
 bulk operations.
 
-## Special thanks
+## Special Thanks
 
 Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-driver) for providing a free JetBrains Open Source license for their complete toolbox.
 
@@ -451,7 +447,7 @@ The [Documentation](https://hexdocs.pm/mongodb_driver/readme.html) is online, bu
 This will be done as soon as possible. In the meantime, look in the source code. Especially 
 for the individual options.  
 
-This driver is based on [original](https://github.com/ankhers/mongodb).
+This driver is based on the [original Elixir driver for MongoDB](https://github.com/ankhers/mongodb).
  
 ## License
 
