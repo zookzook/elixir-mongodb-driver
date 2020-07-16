@@ -206,12 +206,16 @@ Mongo.find(:mongo, "users", %{email: %{"$in" => ["my@email.com", "other@email.co
 
 ### Change streams
 
-Change streams exist in replica set and cluster systems and tell you about changes to collections. 
-They work like endless cursors.
-The special thing about the change streams is that they are resumable. In the case of a resumable error, 
-no exception is made, but the cursor is re-scheduled at the last successful location. 
-The following example will never stop, 
-so it is a good idea to use a process for change streams. 
+Change streams are available in replica set and sharded cluster deployments
+and tell you about changes to documents in collections. They work like endless
+cursors.
+
+The special thing about change streams is that they are resumable: in case of
+a resumable error, no exception is propagated to the application, but instead
+the cursor is re-scheduled at the last successful location. 
+
+The following example will never stop, thus it is a good idea to use a process
+for reading from change streams:
 
 ```elixir
 seeds = ["hostname1.net:27017", "hostname2.net:27017", "hostname3.net:27017"]
@@ -220,7 +224,7 @@ cursor =  Mongo.watch_collection(top, "accounts", [], fn doc -> IO.puts "New Tok
 cursor |> Enum.each(fn doc -> IO.puts inspect doc end)
 ```
 
-An example with a spawned process that sends message to the monitor process: 
+An example with a spawned process that sends messages to the monitor process: 
 
 ```elixir
 def for_ever(top, monitor) do
@@ -231,7 +235,7 @@ end
 spawn(fn -> for_ever(top, self()) end)
 ```
 
-For more information see
+For more information see:
 
 * [Mongo.watch_collection](https://hexdocs.pm/mongodb_driver/Mongo.html#watch_collection/5) 
 
