@@ -3,6 +3,10 @@ defmodule Mongo.Test do
 
   defmodule TestUser do
     defstruct name: "John", age: 27
+
+    defimpl Mongo.Encoder do
+      def encode(m), do: Map.drop(m, [:__struct__])
+    end
   end
 
   setup_all do
@@ -599,8 +603,8 @@ defmodule Mongo.Test do
  end
 
   test "create collection", c do
-
     coll = unique_name()
+
     assert nil == Mongo.show_collections(c.pid) |> Enum.find(fn c -> c == coll end)
     assert :ok == Mongo.create(c.pid, coll)
     assert nil != Mongo.show_collections(c.pid) |> Enum.find(fn c -> c == coll end)
@@ -608,8 +612,8 @@ defmodule Mongo.Test do
   end
 
   test "save struct", c do
-
     coll = unique_name()
+
     value = %TestUser{}
     {:ok, %Mongo.InsertOneResult{inserted_id: id}} = Mongo.insert_one(c.pid, coll, value)
     assert id != nil

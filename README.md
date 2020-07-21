@@ -48,6 +48,47 @@ Since BSON documents are ordered Elixir maps cannot be used to fully represent t
 
 BSON symbols can only be decoded.
 
+### Writing your own encoding info
+
+If you want to write a custom struct to your mongo collection - you can do that
+by implementing `Mongo.Encoder` protocol for your class. The output should be a map,
+which will be passed to the Mongo database.
+
+Example:
+
+```elixir
+defmodule CustomStruct do
+  @fields [:a, :b, :c, :id]
+  @enforce_keys @fields
+  defstruct @fields
+  defimpl Mongo.Encoder do
+    def encode(%{a: a, b: b, id: id}) do
+      %{
+        _id: id,
+        a: a,
+        b: b,
+        custom_encoded: true
+      }
+    end
+  end
+end
+```
+
+So, given the struct:
+```elixir
+%CustomStruct{a: 10, b: 20, c: 30, id: "5ef27e73d2a57d358f812001"}
+```
+
+it will be written to database, as:
+```json
+{
+  "a": 10,
+  "b": 20,
+  "custom_encoded": true,
+  "_id": "5ef27e73d2a57d358f812001"
+}
+```
+
 ## Usage
 
 ### Installation
@@ -80,9 +121,9 @@ To specify a username and password, use the `:username`, `:password`, and `:auth
 
 ```elixir
 # Starts an unpooled connection
-{:ok, conn} = 
-    Mongo.start_link(url: "mongodb://localhost:27017/db-name", 
-                     username: "test_user", 
+{:ok, conn} =
+    Mongo.start_link(url: "mongodb://localhost:27017/db-name",
+                     username: "test_user",
                      password: "hunter2",
                      auth_source: "admin_test")
 
@@ -113,8 +154,8 @@ Failing operations return a `{:error, error}` tuple where `error` is a
 ```
 
 ### Connection Pooling
-The driver supports pooling by DBConnection (2.x). By default `mongodb_driver` will start a single 
-connection, but it also supports pooling with the `:pool_size` option. For 3 connections add the `pool_size: 3` option to `Mongo.start_link` and to all 
+The driver supports pooling by DBConnection (2.x). By default `mongodb_driver` will start a single
+connection, but it also supports pooling with the `:pool_size` option. For 3 connections add the `pool_size: 3` option to `Mongo.start_link` and to all
 function calls in `Mongo` using the pool:
 
 ```elixir
@@ -148,20 +189,20 @@ Due to the mongodb specification, an additional connection is always set up for 
 
 ### Replica Sets
 
-To connect to a Mongo cluster that is using replica sets, it is recommended to use the `:seeds` list instead 
+To connect to a Mongo cluster that is using replica sets, it is recommended to use the `:seeds` list instead
 of a `:hostname` and `:port` pair.
 
 ```elixir
 {:ok, pid} = Mongo.start_link(database: "test", seeds: ["hostname1.net:27017", "hostname2.net:27017"])
 ```
 
-This will allow for scenarios where the first `"hostname1.net:27017"` is unreachable for any reason 
+This will allow for scenarios where the first `"hostname1.net:27017"` is unreachable for any reason
 and will automatically try to connect to each of the following entries in the list to connect to the cluster.
 
 ### Auth Mechanisms
 
-For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM. 
-If you'd like to use [MONGODB-X509](https://docs.mongodb.com/manual/tutorial/configure-x509-client-authentication/#authenticate-with-a-x-509-certificate) 
+For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM.
+If you'd like to use [MONGODB-X509](https://docs.mongodb.com/manual/tutorial/configure-x509-client-authentication/#authenticate-with-a-x-509-certificate)
 authentication, you can specify that as a `start_link` option.
 
 ```elixir
@@ -170,12 +211,12 @@ authentication, you can specify that as a `start_link` option.
 
 ### AWS, TLS and Erlang SSL Ciphers
 
-Some MongoDB cloud providers (notably AWS) require a particular TLS cipher that isn't enabled 
+Some MongoDB cloud providers (notably AWS) require a particular TLS cipher that isn't enabled
 by default in the Erlang SSL module. In order to connect to these services,
-you'll want to add this cipher to your `ssl_opts`: 
+you'll want to add this cipher to your `ssl_opts`:
 
 ```elixir
-{:ok, pid} = Mongo.start_link(database: "test", 
+{:ok, pid} = Mongo.start_link(database: "test",
       ssl_opts: [
         ciphers: ['AES256-GCM-SHA384'],
         cacertfile: "...",
@@ -212,7 +253,7 @@ cursors.
 
 The special thing about change streams is that they are resumable: in case of
 a resumable error, no exception is propagated to the application, but instead
-the cursor is re-scheduled at the last successful location. 
+the cursor is re-scheduled at the last successful location.
 
 The following example will never stop, thus it is a good idea to use a process
 for reading from change streams:
@@ -220,11 +261,11 @@ for reading from change streams:
 ```elixir
 seeds = ["hostname1.net:27017", "hostname2.net:27017", "hostname3.net:27017"]
 {:ok, top} = Mongo.start_link(database: "my-db", seeds: seeds, appname: "getting rich")
-cursor =  Mongo.watch_collection(top, "accounts", [], fn doc -> IO.puts "New Token #{inspect doc}" end, max_time: 2_000 )  
+cursor =  Mongo.watch_collection(top, "accounts", [], fn doc -> IO.puts "New Token #{inspect doc}" end, max_time: 2_000 )
 cursor |> Enum.each(fn doc -> IO.puts inspect doc end)
 ```
 
-An example with a spawned process that sends messages to the monitor process: 
+An example with a spawned process that sends messages to the monitor process:
 
 ```elixir
 def for_ever(top, monitor) do
@@ -237,7 +278,7 @@ spawn(fn -> for_ever(top, self()) end)
 
 For more information see:
 
-* [Mongo.watch_collection](https://hexdocs.pm/mongodb_driver/Mongo.html#watch_collection/5) 
+* [Mongo.watch_collection](https://hexdocs.pm/mongodb_driver/Mongo.html#watch_collection/5)
 
 ### Inserts
 
@@ -261,11 +302,11 @@ Mongo.insert_many(top, "users", [
 The motivation for bulk writes lies in the possibility of optimization, the same operations
 to group. Here, a distinction is made between disordered and ordered bulk writes.
 In disordered, inserts, updates, and deletes are grouped as individual commands
-sent to the database. There is no influence on the order of the execution. 
-A good use case is the import of records from one CSV file. 
+sent to the database. There is no influence on the order of the execution.
+A good use case is the import of records from one CSV file.
 The order of the inserts does not matter.
 
-For ordered bulk writers, order compliance is important to keep. 
+For ordered bulk writers, order compliance is important to keep.
 In this case, only the same consecutive operations are grouped.
 
 Currently, all bulk writes are optimized in memory. This is unfavorable for large bulk writes.
@@ -273,9 +314,9 @@ In this case, one can use streaming bulk writes that only have a certain set of
 group operation in memory and when the maximum number of operations
 has been reached, operations are written to the database. The size can be specified.
 
-Using ordered bulk writes. In this example we first insert some dog's name, add an attribute `kind` 
-and change all dogs to cats. After that we delete three cats. This example would not work with 
-unordered bulk writes. 
+Using ordered bulk writes. In this example we first insert some dog's name, add an attribute `kind`
+and change all dogs to cats. After that we delete three cats. This example would not work with
+unordered bulk writes.
 
 ```elixir
 
@@ -298,23 +339,23 @@ result = Mongo.BulkWrite.write(:mongo, bulk, w: 1)
 In the following example we import 1.000.000 integers into the MongoDB using the stream api:
 
 We need to create an insert operation for each number. Then we call the `Mongo.UnorderedBulk.stream`
-function to import it. This function returns a stream function which accumulate 
+function to import it. This function returns a stream function which accumulate
 all inserts operations until the limit `1000` is reached. In this case the operation group is send to
-MongoDB. So using the stream api you can reduce the memory using while 
+MongoDB. So using the stream api you can reduce the memory using while
 importing big volume of data.
 
 ```elixir
-1..1_000_000 
-|> Stream.map(fn i -> Mongo.BulkOps.get_insert_one(%{number: i}) end) 
+1..1_000_000
+|> Stream.map(fn i -> Mongo.BulkOps.get_insert_one(%{number: i}) end)
 |> Mongo.UnorderedBulk.write(:mongo, "bulk", 1_000)
 |> Stream.run()
 ```
 
 For more information see:
-* [Mongo.UnorderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.UnorderedBulk.html#content) 
-* [Mongo.OrderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.OrderedBulk.html#content) 
-* [Mongo.BulkWrite](https://hexdocs.pm/mongodb_driver/Mongo.BulkWrite.html#content) 
-* [Mongo.BulkOps](https://hexdocs.pm/mongodb_driver/Mongo.BulkOps.html#content) 
+* [Mongo.UnorderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.UnorderedBulk.html#content)
+* [Mongo.OrderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.OrderedBulk.html#content)
+* [Mongo.BulkWrite](https://hexdocs.pm/mongodb_driver/Mongo.BulkWrite.html#content)
+* [Mongo.BulkOps](https://hexdocs.pm/mongodb_driver/Mongo.BulkOps.html#content)
 
 and have a look at the test units as well.
 
@@ -345,9 +386,9 @@ In the example a new bucket with default values is used to upload a file from th
 ```
 
 For more information see:
- * [Mongo.GridFs.Bucket](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Bucket.html#content) 
- * [Mongo.GridFs.Download](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Download.html#content) 
- * [Mongo.GridFs.Upload](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Upload.html#content) 
+ * [Mongo.GridFs.Bucket](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Bucket.html#content)
+ * [Mongo.GridFs.Download](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Download.html#content)
+ * [Mongo.GridFs.Upload](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Upload.html#content)
 
 ### Transactions
 
@@ -382,14 +423,14 @@ Mongo.insert_one(top, "dogs", %{name: "Tom"}, session: session)
 
 For more information see:
 
-* [Mongo.Session](https://hexdocs.pm/mongodb_driver/Mongo.Session.html#content) 
+* [Mongo.Session](https://hexdocs.pm/mongodb_driver/Mongo.Session.html#content)
 
 and have a look at the test units as well.
 
 
 ### Command Monitoring
 
-You can watch all events that are triggered while the driver send requests and processes responses. You can use the 
+You can watch all events that are triggered while the driver send requests and processes responses. You can use the
 `Mongo.EventHandler` as a starting point. It logs the events from the topic `:commands` (by ignoring the `:isMaster` command)
 to `Logger.info`:
 
@@ -414,7 +455,7 @@ pip3 install mtools[all]
 export PATH=to-your-mongodb/bin/:$PATH
 mlaunch init --setParameter enableTestCommands=1 --replicaset --name "rs_1"
 mix test --exclude ssl --exclude socket
-``` 
+```
 
 The SSL test suite is disabled by default.
 
@@ -435,7 +476,7 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 
 ## More Examples
 
-There are some basic examples in the `example` folder. But if you want to see the driver in action 
+There are some basic examples in the `example` folder. But if you want to see the driver in action
 take a look at [Vega](https://github.com/zookzook/vega), especially the [Board.ex](https://github.com/zookzook/vega/blob/master/lib/vega/board.ex) module for using the transaction api together with
 bulk operations.
 
@@ -443,12 +484,12 @@ bulk operations.
 
 Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-driver) for providing a free JetBrains Open Source license for their complete toolbox.
 
-The [Documentation](https://hexdocs.pm/mongodb_driver/readme.html) is online, but currently not up to date. 
-This will be done as soon as possible. In the meantime, look in the source code. Especially 
-for the individual options.  
+The [Documentation](https://hexdocs.pm/mongodb_driver/readme.html) is online, but currently not up to date.
+This will be done as soon as possible. In the meantime, look in the source code. Especially
+for the individual options.
 
 This driver is based on the [original Elixir driver for MongoDB](https://github.com/ankhers/mongodb).
- 
+
 ## License
 
 Copyright 2015 Eric Meadows-Jönsson and Justin Wood

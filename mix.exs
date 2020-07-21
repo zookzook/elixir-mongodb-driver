@@ -20,7 +20,8 @@ defmodule Mongodb.Mixfile do
        plt_add_apps: [:logger, :connection, :db_connection, :mix, :elixir, :ssl, :public_key],
        plt_add_deps: :transitive,
        plt_core_path: "plt_core_path"
-     ]
+     ],
+     consolidate_protocols: Mix.env() != :test
    ]
   end
 
