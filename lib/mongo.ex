@@ -729,6 +729,9 @@ defmodule Mongo do
          {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
          doc                       <- Session.update_session(session, doc, opts),
          {:ok, doc}                <- check_for_error(doc, event) do
+      
+        trace(session, cmd, event, opts)
+          
       {:ok, doc}
     else
       {:error, error} ->
@@ -741,7 +744,6 @@ defmodule Mongo do
           false -> {:error, error}
         end
     end
-
   end
 
   @doc false
@@ -751,7 +753,16 @@ defmodule Mongo do
          {:ok, doc} <- check_for_error(doc, event) do
       {:ok, doc}
     end
+  end
 
+  defp trace(conn_data, command_data, {event, duration}, opts_data) do
+    IO.inspect(conn_data)
+    IO.inspect(command_data)
+    IO.inspect(event)
+    IO.inspect(duration)
+    IO.inspect(opts_data)
+    
+    # :telemetry.execute(event_name, measurements, metadata)
   end
 
   defp check_for_error(%{"ok" => ok} = response, {event, duration}) when ok == 1 do
