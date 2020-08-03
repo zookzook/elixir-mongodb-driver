@@ -756,11 +756,11 @@ defmodule Mongo do
   end
 
   defp trace(conn_data, command_data, {event, duration}, opts_data) do
-    IO.inspect(conn_data)
-    IO.inspect(command_data)
-    IO.inspect(event)
-    IO.inspect(duration)
-    IO.inspect(opts_data)
+    IO.inspect(conn_data, label: "conn_data")
+    IO.inspect(command_data, label: "command_data")
+    IO.inspect(event, label: "event")
+    IO.inspect(duration, label: "duration")
+    IO.inspect(opts_data, label: "opts_data")
     
     # :telemetry.execute(event_name, measurements, metadata)
   end
