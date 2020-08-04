@@ -768,7 +768,8 @@ defmodule Mongo do
 
   defp trace_end({event, duration}) do
     measurements = %{
-      duration: duration
+      duration: duration,
+      end: DateTime.utc_now |> DateTime.to_string
     }
     
     :telemetry.execute([:mongo_driver, :query_end], measurements, event)
