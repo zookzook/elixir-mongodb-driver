@@ -725,7 +725,10 @@ defmodule Mongo do
   @doc false
   @spec exec_command_session(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command_session(session, cmd, opts) do
-    trace_start(cmd)
+    cmd
+    |> Enum.into(%{})
+    |> trace_start()
+
     with {:ok, conn, new_cmd}      <- Session.bind_session(session, cmd),
          {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
          doc                       <- Session.update_session(session, doc, opts),
@@ -749,7 +752,10 @@ defmodule Mongo do
   @doc false
   @spec exec_command(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command(conn, cmd, opts) do
-    trace_start(cmd)
+    cmd
+    |> Enum.into(%{})
+    |> trace_start()
+    
     with {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc, event) do
       trace_end(event)
