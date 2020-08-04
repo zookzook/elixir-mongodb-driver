@@ -725,11 +725,12 @@ defmodule Mongo do
   @doc false
   @spec exec_command_session(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command_session(session, cmd, opts) do
+    trace_start(cmd)
     with {:ok, conn, new_cmd}      <- Session.bind_session(session, cmd),
          {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
          doc                       <- Session.update_session(session, doc, opts),
          {:ok, doc}                <- check_for_error(doc, event) do
-        trace(event)
+      trace_end(event)
           
       {:ok, doc}
     else
@@ -748,20 +749,29 @@ defmodule Mongo do
   @doc false
   @spec exec_command(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command(conn, cmd, opts) do
+    trace_start(cmd)
     with {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc, event) do
-      trace(event)
+      trace_end(event)
 
       {:ok, doc}
     end
   end
 
-  defp trace({event, duration}) do
+  defp trace_start(cmd) do
+    measurements = %{
+      start: DateTime.utc_now |> DateTime.to_string
+    }
+    
+    :telemetry.execute([:mongo_driver, :query_start], measurements, cmd)
+  end
+
+  defp trace_end({event, duration}) do
     measurements = %{
       duration: duration
     }
     
-    :telemetry.execute([:mongo_driver, :query], measurements, event)
+    :telemetry.execute([:mongo_driver, :query_end], measurements, event)
   end
 
   defp check_for_error(%{"ok" => ok} = response, {event, duration}) when ok == 1 do
