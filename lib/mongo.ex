@@ -750,6 +750,8 @@ defmodule Mongo do
   def exec_command(conn, cmd, opts) do
     with {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
          {:ok, doc} <- check_for_error(doc, event) do
+      trace(event)
+
       {:ok, doc}
     end
   end
