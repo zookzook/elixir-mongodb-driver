@@ -473,7 +473,10 @@ defmodule Mongo.Session do
           |> ReadPreference.add_read_preference(opts)
           |> filter_nils()
 
-    {:keep_state_and_data, {:ok, conn, cmd}}
+    {host, port} = Mongo.MongoDBConnection.Utils.hostname_port(opts)
+    address = "#{host}:#{port}"
+
+    {:keep_state_and_data, {:ok, conn, cmd, address}}
   end
   def handle_call_event({:bind_session, cmd}, :starting_transaction,
         %Session{conn: conn,

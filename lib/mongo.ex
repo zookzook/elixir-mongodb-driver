@@ -407,7 +407,7 @@ defmodule Mongo do
     opts = Mongo.retryable_reads(opts)
 
     with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
-         result <- exec_command_session(session, cmd, opts),
+         result <- exec_command_session(topology_pid, session, cmd, opts),
          :ok <- Session.end_implict_session(topology_pid, session) do
       case result do
         {:error, error} ->
@@ -429,7 +429,7 @@ defmodule Mongo do
     opts = Mongo.retryable_writes(opts, acknowledged?(cmd[:writeConcerns]))
 
     with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
-         result         <- exec_command_session(session, cmd, opts),
+         result         <- exec_command_session(topology_pid, session, cmd, opts),
          :ok            <- Session.end_implict_session(topology_pid, session) do
       result
     else
@@ -723,20 +723,28 @@ defmodule Mongo do
   end
 
   @doc false
-  @spec exec_command_session(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
-  def exec_command_session(session, cmd, opts) do
-    with {:ok, conn, new_cmd}      <- Session.bind_session(session, cmd),
+  @spec exec_command_session(GenServer.server, GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
+  def exec_command_session(topology_pid, session, cmd, opts) do
+    with {:ok, conn, new_cmd, address}      <- Session.bind_session(session, cmd),
          {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
          doc                       <- Session.update_session(session, doc, opts),
-         {:ok, doc}                <- check_for_error(doc, event) do
+         {:ok, doc}                <- check_for_error(doc, event, address) do
       {:ok, doc}
     else
       {:error, error} ->
       ## todo update Topology
+      IO.inspect(error)
+        if error.not_master_or_recovering do
+          IO.inspect("ok")
+          server_description = Mongo.ServerDescription.from_is_master_error(error.address, error)
+          GenServer.cast(topology_pid, {:server_description, server_description})
+        end
+        #require IEx; IEx.pry
+	#:debugger.start()
         case Error.should_retry_write(error, cmd, opts) do
           true  ->
           with :ok <- Session.select_server(session, opts) do
-           exec_command_session(session, cmd, Keyword.put(opts, :write_counter, 2))
+           exec_command_session(topology_pid, session, cmd, Keyword.put(opts, :write_counter, 2))
           end
           false -> {:error, error}
         end
@@ -748,13 +756,13 @@ defmodule Mongo do
   @spec exec_command(GenServer.server, BSON.document, Keyword.t) :: {:ok, BSON.document | nil} | {:error, Mongo.Error.t}
   def exec_command(conn, cmd, opts) do
     with {:ok, _cmd, {doc, event}} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
-         {:ok, doc} <- check_for_error(doc, event) do
+         {:ok, doc} <- check_for_error(doc, event, conn) do
       {:ok, doc}
     end
 
   end
 
-  defp check_for_error(%{"ok" => ok} = response, {event, duration}) when ok == 1 do
+  defp check_for_error(%{"ok" => ok} = response, {event, duration}, conn) when ok == 1 do
     Events.notify(%CommandSucceededEvent{
       reply: response,
       duration: duration,
@@ -765,9 +773,9 @@ defmodule Mongo do
     }, :commands)
     {:ok, response}
   end
-  defp check_for_error(doc, {event, duration}) do
+  defp check_for_error(doc, {event, duration}, address) do
 
-    error = Mongo.Error.exception(doc)
+    error = Mongo.Error.exception(doc, address)
 
     Events.notify(%CommandFailedEvent{
       failure: error,

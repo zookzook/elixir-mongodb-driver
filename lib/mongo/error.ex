@@ -2,7 +2,7 @@ defmodule Mongo.Error do
 
   alias Mongo.Events
 
-  defexception [:message, :code, :host, :error_labels, :resumable, :retryable_reads, :retryable_writes]
+  defexception [:message, :code, :host, :error_labels, :resumable, :retryable_reads, :retryable_writes, :not_master_or_recovering, :address]
 
   @host_unreachable                     6
   @host_not_found                       7
@@ -21,6 +21,18 @@ defmodule Mongo.Error do
   @stale_config                         13388
   @retry_change_stream                  234
   @failed_to_satisfy_read_preference    133
+  
+  # https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#not-master-and-node-is-recovering
+  @not_master_or_recovering [
+    @interrupted_at_shutdown,
+    @interrupted_due_to_repl_state_change,
+    @not_master_or_secondary,
+    @primary_stepped_down,
+    @shutdown_in_progress,
+    
+    @not_master,
+    @not_master_no_slaveok,
+  ]
 
   @retryable_writes [@interrupted_at_shutdown, @interrupted_due_to_repl_state_change, @not_master, @not_master_no_slaveok,
                      @not_master_or_secondary, @primary_stepped_down, @shutdown_in_progress, @host_not_found,
@@ -42,7 +54,8 @@ defmodule Mongo.Error do
     error_labels: [String.t] | nil,
     resumable: boolean,
     retryable_reads: boolean,
-    retryable_writes: boolean
+    retryable_writes: boolean,
+    not_master_or_recovering: boolean,
   }
 
   def message(e) do
@@ -60,12 +73,13 @@ defmodule Mongo.Error do
     %Mongo.Error{message: "#{host} ssl #{action}: #{formatted_reason} - #{inspect(reason)}", host: host, resumable: false}
   end
 
-  def exception(%{"code" => code, "errmsg" => msg} = doc) do
+  def exception(%{"code" => code, "errmsg" => msg} = doc, address) do
     errorLabels     = doc["errorLabels"] || []
     resumable       = Enum.any?(@resumable, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "ResumableChangeStreamError"))
     retryable_reads = Enum.any?(@retryable_reads, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "RetryableReadError"))
     retryable_writes = Enum.any?(@retryable_writes, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "RetryableWriteError"))
-    %Mongo.Error{message: msg, code: code, error_labels: errorLabels, resumable: resumable, retryable_reads: retryable_reads, retryable_writes: retryable_writes}
+    not_master_or_recovering = Enum.any?(@not_master_or_recovering, &(&1 == code))
+    %Mongo.Error{message: msg, code: code, error_labels: errorLabels, resumable: resumable, retryable_reads: retryable_reads, retryable_writes: retryable_writes, not_master_or_recovering: not_master_or_recovering, address: address}
   end
   def exception(message: message, code: code) do
     %Mongo.Error{message: message, code: code, resumable: Enum.any?(@resumable, &(&1 == code))}
@@ -76,7 +90,7 @@ defmodule Mongo.Error do
   end
 
   @doc """
-  Return true if the error is retryalble for read operations.
+  Return true if the error is retryable for read operations.
   """
   def should_retry_read(%Mongo.Error{retryable_reads: true}, cmd, opts) do
     [{command_name,_}|_] = cmd
@@ -93,7 +107,7 @@ defmodule Mongo.Error do
   end
 
   @doc """
-  Return true if the error is retryalble for writes operations.
+  Return true if the error is retryable for writes operations.
   """
   def should_retry_write(%Mongo.Error{retryable_writes: true}, cmd, opts) do
     [{command_name,_}|_] = cmd
