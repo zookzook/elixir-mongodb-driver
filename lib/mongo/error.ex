@@ -76,7 +76,7 @@ defmodule Mongo.Error do
   end
 
   @doc """
-  Return true if the error is retryalble for read operations.
+  Return true if the error is retryable for read operations.
   """
   def should_retry_read(%Mongo.Error{retryable_reads: true}, cmd, opts) do
     [{command_name,_}|_] = cmd
@@ -93,7 +93,7 @@ defmodule Mongo.Error do
   end
 
   @doc """
-  Return true if the error is retryalble for writes operations.
+  Return true if the error is retryable for writes operations.
   """
   def should_retry_write(%Mongo.Error{retryable_writes: true}, cmd, opts) do
     [{command_name,_}|_] = cmd
