@@ -148,15 +148,29 @@ Due to the mongodb specification, an additional connection is always set up for 
 
 ### Replica Sets
 
-To connect to a Mongo cluster that is using replica sets, it is recommended to use the `:seeds` list instead 
-of a `:hostname` and `:port` pair.
+By default, the driver will discover the deployment's topology and will connect
+to the replica set automatically, using either the seed list syntax or the URI
+syntax. Assuming the deployment has nodes at `hostname1.net:27017`,
+`hostname2.net:27017` and `hostname3.net:27017`, either of the following
+invocations will discover the entire deployment:
 
 ```elixir
-{:ok, pid} = Mongo.start_link(database: "test", seeds: ["hostname1.net:27017", "hostname2.net:27017"])
+{:ok, pid} = Mongo.start_link(database: "test", seeds: ["hostname1.net:27017"])
+
+{:ok, pid} = Mongo.start_link(url: "mongodb://hostname1.net:27017/test")
 ```
 
-This will allow for scenarios where the first `"hostname1.net:27017"` is unreachable for any reason 
-and will automatically try to connect to each of the following entries in the list to connect to the cluster.
+To ensure that the connection succeeds even when some of the nodes are not
+available, it is recommended to list all nodes in both the seed list and the
+URI, as follows:
+
+```elixir
+{:ok, pid} = Mongo.start_link(database: "test", seeds: ["hostname1.net:27017", "hostname2.net:27017", "hostname3.net:27017"])
+
+{:ok, pid} = Mongo.start_link(url: "mongodb://hostname1.net:27017,hostname2.net:27017,hostname3.net:27017/test")
+```
+
+Using an SRV URI also discovers all nodes of the deployment automatically.
 
 ### Auth Mechanisms
 
