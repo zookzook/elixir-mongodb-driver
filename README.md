@@ -270,6 +270,21 @@ Mongo.insert_many(top, "users", [
 ])
 ```
 
+### Indexes
+
+To create indexes you can call the function `Mongo.createIndexed/4`:
+
+```elixir
+indexes =  [[key: [files_id: 1, n: 1], name: "files_n_index", unique: true]]
+Mongo.create_indexes(topology_pid, "my_collection", indexes, opts)
+```
+
+You specify the `indexes` parameter as a keyword list with all options described in the documentation of the [createIndex](https://docs.mongodb.com/manual/reference/command/createIndexes/#dbcmd.createIndexes) command.
+
+For more information see:
+* [Mongo.create_indexes](https://hexdocs.pm/mongodb_driver/Mongo.html#create_indexes/4) 
+* [Mongo.drop_index](https://hexdocs.pm/mongodb_driver/Mongo.html#drop_index/4)
+ 
 ### Bulk Writes
 
 The motivation for bulk writes lies in the possibility of optimization, the same operations

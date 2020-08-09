@@ -1194,7 +1194,10 @@ defmodule Mongo do
   end
 
   @doc """
-  Convenient function to creates new indexes in the collection `coll`.
+  Convenient function to creates new indexes in the collection `coll`. The `indexes` parameter
+  is a keyword list with all options for creating indexes in the MongoDB.
+  See [options](https://docs.mongodb.com/manual/reference/command/createIndexes/#dbcmd.createIndexes) about the
+  details of each parameter.
   """
   @spec create_indexes(GenServer.server, String.t, Keyword.t, Keyword.t) :: :ok | {:error, Mongo.Error.t}
   def create_indexes(topology_pid, coll, indexes, opts \\ []) do
