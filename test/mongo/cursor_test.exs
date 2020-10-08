@@ -1,6 +1,30 @@
 defmodule Mongo.CursorTest do
   use CollectionCase, async: false
 
+  test "tailable cursors with awaitData", c do
+
+    coll      = "tailable_cursors"
+    init_docs = Stream.cycle([%{"foo" => 42}]) |> Enum.take(5)
+    tail_docs = Stream.cycle([%{"foo" => 10}]) |> Enum.take(10)
+
+    assert :ok      = Mongo.create(c.pid, coll, capped: true, size: 1_000_000)
+    assert {:ok, _} = Mongo.insert_many(c.pid, coll, init_docs)
+
+    tailing_task = Task.async fn ->
+      Mongo.find(c.pid, coll, %{}, tailable: true, await_data: true)
+      |> Enum.take(15)
+    end
+
+    Enum.each tail_docs, fn doc ->
+      Process.sleep 100
+      Mongo.insert_one(c.pid, coll, doc)
+    end
+
+    expected_docs = init_docs ++ tail_docs
+    assert ^expected_docs = Task.await(tailing_task) |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
+
+  end
+
   test "checking if killCursor is called properly", c do
 
     coll    = "kill_cursors"

@@ -657,7 +657,6 @@ defmodule Mongo do
            showRecordId: opts[:show_record_id],
            tailable: opts[:tailable],
            oplogReplay: opts[:oplog_replay],
-           tailable: opts[:tailable],
            noCursorTimeout: opts[:no_cursor_timeout],
            awaitData: opts[:await_data],
            batchSize: opts[:batch_size],
