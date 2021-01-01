@@ -1,3 +1,9 @@
+## 0.7.1
+
+* Enhancements
+    * upgraded decimal to 2.0, jason to 1.2
+    * Add proper support for tailable cursors and awaitData (PR #74)
+
 ## 0.7.0
 
 * Enhancements
