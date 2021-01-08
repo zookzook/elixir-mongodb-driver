@@ -52,7 +52,7 @@ defmodule Mongo.Auth.SCRAM do
     {message, server_signature}
   end
 
-  defp second(%{"conversationId" => conversation_id, "payload" => payload, "done" => false}, signature) do
+  defp second(%{"conversationId" => conversation_id, "payload" => payload}, signature) do
     params = parse_payload(payload)
     ^signature = params["v"] |> Base.decode64!
     [saslContinue: 1, conversationId: conversation_id, payload: %BSON.Binary{binary: ""}]
