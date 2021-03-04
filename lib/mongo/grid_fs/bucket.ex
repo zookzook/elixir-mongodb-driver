@@ -121,7 +121,6 @@ defmodule Mongo.GridFs.Bucket do
     Mongo.find(topology_pid, files_collection_name(bucket), filter, opts)
   end
 
-
   @doc """
   Finds one file document by `file_id` specified either as a string or `BSON.ObjectId`.
   """
