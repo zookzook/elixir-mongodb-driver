@@ -636,7 +636,7 @@ defmodule Mongo do
        Mongo.find(top, "jobs", %{}, batch_size: 2)
 
   """
-  @spec find(GenServer.server, collection, BSON.document, Keyword.t) :: cursor
+  @spec find(GenServer.server, collection, BSON.document, Keyword.t) :: cursor | {:error, term()}
   def find(topology_pid, coll, filter, opts \\ []) do
 
     filter = case normalize_doc(filter) do
