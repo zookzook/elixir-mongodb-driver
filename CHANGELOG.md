@@ -1,3 +1,12 @@
+## 0.7.2
+
+* Enhancements
+  * Adds test to cover one of Mongo.find/4 errors (vukanac)
+  * Update specs for Mongo.find/4 with error tuple (vukanac)
+  * Fix build warnings and correct typespec (joeapearson)
+  * Update db_connection version to remove System.stacktrace warnings (vukanac)
+  * Update SCRAM auth procedure (LetThereBeDwight)
+  
 ## 0.7.1
 
 * Enhancements
