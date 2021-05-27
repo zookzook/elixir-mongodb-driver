@@ -35,7 +35,7 @@ defmodule Mongo.MongoDBConnection do
       auth_mechanism: opts[:auth_mechanism] || nil,
       connection_type: Keyword.fetch!(opts, :connection_type),
       topology_pid: Keyword.fetch!(opts, :topology_pid),
-      ssl: opts[:ssl] || false
+      ssl: opts[:ssl] || opts[:tls] || false
     }
     connect(opts, state)
   end
