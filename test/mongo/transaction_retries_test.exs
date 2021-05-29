@@ -53,7 +53,7 @@ defmodule Mongo.TransactionRetriesTest do
     assert :ok == Session.end_session(top, session)
 
     assert [:commitTransaction, :commitTransaction, :commitTransaction] = EventCatcher.failed_events(catcher) |> Enum.map(fn event -> event.command_name end)
-    assert [:commitTransaction, :configureFailPoint, :insert, :create] = EventCatcher.succeeded_events(catcher) |> Enum.map(fn event -> event.command_name end)
+    assert [:commitTransaction, :configureFailPoint, :insert, :create] = get_succeeded_events(catcher)
 
   end
 
@@ -125,7 +125,7 @@ defmodule Mongo.TransactionRetriesTest do
 
     Mongo.admin_command(top, [configureFailPoint: "failCommand", mode: "off"])
 
-    assert [:configureFailPoint, :abortTransaction, :configureFailPoint, :insert, :create] = EventCatcher.succeeded_events(catcher) |> Enum.map(fn event -> event.command_name end)
+    assert [:configureFailPoint, :abortTransaction, :configureFailPoint, :insert, :create] = get_succeeded_events(catcher)
 
   end
 
@@ -150,8 +150,15 @@ defmodule Mongo.TransactionRetriesTest do
 
     Mongo.admin_command(top, [configureFailPoint: "failCommand", mode: "off"])
 
-    assert [:configureFailPoint, :abortTransaction, :insert, :configureFailPoint, :create] = EventCatcher.succeeded_events(catcher) |> Enum.map(fn event -> event.command_name end)
+    assert [:configureFailPoint, :abortTransaction, :insert, :configureFailPoint, :create] = get_succeeded_events(catcher)
 
+  end
+
+  defp get_succeeded_events(catcher) do
+    catcher
+    |> EventCatcher.succeeded_events()
+    |> Enum.map(fn event -> event.command_name end)
+    |> Enum.reject(fn event -> event == :isMaster end)
   end
 
 end

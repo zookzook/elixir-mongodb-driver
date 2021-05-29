@@ -74,17 +74,33 @@ defmodule Mongo.Auth.SCRAM do
     Mongo.PBKDF2Cache.pbkdf2(password, salt, iterations, digest)
   end
 
-  defp generate_proof(salted_password, auth_message, digest) do
-    client_key   = :crypto.mac(:hmac, digest, salted_password, "Client Key")
-    stored_key   = :crypto.hash(digest, client_key)
-    signature    = :crypto.mac(:hmac, digest, stored_key, auth_message)
-    client_proof = xor_keys(client_key, signature, "")
-    "p=#{Base.encode64(client_proof)}"
-  end
+  ## support for OTP 22.x
+  if Code.ensure_loaded?(:crypto) and function_exported?(:crypto, :hmac, 3) do
+    defp generate_proof(salted_password, auth_message, digest) do
+      client_key   = :crypto.hmac(digest, salted_password, "Client Key")
+      stored_key   = :crypto.hash(digest, client_key)
+      signature    = :crypto.hmac(digest, stored_key, auth_message)
+      client_proof = xor_keys(client_key, signature, "")
+      "p=#{Base.encode64(client_proof)}"
+    end
 
-  defp generate_signature(salted_password, auth_message, digest) do
-    server_key = :crypto.mac(:hmac, digest, salted_password, "Server Key")
-    :crypto.mac(:hmac, digest, server_key, auth_message)
+    defp generate_signature(salted_password, auth_message, digest) do
+      server_key = :crypto.hmac(digest, salted_password, "Server Key")
+      :crypto.hmac(digest, server_key, auth_message)
+    end
+  else
+    defp generate_proof(salted_password, auth_message, digest) do
+      client_key   = :crypto.mac(:hmac, digest, salted_password, "Client Key")
+      stored_key   = :crypto.hash(digest, client_key)
+      signature    = :crypto.mac(:hmac, digest, stored_key, auth_message)
+      client_proof = xor_keys(client_key, signature, "")
+      "p=#{Base.encode64(client_proof)}"
+    end
+
+    defp generate_signature(salted_password, auth_message, digest) do
+      server_key = :crypto.mac(:hmac, digest, salted_password, "Server Key")
+      :crypto.mac(:hmac, digest, server_key, auth_message)
+    end
   end
 
   defp xor_keys("", "", result), do: result

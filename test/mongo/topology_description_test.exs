@@ -62,12 +62,12 @@ defmodule Mongo.TopologyDescriptionTest do
     opts = [
       read_preference: ReadPreference.primary(%{mode: :primary})
     ]
-    assert {:ok, {master, _}} = TopologyDescription.select_servers(repl_set_with_master(), :read, opts)
+    assert {:ok, {_master, _}} = TopologyDescription.select_servers(repl_set_with_master(), :read, opts)
 
     opts = [
       read_preference: ReadPreference.primary(%{mode: :primary_preferred})
     ]
-    assert {:ok, {master, _}} = TopologyDescription.select_servers(repl_set_with_master(), :read, opts)
+    assert {:ok, {_master, _}} = TopologyDescription.select_servers(repl_set_with_master(), :read, opts)
 
     opts = [
       read_preference: ReadPreference.primary(%{mode: :primary_preferred})

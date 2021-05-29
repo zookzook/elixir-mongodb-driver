@@ -1,3 +1,10 @@
+## 0.7.3
+
+* Enhancements
+  * added support for OTP 24
+  * Add support for tls setting in connection string (tschmittni)
+  * Replace deprecated functions (OTP 24) (aenglisc )
+  
 ## 0.7.2
 
 * Enhancements
