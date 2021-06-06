@@ -78,6 +78,16 @@ defmodule Mongo.UnorderedBulk do
   end
 
   @doc """
+  Returns true, if the bulk is empty, that means it contains no inserts, updates or deletes operations
+  """
+  def empty?(%UnorderedBulk{inserts: [], updates: [], deletes: []}) do
+    true
+  end
+  def empty?(_other) do
+    false
+  end
+
+  @doc """
   Adds the two unordered bulks together.
   """
   def add(%UnorderedBulk{coll: coll_a} = a,  %UnorderedBulk{coll: coll_b} = b) when coll_a == coll_b do
@@ -243,8 +253,14 @@ defmodule Mongo.UnorderedBulk do
         op, {bulk, l} -> {:cont, {push(op, bulk), l - 1}}
       end,
       fn
-        {bulk, 0} -> {:cont, bulk}
-        {bulk, _} -> {:cont, BulkWrite.write(top, bulk, opts), {new(coll), limit - 1}}
+        {bulk, _} ->
+          case empty?(bulk) do
+            true ->
+              {:cont, bulk}
+
+            false ->
+              {:cont, BulkWrite.write(top, bulk, opts), {new(coll), limit - 1}}
+          end
     end)
   end
   def write(_enum, _top, _coll, limit, _opts) when limit < 1 do

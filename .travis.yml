@@ -2,8 +2,8 @@ dist: bionic
 sudo: required
 language: elixir
 
-elixir: 1.12.1
-otp_release: 24.0
+elixir: 1.10.2
+otp_release: 22.0
 
 addons:
   apt:

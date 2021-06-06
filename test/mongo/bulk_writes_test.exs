@@ -30,6 +30,31 @@ defmodule Mongo.BulkWritesTest do
 
   end
 
+  test "check unordered bulk with limit", top do
+    coll = unique_collection()
+
+    [batch_1, batch_2] = 1..49
+                         |> Stream.map(fn i -> Mongo.BulkOps.get_insert_one(%{number: i}) end)
+                         |> Mongo.UnorderedBulk.write(top.pid, coll, 25)
+                         |> Enum.map(& &1)
+
+    assert %{:inserted_count => 25} ==  Map.take(batch_1, [:inserted_count])
+    assert %{:inserted_count => 24} ==  Map.take(batch_2, [:inserted_count])
+  end
+
+  test "check ordered bulk with limit", top do
+    coll = unique_collection()
+
+    [batch_1, batch_2] = 1..49
+                         |> Stream.map(fn i -> Mongo.BulkOps.get_insert_one(%{number: i}) end)
+                         |> Mongo.OrderedBulk.write(top.pid, coll, 25)
+                         |> Enum.map(& &1)
+
+    assert %{:inserted_count => 25} ==  Map.take(batch_1, [:inserted_count])
+    assert %{:inserted_count => 24} ==  Map.take(batch_2, [:inserted_count])
+  end
+
+
   test "check ordered bulk", top do
     coll = unique_collection()
 
