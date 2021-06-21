@@ -1,3 +1,7 @@
+## 0.7.4
+* Enhancements
+  * added a new option to specify a timeout, when increasing the connction pool is no option
+
 ## 0.7.3
 
 * Enhancements
