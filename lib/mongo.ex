@@ -671,7 +671,7 @@ defmodule Mongo do
 
     cmd = filter_nils(cmd)
 
-    drop = ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data batch_size projection comment max_time skip sort)a
+    drop = ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data projection comment skip sort)a
     opts = Keyword.drop(opts, drop)
     try do
       get_stream(topology_pid, cmd, opts)
