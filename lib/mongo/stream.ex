@@ -5,7 +5,7 @@ defmodule Mongo.Stream do
 
   import Record, only: [defrecordp: 2]
 
-  defstruct [:topology_pid, :session, :cursor, :coll, :docs, :opts]
+  defstruct [:topology_pid, :session, :cursor, :coll, :docs, :cmd, :opts]
 
   alias Mongo.Session
 
@@ -22,7 +22,7 @@ defmodule Mongo.Stream do
                "ns" => coll,
                "firstBatch" => docs}}} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
 
-      %Mongo.Stream{topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, docs: docs, opts: opts}
+      %Mongo.Stream{topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, docs: docs, cmd: cmd, opts: opts}
     else
       {:error, error} ->
         case Error.should_retry_read(error, cmd, opts) do
@@ -35,11 +35,11 @@ defmodule Mongo.Stream do
 
   defimpl Enumerable do
 
-    defrecordp :state, [:topology_pid, :session, :cursor, :coll,  :docs]
+    defrecordp :state, [:topology_pid, :session, :cursor, :coll, :cmd, :docs]
 
-    def reduce(%Mongo.Stream{topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, docs: docs, opts: opts}, acc, reduce_fun) do
+    def reduce(%Mongo.Stream{topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, docs: docs, cmd: cmd, opts: opts}, acc, reduce_fun) do
 
-      start_fun = fn -> state(topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, docs: docs) end
+      start_fun = fn -> state(topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, cmd: cmd, docs: docs) end
       next_fun  = next_fun(opts)
       after_fun = after_fun(opts)
 
@@ -51,9 +51,9 @@ defmodule Mongo.Stream do
         state(docs: [], cursor: 0) = state ->  {:halt, state}
 
         # this is a regular cursor
-        state(docs: [], topology_pid: topology_pid, session: session, cursor: cursor, coll: coll) = state ->
+        state(docs: [], topology_pid: topology_pid, session: session, cursor: cursor, coll: coll, cmd: cmd) = state ->
           case get_more(topology_pid, session, only_coll(coll), cursor, nil, opts) do
-            {:ok, %{cursor_id: cursor_id, docs: []}}   -> {:halt, state(state, cursor: cursor_id)}
+            {:ok, %{cursor_id: cursor_id, docs: []}}   -> {if(cmd[:tailable], do: [], else: :halt), state(state, cursor: cursor_id)}
             {:ok, %{cursor_id: cursor_id, docs: docs}} -> {docs, state(state, cursor: cursor_id)}
             {:error, error}                            -> raise error
           end

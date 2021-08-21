@@ -51,6 +51,7 @@ defmodule Mongo.ReadPreferencesTest do
     rs.reconfig(conf);
 
   """
+  @tag timeout: 70_0000
   @tag :tag_set
   test "find_one, using read_preferences options, tag_set", %{pid: top, catcher: catcher} do
 

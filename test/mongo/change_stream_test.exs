@@ -68,7 +68,7 @@ defmodule Mongo.ChangeStreamTest do
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Greta"})
 
     assert_receive {:token, _}, 5_000
-    assert_receive {:token, token}, 5_000
+    assert_receive {:token, _token}, 5_000
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Greta"}}}, 5_000
 
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
@@ -94,7 +94,7 @@ defmodule Mongo.ChangeStreamTest do
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Greta"})
 
     assert_receive {:token, _}, 5_000
-    assert_receive {:token, token}, 5_000
+    assert_receive {:token, _token}, 5_000
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Greta"}}}, 5_000
 
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
@@ -121,7 +121,7 @@ defmodule Mongo.ChangeStreamTest do
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Greta"})
 
     assert_receive {:token, _}, 5_000
-    assert_receive {:token, token}, 5_000
+    assert_receive {:token, _token}, 5_000
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Greta"}}}, 5_000
 
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
@@ -148,7 +148,7 @@ defmodule Mongo.ChangeStreamTest do
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Greta"})
 
     assert_receive {:token, _}, 5_000
-    assert_receive {:token, token}, 5_000
+    assert_receive {:token, _token}, 5_000
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Greta"}}}, 5_000
 
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
@@ -175,7 +175,7 @@ defmodule Mongo.ChangeStreamTest do
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Greta"})
 
     assert_receive {:token, _}, 5_000
-    assert_receive {:token, token}, 5_000
+    assert_receive {:token, _token}, 5_000
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Greta"}}}, 5_000
 
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)

@@ -9,20 +9,32 @@ defmodule BSON.Binary do
   }
   defstruct [binary: nil, subtype: :generic]
 
-  defimpl Inspect do
-    def inspect(%BSON.Binary{binary: value, subtype: :generic}, _opts) do
-      "#BSON.Binary<#{Base.encode16(value, case: :lower)}>"
-    end
-    def inspect(%BSON.Binary{binary: value, subtype: :uuid}, _opts) do
+  defimpl String.Chars, for: BSON.Binary do
+    def to_string(%BSON.Binary{binary: value, subtype: subtype}) when subtype in [:uuid, :uuid_old] do
       p1 = binary_part(value, 0, 4)
       p2 = binary_part(value, 4, 2)
       p3 = binary_part(value, 6, 2)
       p4 = binary_part(value, 8, 2)
       p5 = binary_part(value, 10, 6)
-      "#BSON.UUID<#{Base.encode16(p1, case: :lower)}-#{Base.encode16(p2, case: :lower)}-#{Base.encode16(p3, case: :lower)}-#{Base.encode16(p4, case: :lower)}-#{Base.encode16(p5, case: :lower)}>"
+      "#{Base.encode16(p1, case: :lower)}-#{Base.encode16(p2, case: :lower)}-#{Base.encode16(p3, case: :lower)}-#{Base.encode16(p4, case: :lower)}-#{Base.encode16(p5, case: :lower)}"
     end
-    def inspect(%BSON.Binary{binary: value, subtype: subtype}, _opts) do
-      "#BSON.Binary<#{Base.encode16(value, case: :lower)}, #{subtype}>"
+    def to_string(%BSON.Binary{binary: value}) do
+      Base.encode16(value, case: :lower)
+    end
+  end
+
+  defimpl Inspect do
+    def inspect(%BSON.Binary{subtype: :generic} = binary, _opts) do
+      "#BSON.Binary<#{to_string(binary)}>"
+    end
+    def inspect(%BSON.Binary{subtype: :uuid} = binary, _opts) do
+      "#BSON.UUID<#{to_string(binary)}>"
+    end
+    def inspect(%BSON.Binary{subtype: :uuid_old} = binary, _opts) do
+      "#BSON.LUUID<#{to_string(binary)}>"
+    end
+    def inspect(%BSON.Binary{subtype: subtype} = binary, _opts) do
+      "#BSON.Binary<#{to_string(binary)}, #{subtype}>"
     end
   end
 end

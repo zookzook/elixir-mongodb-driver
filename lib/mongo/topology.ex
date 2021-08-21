@@ -18,6 +18,8 @@ defmodule Mongo.Topology do
   # https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#heartbeatfrequencyms-defaults-to-10-seconds-or-60-seconds
   @heartbeat_frequency_ms 10_000
 
+  @default_checkout_timeout 60_000
+
   @spec start_link(Keyword.t, Keyword.t) ::
           {:ok, pid} |
           {:error, reason :: atom}
@@ -51,8 +53,9 @@ defmodule Mongo.Topology do
     GenServer.call(pid, :topology)
   end
 
-  def select_server(pid, type, opts \\ []) do
-    GenServer.call(pid, {:select_server, type, opts})
+  def select_server(pid, type, opts \\ []) do#97
+    timeout = Keyword.get(opts, :checkout_timeout,  @default_checkout_timeout)
+    GenServer.call(pid, {:select_server, type, opts}, timeout)
   end
 
   def limits(pid) do
@@ -63,11 +66,9 @@ defmodule Mongo.Topology do
     GenServer.call(pid, :wire_version)
   end
 
-  @doc """
-
-  """
   def checkout_session(pid, cmd_type, type, opts \\ []) do
-    GenServer.call(pid, {:checkout_session, cmd_type, type, opts})
+    timeout = Keyword.get(opts, :checkout_timeout,  @default_checkout_timeout)
+    GenServer.call(pid, {:checkout_session, cmd_type, type, opts}, timeout)
   end
 
   def checkin_session(pid, server_session) do

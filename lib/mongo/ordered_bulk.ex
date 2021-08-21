@@ -77,6 +77,16 @@ defmodule Mongo.OrderedBulk do
   end
 
   @doc """
+  Returns true, if the bulk is empty, that means it contains no inserts, updates or deletes operations
+  """
+  def empty?(%OrderedBulk{ops: []}) do
+    true
+  end
+  def empty?(_other) do
+    false
+  end
+
+  @doc """
   Appends a bulk operation to the ordered bulk.
   """
   @spec push(BulkOps.bulk_op, OrderedBulk.t) :: OrderedBulk.t
@@ -207,8 +217,14 @@ defmodule Mongo.OrderedBulk do
         op, {bulk, l} -> {:cont, {push(op, bulk), l - 1}}
       end,
       fn
-        {bulk, 0} -> {:cont, bulk}
-        {bulk, _} -> {:cont, BulkWrite.write(top, bulk, opts), {new(coll), limit - 1}}
+        {bulk, _} ->
+          case empty?(bulk) do
+            true ->
+              {:cont, bulk}
+
+            false ->
+              {:cont, BulkWrite.write(top, bulk, opts), {new(coll), limit - 1}}
+          end
       end)
   end
   def write(_enum, _top, _coll, limit, _opts) when limit < 1 do

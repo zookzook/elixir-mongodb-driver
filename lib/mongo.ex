@@ -10,6 +10,8 @@ defmodule Mongo do
     * `:timeout` - The maximum time that the caller is allowed the to hold the
       connection’s state (ignored when using a run/transaction connection,
       default: `15_000`)
+    * `:checkout_timeout` - The maximum time for checking out a new session and connection (default: `60_000`).
+      When the connection pool exhausted then the function call times out after :checkout_timeout.
     * `:pool` - The pooling behaviour module to use, this option is required
       unless the default `DBConnection.Connection` pool is used
     * `:pool_timeout` - The maximum time to wait for a reply when making a
@@ -636,7 +638,7 @@ defmodule Mongo do
        Mongo.find(top, "jobs", %{}, batch_size: 2)
 
   """
-  @spec find(GenServer.server, collection, BSON.document, Keyword.t) :: cursor
+  @spec find(GenServer.server, collection, BSON.document, Keyword.t) :: cursor | {:error, term()}
   def find(topology_pid, coll, filter, opts \\ []) do
 
     filter = case normalize_doc(filter) do
@@ -657,7 +659,6 @@ defmodule Mongo do
            showRecordId: opts[:show_record_id],
            tailable: opts[:tailable],
            oplogReplay: opts[:oplog_replay],
-           tailable: opts[:tailable],
            noCursorTimeout: opts[:no_cursor_timeout],
            awaitData: opts[:await_data],
            batchSize: opts[:batch_size],
@@ -670,7 +671,7 @@ defmodule Mongo do
 
     cmd = filter_nils(cmd)
 
-    drop = ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data batch_size projection comment max_time skip sort)a
+    drop = ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data projection comment skip sort)a
     opts = Keyword.drop(opts, drop)
     try do
       get_stream(topology_pid, cmd, opts)
@@ -1202,9 +1203,14 @@ defmodule Mongo do
   end
 
   @doc """
-  Convenient function to creates new indexes in the collection `coll`.
+  Convenient function to creates new indexes in the collection `coll`. The `indexes` parameter is a
+  list with all options for creating indexes in the MongoDB.
+
+  See
+  [options](https://docs.mongodb.com/manual/reference/command/createIndexes/#dbcmd.createIndexes)
+  about the details of each parameter.
   """
-  @spec create_indexes(GenServer.server, String.t, Keyword.t, Keyword.t) :: :ok | {:error, Mongo.Error.t}
+  @spec create_indexes(GenServer.server, String.t, [Keyword.t], Keyword.t) :: :ok | {:error, Mongo.Error.t}
   def create_indexes(topology_pid, coll, indexes, opts \\ []) do
     cmd = [createIndexes: coll, indexes: indexes]
     with {:ok, _} <- Mongo.issue_command(topology_pid, cmd, :write, opts) do

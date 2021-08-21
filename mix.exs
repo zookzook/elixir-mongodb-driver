@@ -1,7 +1,7 @@
 defmodule Mongodb.Mixfile do
   use Mix.Project
 
-  @version "0.7.0"
+  @version "0.7.4"
 
   def project() do
     [app: :mongodb_driver,
@@ -28,9 +28,12 @@ defmodule Mongodb.Mixfile do
   defp elixirc_paths(_),     do: ["lib"]
 
   def application() do
-    [applications: applications(Mix.env),
-     mod: {Mongo.App, []},
-     env: []]
+    [
+      applications: applications(Mix.env),
+      env: [],
+      extra_applications: [:crypto, :ssl],
+      mod: {Mongo.App, []}
+    ]
   end
 
   def applications(:test), do: [:logger, :connection, :db_connection]
@@ -38,12 +41,12 @@ defmodule Mongodb.Mixfile do
 
   defp deps() do
     [
-      {:db_connection, "~> 2.2.1"},
-      {:decimal,       "~> 1.8"},
+      {:db_connection, "~> 2.3"},
+      {:decimal,       "~> 2.0"},
       {:excoveralls,   "~> 0.12.1", only: :test},
       {:benchee,       "~> 1.0", only: :dev},
-      {:jason,         "~> 1.0.0", only: :test},
-      {:ex_doc,        "~> 0.20.1 ", only: :dev},
+      {:jason,         "~> 1.2", only: :test},
+      {:ex_doc,        "~> 0.24 ", only: :dev},
       {:earmark,       ">= 0.0.0", only: :dev},
       {:dialyxir,      "~> 0.5", only: [:dev], runtime: false}
     ]

@@ -144,6 +144,50 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  test "commit_transaction on multiple database", %{top: top} do
+
+    coll = "dogs"
+
+    Mongo.insert_one(top, coll, %{name: "Wuff"})
+    Mongo.delete_many(top, coll, %{})
+    Mongo.insert_one(top, coll, %{name: "Wuff"}, database: "mongodb_test_2")
+    Mongo.delete_many(top, coll, %{}, database: "mongodb_test_2")
+
+    {:ok, session} = Session.start_session(top, :write, [])
+    assert :ok = Session.start_transaction(session)
+
+    {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"}, session: session)
+    assert id != nil
+    {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Waldo"}, session: session)
+    assert id != nil
+    {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Tom"}, session: session)
+    assert id != nil
+
+    {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"}, session: session, database: "mongodb_test_2")
+    assert id != nil
+    {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Waldo"}, session: session, database: "mongodb_test_2")
+    assert id != nil
+    {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Tom"}, session: session, database: "mongodb_test_2")
+    assert id != nil
+
+    assert %{"name" => "Tom"} = Mongo.find_one(top, coll, %{name: "Tom"}, session: session)
+    assert {:ok, 3} == Mongo.count_documents(top, coll, %{}, session: session)
+    assert {:ok, 0} == Mongo.count_documents(top, coll, %{})
+
+    assert %{"name" => "Tom"} = Mongo.find_one(top, coll, %{name: "Tom"}, session: session, database: "mongodb_test_2")
+    assert {:ok, 3} == Mongo.count_documents(top, coll, %{}, session: session, database: "mongodb_test_2")
+    assert {:ok, 0} == Mongo.count_documents(top, coll, %{}, database: "mongodb_test_2")
+
+    :ok = Session.commit_transaction(session)
+
+    %{"_id" => _id, "name" =>  "Tom"} = Mongo.find_one(top, coll, %{name: "Tom"}, session: session)
+    assert {:ok, 3} == Mongo.count(top, coll, %{})
+    assert {:ok, 3} == Mongo.count(top, coll, %{}, session: session)
+
+    assert :ok == Session.end_session(top, session)
+
+  end
+  @tag :mongo_4_2
   test "abort_transaction", %{top: top} do
 
     coll = "dogs"

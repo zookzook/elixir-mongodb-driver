@@ -1,3 +1,29 @@
+## 0.7.4
+* Enhancements
+  * added a new option to specify a timeout, when increasing the connction pool is no option
+
+## 0.7.3
+
+* Enhancements
+  * added support for OTP 24
+  * Add support for tls setting in connection string (tschmittni)
+  * Replace deprecated functions (OTP 24) (aenglisc )
+  
+## 0.7.2
+
+* Enhancements
+  * Adds test to cover one of Mongo.find/4 errors (vukanac)
+  * Update specs for Mongo.find/4 with error tuple (vukanac)
+  * Fix build warnings and correct typespec (joeapearson)
+  * Update db_connection version to remove System.stacktrace warnings (vukanac)
+  * Update SCRAM auth procedure (LetThereBeDwight)
+  
+## 0.7.1
+
+* Enhancements
+    * upgraded decimal to 2.0, jason to 1.2
+    * Add proper support for tailable cursors and awaitData (PR #74)
+
 ## 0.7.0
 
 * Enhancements

@@ -199,6 +199,10 @@ defmodule Mongo.Test do
 
     assert [%{"foo" => 44}, %{"foo" => 43}] =
       Mongo.find(c.pid, coll, %{}, sort: [foo: -1], batch_size: 2, limit: 2) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
+
+    # one of error types
+    assert {:error, %Mongo.Error{message: "unknown top level operator: $foo"}} =
+      Mongo.find(c.pid, coll, %{"$foo" => []})
   end
 
   test "find_one", c do
