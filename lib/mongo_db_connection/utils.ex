@@ -1,7 +1,7 @@
 defmodule Mongo.MongoDBConnection.Utils do
   @moduledoc false
   import Kernel, except: [send: 2]
-  import Mongo.Messages
+  use Mongo.Messages
   use Bitwise
 
   # @reply_cursor_not_found   0x1
