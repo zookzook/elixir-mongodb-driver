@@ -2,50 +2,85 @@ defmodule Mongo.Error do
 
   alias Mongo.Events
 
-  defexception [:message, :code, :host, :error_labels, :resumable, :retryable_reads, :retryable_writes, :not_master_or_recovering, :address]
+  defexception [:message, :code, :host, :error_labels, :resumable, :retryable_reads, :retryable_writes, :not_writable_primary_or_recovering]
 
-  @host_unreachable                     6
-  @host_not_found                       7
-  @network_timeout                      89
-  @shutdown_in_progress                 91
-  @primary_stepped_down                 189
   @exceeded_time_limit                  262
-  @socket_exception                     9001
-  @not_master                           10107
+  @failed_to_satisfy_read_preference    133
+  @host_not_found                       7
+  @host_unreachable                     6
   @interrupted_at_shutdown              11600
   @interrupted_due_to_repl_state_change 11602
-  @not_master_no_slaveok                13435
-  @not_master_or_secondary              13436
-  @stale_shard_version                  63
-  @stale_epoch                          150
-  @stale_config                         13388
+  @network_timeout                      89
+  @not_primary_no_secondary_ok          13435
+  @not_primary_or_secondary             13436
+  @not_writable_primary                 10107
+  @primary_stepped_down                 189
   @retry_change_stream                  234
-  @failed_to_satisfy_read_preference    133
-  
-  # https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#not-master-and-node-is-recovering
-  @not_master_or_recovering [
+  @shutdown_in_progress                 91
+  @socket_exception                     9001
+  @stale_config                         13388
+  @stale_epoch                          150
+  @stale_shard_version                  63
+
+  @retryable_writes [
+    @exceeded_time_limit,
+    @host_not_found,
+    @host_unreachable,
     @interrupted_at_shutdown,
     @interrupted_due_to_repl_state_change,
-    @not_master_or_secondary,
+    @network_timeout,
+    @not_primary_no_secondary_ok,
+    @not_primary_or_secondary,
+    @not_writable_primary,
     @primary_stepped_down,
     @shutdown_in_progress,
-    
-    @not_master,
-    @not_master_no_slaveok,
+    @socket_exception
   ]
 
-  @retryable_writes [@interrupted_at_shutdown, @interrupted_due_to_repl_state_change, @not_master, @not_master_no_slaveok,
-                     @not_master_or_secondary, @primary_stepped_down, @shutdown_in_progress, @host_not_found,
-                     @host_unreachable, @network_timeout, @socket_exception, @exceeded_time_limit ]
+  @retryable_reads [
+    @host_not_found,
+    @host_unreachable,
+    @interrupted_due_to_repl_state_change,
+    @network_timeout,
+    @not_primary_no_secondary_ok,
+    @not_primary_or_secondary,
+    @not_writable_primary,
+    @primary_stepped_down,
+    @socket_exception,
+    @interrupted_at_shutdown
+    ]
 
-  @retryable_reads [@interrupted_at_shutdown, @interrupted_due_to_repl_state_change, @not_master,
-                    @not_master_no_slaveok, @not_master_or_secondary, @primary_stepped_down,
-                    @host_not_found, @host_unreachable , @network_timeout, @socket_exception]
+  @resumable [
+    @exceeded_time_limit,
+    @interrupted_due_to_repl_state_change,
+    @stale_epoch,
+    @failed_to_satisfy_read_preference,
+    @host_not_found,
+    @host_unreachable,
+    @interrupted_at_shutdown,
+    @interrupted_at_shutdown,
+    @network_timeout,
+    @not_primary_no_secondary_ok,
+    @not_primary_or_secondary,
+    @not_writable_primary,
+    @primary_stepped_down,
+    @retry_change_stream,
+    @shutdown_in_progress,
+    @socket_exception,
+    @stale_config,
+    @stale_shard_version
+  ]
 
-  @resumable [@host_unreachable, @host_not_found, @network_timeout, @shutdown_in_progress, @primary_stepped_down,
-              @exceeded_time_limit, @socket_exception, @not_master, @interrupted_at_shutdown, @interrupted_at_shutdown,
-              @interrupted_due_to_repl_state_change, @not_master_no_slaveok, @not_master_or_secondary, @stale_shard_version,
-              @stale_epoch, @stale_config, @retry_change_stream, @failed_to_satisfy_read_preference]
+  # https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#not-writable-primary-and-node-is-recovering
+  @not_writable_primary_or_recovering [
+    @interrupted_at_shutdown,
+    @interrupted_due_to_repl_state_change,
+    @not_primary_no_secondary_ok,
+    @not_primary_or_secondary,
+    @not_writable_primary,
+    @primary_stepped_down,
+    @shutdown_in_progress
+  ]
 
   @type t :: %__MODULE__{
     message: String.t,
@@ -55,7 +90,7 @@ defmodule Mongo.Error do
     resumable: boolean,
     retryable_reads: boolean,
     retryable_writes: boolean,
-    not_master_or_recovering: boolean,
+    not_writable_primary_or_recovering: boolean
   }
 
   def message(e) do
@@ -73,14 +108,22 @@ defmodule Mongo.Error do
     %Mongo.Error{message: "#{host} ssl #{action}: #{formatted_reason} - #{inspect(reason)}", host: host, resumable: false}
   end
 
-  def exception(%{"code" => code, "errmsg" => msg} = doc, address) do
+  def exception(%{"code" => code, "errmsg" => msg} = doc) do
     errorLabels     = doc["errorLabels"] || []
     resumable       = Enum.any?(@resumable, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "ResumableChangeStreamError"))
     retryable_reads = Enum.any?(@retryable_reads, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "RetryableReadError"))
     retryable_writes = Enum.any?(@retryable_writes, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "RetryableWriteError"))
-    not_master_or_recovering = Enum.any?(@not_master_or_recovering, &(&1 == code))
-    %Mongo.Error{message: msg, code: code, error_labels: errorLabels, resumable: resumable, retryable_reads: retryable_reads, retryable_writes: retryable_writes, not_master_or_recovering: not_master_or_recovering, address: address}
+    not_writable_primary_or_recovering = Enum.any?(@not_writable_primary_or_recovering, &(&1 == code))
+
+    %Mongo.Error{message: msg,
+      code: code,
+      error_labels: errorLabels,
+      resumable: resumable,
+      retryable_reads: retryable_reads,
+      retryable_writes: retryable_writes,
+      not_writable_primary_or_recovering: not_writable_primary_or_recovering}
   end
+
   def exception(message: message, code: code) do
     %Mongo.Error{message: message, code: code, resumable: Enum.any?(@resumable, &(&1 == code))}
   end
@@ -88,6 +131,7 @@ defmodule Mongo.Error do
   def exception(message) do
     %Mongo.Error{message: message, resumable: false}
   end
+
 
   @doc """
   Return true if the error is retryable for read operations.
@@ -128,6 +172,24 @@ defmodule Mongo.Error do
   end
   def has_label(_other, _label) do
     false
+  end
+
+  def not_writable_primary?(%Mongo.Error{code: code}) do
+    code == @not_writable_primary
+  end
+  def not_primary_no_secondary_ok?(%Mongo.Error{code: code}) do
+    code == @not_primary_no_secondary_ok
+  end
+  def not_primary_or_secondary?(%Mongo.Error{code: code}) do
+    code == @not_primary_or_secondary
+  end
+
+  @doc """
+  Return true if the error == not writable primary or in recovering mode.
+  """
+  def not_writable_primary_or_recovering?(%Mongo.Error{not_writable_primary_or_recovering: result}, opts) do
+    ## no explicit session, no retry counter but not_writable_primary_or_recovering
+    Keyword.get(opts, :session, nil) == nil && Keyword.get(opts, :retry_counter, nil) == nil && result
   end
 end
 

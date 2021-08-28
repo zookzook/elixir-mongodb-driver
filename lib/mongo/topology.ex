@@ -4,19 +4,33 @@ defmodule Mongo.Topology do
   require Logger
 
   use GenServer
-  alias Mongo.Events.{ServerDescriptionChangedEvent, ServerOpeningEvent, ServerClosedEvent,
-                      TopologyDescriptionChangedEvent, TopologyOpeningEvent, TopologyClosedEvent,
-                      ServerSelectionEmptyEvent}
-  alias Mongo.TopologyDescription
-  alias Mongo.ServerDescription
-  alias Mongo.Monitor
-  alias Mongo.Session.SessionPool
-  alias Mongo.Session
 
-  @limits [:compression, :logical_session_timeout, :max_bson_object_size, :max_message_size_bytes, :max_wire_version, :max_write_batch_size, :read_only]
+  alias Mongo.Events.ServerDescriptionChangedEvent
+  alias Mongo.Events.ServerSelectionEmptyEvent
+  alias Mongo.Events.TopologyClosedEvent
+  alias Mongo.Events.TopologyDescriptionChangedEvent
+  alias Mongo.Events.TopologyOpeningEvent
+  alias Mongo.Events.ServerClosedEvent
+  alias Mongo.Events.ServerOpeningEvent
+  alias Mongo.Monitor
+  alias Mongo.ServerDescription
+  alias Mongo.Session
+  alias Mongo.Session.SessionPool
+  alias Mongo.TopologyDescription
+
+  @limits [
+    :compression,
+    :logical_session_timeout,
+    :max_bson_object_size,
+    :max_message_size_bytes,
+    :max_wire_version,
+    :max_write_batch_size,
+    :read_only,
+  ]
 
   # https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#heartbeatfrequencyms-defaults-to-10-seconds-or-60-seconds
-  @heartbeat_frequency_ms 10_000
+  @max_heartbeat_frequency_ms 10_000
+  @min_heartbeat_frequency_ms 500
 
   @default_checkout_timeout 60_000
 
@@ -56,6 +70,12 @@ defmodule Mongo.Topology do
   def select_server(pid, type, opts \\ []) do#97
     timeout = Keyword.get(opts, :checkout_timeout,  @default_checkout_timeout)
     GenServer.call(pid, {:select_server, type, opts}, timeout)
+  end
+
+  def mark_server_unknown(pid, address) do
+    ## todo Logger.info("mark_server_unknown #{inspect address} ")
+    server_description = ServerDescription.from_is_master_error(address, "not writable primary or recovering")
+    update_server_description(pid, server_description)
   end
 
   def limits(pid) do
@@ -103,7 +123,7 @@ defmodule Mongo.Topology do
               set_name: set_name,
               servers: servers,
               local_threshold_ms: local_threshold_ms,
-              heartbeat_frequency_ms: @heartbeat_frequency_ms
+              heartbeat_frequency_ms: @min_heartbeat_frequency_ms
             }),
             seeds: seeds,
             opts: opts,
@@ -131,9 +151,7 @@ defmodule Mongo.Topology do
     end
     Enum.each(state.connection_pools, fn {_address, pid} -> GenServer.stop(pid) end)
     Enum.each(state.monitors, fn {_address, pid} -> GenServer.stop(pid) end)
-    :ok = Mongo.Events.notify(%TopologyClosedEvent{
-      topology_pid: self()
-    })
+    Mongo.Events.notify(%TopologyClosedEvent{topology_pid: self()})
   end
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#updating-the-topologydescription
@@ -180,7 +198,7 @@ defmodule Mongo.Topology do
           {:ok, pool} = DBConnection.start_link(Mongo.MongoDBConnection, conn_opts)
           connection_pools = Map.put(state.connection_pools, host, pool)
 
-          Process.send_after(self(), {:new_connection, state.waiting_pids, host}, 1000)
+          Process.send_after(self(), {:new_connection, state.waiting_pids}, 10)
 
           %{state | connection_pools: connection_pools, waiting_pids: []}
         end
@@ -207,8 +225,9 @@ defmodule Mongo.Topology do
     {:noreply, %{state | session_pool: SessionPool.checkin(pool, server_session)}}
   end
 
-  def handle_info({:new_connection, waiting_pids, host}, state) do
-    Enum.each(waiting_pids, fn from -> GenServer.reply(from, {:new_connection, host}) end)
+  def handle_info({:new_connection, waiting_pids}, state) do
+    ## todo Logger.info("Notify waitings pid with new_connection #{inspect waiting_pids}")
+    Enum.each(waiting_pids, fn from -> GenServer.reply(from, :new_connection) end)
     {:noreply, state}
   end
 
@@ -219,6 +238,7 @@ defmodule Mongo.Topology do
     state
     |> get_and_update_in([:topology], &TopologyDescription.update(&1, server_description, length(state.seeds)))
     |> process_events()
+    |> update_heartbeat_frequency()
     |> update_monitor()
     |> update_session_pool(logical_session_timeout)
   end
@@ -226,7 +246,37 @@ defmodule Mongo.Topology do
     state
     |> get_and_update_in([:topology], &TopologyDescription.update(&1, server_description, length(state.seeds)))
     |> process_events()
+    |> update_heartbeat_frequency()
     |> update_monitor()
+  end
+
+  defp update_heartbeat_frequency(%{:topology => %{heartbeat_frequency_ms: current} = topology, monitors: monitors} = state) do
+    case TopologyDescription.select_servers(topology, :write, []) do
+      :empty ->
+        case current == @min_heartbeat_frequency_ms do
+          true ->
+            ## todo Logger.info("Topology: no primary found, searching")
+            state
+          false ->
+            ## todo Logger.info("Topology: no primary found, start searching")
+            Enum.each(monitors, fn {_address, pid} -> Monitor.set_heartbeat_frequency_ms(pid, @min_heartbeat_frequency_ms) end)
+            put_in(state[:topology][:heartbeat_frequency_ms], @min_heartbeat_frequency_ms)
+        end
+      host ->
+        case current == @max_heartbeat_frequency_ms do
+          true ->
+            ## todo Logger.info("Topology: primary exist")
+            state
+          false ->
+            ## todo Logger.info("Topology: primary found #{inspect host}, stop searching")
+
+            ## filter own pid
+            Enum.each(monitors, fn {_address, pid} -> Monitor.set_heartbeat_frequency_ms(pid, @max_heartbeat_frequency_ms) end)
+            Process.send_after(self(), {:new_connection, state.waiting_pids}, 10)
+            state = put_in(state[:topology][:heartbeat_frequency_ms], @max_heartbeat_frequency_ms)
+            %{state | waiting_pids: []}
+        end
+    end
   end
 
   defp process_events({events, state}) do
@@ -270,7 +320,7 @@ defmodule Mongo.Topology do
         with {:ok, connection}           <- get_connection(address, state),
              wire_version                <- wire_version(address, topology),
              {server_session, new_state} <- checkout_server_session(state),
-             {:ok, session}              <- Session.start_link(self(), connection, server_session, type, wire_version, opts) do
+             {:ok, session}              <- Session.start_link(self(), connection, address, server_session, type, wire_version, opts) do
           {:reply, {:ok, session}, new_state}
         else
           error -> {:reply, error, state} ## in case of an error, just return the error
@@ -312,10 +362,11 @@ defmodule Mongo.Topology do
   end
 
   def handle_call(:wire_version, _from, %{:topology => topology} = state) do
-    case TopologyDescription.select_servers(topology, :write, []) do
+    case TopologyDescription.select_servers(topology, :read, []) do
       :empty ->
-        Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :wire_version, cmd_type: :write, topology: topology})
-        {:reply, nil, state}
+        Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :wire_version, cmd_type: :read, topology: topology})
+        ## todo fix me
+        {:reply, {:ok, 9}, state}
 
       {:ok, {address, _opts}} ->
         {:reply, {:ok, wire_version(address, topology)}, state}
@@ -360,7 +411,7 @@ defmodule Mongo.Topology do
   ##
   # update the monitor process. For new servers the function creates new monitor processes.
   #
-  defp update_monitor(state) do
+  defp update_monitor(%{topology: %{heartbeat_frequency_ms: heartbeat_frequency_ms}} = state) do
     arbiters = fetch_arbiters(state)
     old_addrs = Map.keys(state.monitors)
     # remove arbiters from connection pool as descriptions are recieved
@@ -376,7 +427,7 @@ defmodule Mongo.Topology do
 
       Mongo.Events.notify(%ServerOpeningEvent{address: address, topology_pid: self()})
 
-      args = [server_description.address, self(), @heartbeat_frequency_ms, Keyword.put(connopts, :pool, DBConnection.ConnectionPool)]
+      args = [server_description.address, self(), heartbeat_frequency_ms, Keyword.put(connopts, :pool, DBConnection.ConnectionPool)]
       {:ok, pid} = Monitor.start_link(args)
 
       %{ state | monitors: Map.put(state.monitors, address, pid) }

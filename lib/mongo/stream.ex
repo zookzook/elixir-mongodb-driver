@@ -7,8 +7,6 @@ defmodule Mongo.Stream do
 
   defstruct [:topology_pid, :session, :cursor, :coll, :docs, :cmd, :opts]
 
-  alias Mongo.Session
-
   def new(topology_pid, cmd, opts) do
 
     ## check, if retryable reads are enabled

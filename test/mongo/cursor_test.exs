@@ -39,7 +39,7 @@ defmodule Mongo.CursorTest do
 
   # issue #35: Crash executing find function without enough permission
   test "matching errors in the next function of the stream api", c do
-    assert {:error, %Mongo.Error{__exception__: true, code: 2, error_labels: '', host: nil, message: "unknown operator: $gth", resumable: false, retryable_reads: false, retryable_writes: false}} == Mongo.find(c.pid, "test", [_id: ["$gth": 1]])
+    assert {:error, %Mongo.Error{__exception__: true, code: 2, error_labels: '', host: nil, message: "unknown operator: $gth", resumable: false, retryable_reads: false, retryable_writes: false, not_writable_primary_or_recovering: false}} == Mongo.find(c.pid, "test", [_id: ["$gth": 1]])
   end
 
 end

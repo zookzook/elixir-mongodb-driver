@@ -187,10 +187,6 @@ defmodule Mongo.BulkWrite do
          result         = one_bulk_write(topology_pid, session, bulk, opts),
          :ok            <- Session.end_implict_session(topology_pid, session) do
       result
-      else
-      {:new_connection, _server} ->
-        :timer.sleep(1000)
-        write(topology_pid, bulk, opts)
     end
 
   end
@@ -210,10 +206,6 @@ defmodule Mongo.BulkWrite do
                   |> BulkWriteResult.reduce(empty) do
 
       result
-    else
-      {:new_connection, _server} ->
-        :timer.sleep(1000)
-        write(topology_pid, bulk, opts)
     end
 
   end
