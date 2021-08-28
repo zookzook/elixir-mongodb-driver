@@ -3,8 +3,6 @@ defmodule Mongo.ChangeStream do
   alias Mongo.Session
   alias Mongo.Error
 
-  require Logger
-
   import Record, only: [defrecordp: 2]
 
   defstruct [:topology_pid, :session, :doc, :cmd, :on_resume_token, :opts]
@@ -71,7 +69,6 @@ defmodule Mongo.ChangeStream do
 
     def aggregate(topology_pid, cmd, fun, opts) do
 
-      Logger.info("start_implicit_session ")
       with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
            {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts)  do
 
@@ -87,13 +84,11 @@ defmodule Mongo.ChangeStream do
 
     def aggregate(topology_pid, session, doc, cmd, fun) do
 
-      Logger.info("aggregate wire version: #{inspect Mongo.wire_version(topology_pid)}")
       with %{"operationTime" => op_time,
              "cursor" => %{
                "id" => cursor_id,
                "ns" => coll,
-               "firstBatch" => docs} = response} <- doc,
-           {:ok, wire_version} <- Mongo.wire_version(topology_pid) do
+               "firstBatch" => docs} = response} <- doc do
 
         [%{"$changeStream" => stream_opts} | _pipeline] = Keyword.get(cmd, :pipeline) # extract the change stream options
 
@@ -105,7 +100,7 @@ defmodule Mongo.ChangeStream do
         # The initial aggregate response did not include a postBatchResumeToken.
 
         has_values = stream_opts["startAtOperationTime"] || stream_opts["startAfter"] || stream_opts["resumeAfter"]
-        op_time    = update_operation_time(op_time, has_values, docs, response["postBatchResumeToken"], wire_version)
+        op_time    = update_operation_time(op_time, has_values, docs, response["postBatchResumeToken"], Session.wire_version(session))
 
         # When the ChangeStream is started:
         # If startAfter is set, cache it.
@@ -132,7 +127,6 @@ defmodule Mongo.ChangeStream do
           change_stream(resume_token: resume_token, op_time: op_time, cmd: aggregate_cmd,
             on_resume_token: fun) = change_stream, opts) do
 
-      Logger.info("Get more")
       get_more = [
                    getMore: %BSON.LongNumber{value: cursor_id},
                    collection: coll,
@@ -159,26 +153,20 @@ defmodule Mongo.ChangeStream do
         {:error, %Mongo.Error{resumable: false} = not_resumable} -> {:error, not_resumable}
         {:error, _error} ->
 
-          Logger.info("Resuming....: #{inspect Mongo.wire_version(topology_pid) }")
-          with {:ok, wire_version} <- Mongo.wire_version(topology_pid) do
+          [%{"$changeStream" => stream_opts} | pipeline] = Keyword.get(aggregate_cmd, :pipeline) # extract the change stream options
 
-            [%{"$changeStream" => stream_opts} | pipeline] = Keyword.get(aggregate_cmd, :pipeline) # extract the change stream options
+          stream_opts   = update_stream_options(stream_opts, resume_token, op_time, Session.wire_version(session))
+          aggregate_cmd = Keyword.update!(aggregate_cmd, :pipeline, fn _ -> [%{"$changeStream" => stream_opts} | pipeline] end)
 
-            stream_opts   = update_stream_options(stream_opts, resume_token, op_time, wire_version)
-            aggregate_cmd = Keyword.update!(aggregate_cmd, :pipeline, fn _ -> [%{"$changeStream" => stream_opts} | pipeline] end)
+          # kill the cursor
+          kill_cursors(session, coll, [cursor_id], opts)
 
-            # kill the cursor
-            kill_cursors(session, coll, [cursor_id], opts)
-
-            # Start aggregation again...
-            Logger.info("Calling aggregate again")
-            with {:ok, state} <- aggregate(topology_pid, aggregate_cmd, fun, opts) do
-              {:resume, state}
-            end
+          # Start aggregation again...
+          with {:ok, state} <- aggregate(topology_pid, aggregate_cmd, fun, opts) do
+            {:resume, state}
           end
         reason ->
-          Logger.info("Error: #{inspect reason}")
-          {:error, nil}
+          {:error, reason}
       end
     end
 
@@ -260,7 +248,6 @@ defmodule Mongo.ChangeStream do
     """
     def kill_cursors(session, coll, cursor_ids, opts) do
 
-      ## todo Logger.info("Kill-Cursor")
       cmd = [
               killCursors: coll,
               cursors: cursor_ids |> Enum.map(fn id -> %BSON.LongNumber{value: id} end)

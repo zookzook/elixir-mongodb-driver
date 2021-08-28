@@ -365,6 +365,14 @@ defmodule Mongo.Session do
   end
 
   @doc """
+  Return the wire_version used in the session.
+  """
+  @spec connection(Session.t) :: pid
+  def wire_version(pid) do
+    call(pid, :wire_version)
+  end
+
+  @doc """
   Return the connection used in the session.
   """
   @spec connection(Session.t) :: pid
@@ -531,6 +539,9 @@ defmodule Mongo.Session do
   end
   def handle_call_event(:abort_transaction, _state, _data) do
     {:keep_state_and_data, :ok}
+  end
+  def handle_call_event(:wire_version, _state,  %{wire_version: wire_version}) do
+    {:keep_state_and_data, wire_version}
   end
   def handle_call_event(:connection, _state,  %{conn: conn}) do
     {:keep_state_and_data, conn}

@@ -191,7 +191,7 @@ defmodule Mongo.BulkWrite do
 
   end
 
-  def write(topology_pid, %OrderedBulk{coll: coll, ops: ops} = bulk, opts) do
+  def write(topology_pid, %OrderedBulk{coll: coll, ops: ops}, opts) do
 
     write_concern = write_concern(opts)
 

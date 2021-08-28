@@ -1,8 +1,6 @@
 defmodule Mongo.Topology do
   @moduledoc false
 
-  require Logger
-
   use GenServer
 
   alias Mongo.Events.ServerDescriptionChangedEvent
@@ -73,7 +71,6 @@ defmodule Mongo.Topology do
   end
 
   def mark_server_unknown(pid, address) do
-    ## todo Logger.info("mark_server_unknown #{inspect address} ")
     server_description = ServerDescription.from_is_master_error(address, "not writable primary or recovering")
     update_server_description(pid, server_description)
   end
@@ -226,7 +223,6 @@ defmodule Mongo.Topology do
   end
 
   def handle_info({:new_connection, waiting_pids}, state) do
-    ## todo Logger.info("Notify waitings pid with new_connection #{inspect waiting_pids}")
     Enum.each(waiting_pids, fn from -> GenServer.reply(from, :new_connection) end)
     {:noreply, state}
   end
@@ -255,20 +251,16 @@ defmodule Mongo.Topology do
       :empty ->
         case current == @min_heartbeat_frequency_ms do
           true ->
-            ## todo Logger.info("Topology: no primary found, searching")
             state
           false ->
-            ## todo Logger.info("Topology: no primary found, start searching")
             Enum.each(monitors, fn {_address, pid} -> Monitor.set_heartbeat_frequency_ms(pid, @min_heartbeat_frequency_ms) end)
             put_in(state[:topology][:heartbeat_frequency_ms], @min_heartbeat_frequency_ms)
         end
-      host ->
+      _host ->
         case current == @max_heartbeat_frequency_ms do
           true ->
-            ## todo Logger.info("Topology: primary exist")
             state
           false ->
-            ## todo Logger.info("Topology: primary found #{inspect host}, stop searching")
 
             ## filter own pid
             Enum.each(monitors, fn {_address, pid} -> Monitor.set_heartbeat_frequency_ms(pid, @max_heartbeat_frequency_ms) end)
@@ -351,7 +343,7 @@ defmodule Mongo.Topology do
     case TopologyDescription.select_servers(topology, :write, []) do
       :empty ->
         Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :limits, cmd_type: :write, topology: topology})
-        {:reply, nil, state}
+        {:reply, {:error, :empty}, state}
       {:ok, {address, _opts}} ->
         with {:ok, limits} <- get_limits(address, topology) do
           {:reply, {:ok, limits}, state}
@@ -362,11 +354,10 @@ defmodule Mongo.Topology do
   end
 
   def handle_call(:wire_version, _from, %{:topology => topology} = state) do
-    case TopologyDescription.select_servers(topology, :read, []) do
+    case TopologyDescription.select_servers(topology, :write, []) do
       :empty ->
         Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :wire_version, cmd_type: :read, topology: topology})
-        ## todo fix me
-        {:reply, {:ok, 9}, state}
+        {:reply, {:error, :empty}, state}
 
       {:ok, {address, _opts}} ->
         {:reply, {:ok, wire_version(address, topology)}, state}
