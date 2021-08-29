@@ -99,8 +99,6 @@ defmodule Mongo.Session do
   import Keywords
   import Mongo.WriteConcern
 
-  require Logger
-
   alias BSON.Timestamp
   alias Mongo.Error
   alias Mongo.ReadPreference
@@ -173,8 +171,6 @@ defmodule Mongo.Session do
           {:ok, session}
         else
           :new_connection ->
-            ## todo Logger.info("New connection while checkout session")
-            ## :timer.sleep(1000)
             start_implicit_session(topology_pid, type, opts)
           {:error, error} -> {:error, error}
           other           -> {:error, Mongo.Error.exception("Unknow result #{inspect other} while calling Topology.checkout_session/4")}
@@ -187,7 +183,6 @@ defmodule Mongo.Session do
     call(pid, :mark_server_unknown)
   end
   def select_server(pid, opts) do
-    Logger.info("Select server")
     call(pid, {:select_server, opts})
   end
 
