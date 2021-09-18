@@ -1,3 +1,7 @@
+## 0.7.5
+* Enhancements
+  * replica set connection: faster topology update if the primary is down (thanks to p-mongo)
+
 ## 0.7.4
 * Enhancements
   * added a new option to specify a timeout, when increasing the connction pool is no option
