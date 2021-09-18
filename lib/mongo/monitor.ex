@@ -12,6 +12,7 @@ defmodule Mongo.Monitor do
   The result of the `isMaster` command is mapped the `ServerDescription` structure and sent to the topology process, which
   updates it internal data structure.
   """
+  require Logger
 
   use GenServer
 
@@ -48,6 +49,9 @@ defmodule Mongo.Monitor do
     GenServer.cast(pid, :update)
   end
 
+  def set_heartbeat_frequency_ms(pid, heartbeat_frequency_ms) do
+    GenServer.cast(pid, {:update, heartbeat_frequency_ms})
+  end
 
   @doc """
   Initialize the monitor process
@@ -105,6 +109,14 @@ defmodule Mongo.Monitor do
     {:noreply, new_state, new_state.heartbeat_frequency_ms}
   end
 
+  def handle_cast({:update, heartbeat_frequency_ms}, state) do
+    new_state = state
+    |> update_server_description()
+    |> Map.put(:heartbeat_frequency_ms, heartbeat_frequency_ms)
+    # we return with heartbeat_frequency_ms, so after heartbeat_frequency_ms handle_info(:timeout...) gets called.
+    {:noreply, new_state, new_state.heartbeat_frequency_ms}
+  end
+
   def handle_cast(:stop, state) do
     exit(:normal)
     {:noreply, state}
@@ -116,6 +128,8 @@ defmodule Mongo.Monitor do
   """
   def handle_info(:timeout, state) do
     new_state = update_server_description(state)
+
+    ## todo Logger.info("XXX: heartbeat_frequency_ms: #{inspect new_state.heartbeat_frequency_ms}")
     {:noreply, new_state, new_state.heartbeat_frequency_ms}
   end
   def handle_info(:update, state) do

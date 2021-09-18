@@ -52,6 +52,8 @@ defmodule Mongo do
   import Mongo.Utils
   import Mongo.WriteConcern
 
+  require Logger
+
   use Bitwise
   use Mongo.Messages
 
@@ -413,16 +415,20 @@ defmodule Mongo do
          :ok <- Session.end_implict_session(topology_pid, session) do
       case result do
         {:error, error} ->
-          case Error.should_retry_read(error, cmd, opts) do
-            true  -> issue_command(topology_pid, cmd, :read, Keyword.put(opts, :read_counter, 2))
-            false -> {:error, error}
+
+          cond do
+            Error.not_writable_primary_or_recovering?(error, opts) ->
+              ## in case of explicity
+              issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
+
+            Error.should_retry_read(error, cmd, opts) ->
+              issue_command(topology_pid, cmd, :read, Keyword.put(opts, :read_counter, 2))
+
+            true ->
+              {:error, error}
           end
         _other        -> result
       end
-    else
-      {:new_connection, _server} ->
-        :timer.sleep(1000)
-        issue_command(topology_pid, cmd, :read, opts)
     end
   end
   def issue_command(topology_pid, cmd, :write, opts) do
@@ -433,11 +439,25 @@ defmodule Mongo do
     with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
          result         <- exec_command_session(session, cmd, opts),
          :ok            <- Session.end_implict_session(topology_pid, session) do
-      result
-    else
-      {:new_connection, _server} ->
-        :timer.sleep(1000)
-        issue_command(topology_pid, cmd, :write, opts)
+
+      case result do
+        {:error, error} ->
+          cond do
+            Error.not_writable_primary_or_recovering?(error, opts) ->
+              ## in case of explicity
+              issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
+
+            Error.should_retry_write(error, cmd, opts) ->
+              issue_command(topology_pid, cmd, :write, Keyword.put(opts, :write_counter, 2))
+
+            true ->
+              {:error, error}
+          end
+
+        result ->
+          result
+      end
+
     end
   end
 
@@ -731,16 +751,16 @@ defmodule Mongo do
          doc                       <- Session.update_session(session, doc, opts),
          {:ok, doc}                <- check_for_error(doc, event) do
       {:ok, doc}
-    else
+      else
       {:error, error} ->
-      ## todo update Topology
-        case Error.should_retry_write(error, cmd, opts) do
-          true  ->
-          with :ok <- Session.select_server(session, opts) do
-           exec_command_session(session, cmd, Keyword.put(opts, :write_counter, 2))
-          end
-          false -> {:error, error}
+        case Error.not_writable_primary_or_recovering?(error, opts) do
+          true ->
+            Session.mark_server_unknown(session)
+            {:error, error}
+          false ->
+            {:error, error}
         end
+
     end
 
   end

@@ -88,8 +88,7 @@ defmodule Mongo.ChangeStream do
              "cursor" => %{
                "id" => cursor_id,
                "ns" => coll,
-               "firstBatch" => docs} = response} <- doc,
-           {:ok, wire_version} <- Mongo.wire_version(topology_pid) do
+               "firstBatch" => docs} = response} <- doc do
 
         [%{"$changeStream" => stream_opts} | _pipeline] = Keyword.get(cmd, :pipeline) # extract the change stream options
 
@@ -101,7 +100,7 @@ defmodule Mongo.ChangeStream do
         # The initial aggregate response did not include a postBatchResumeToken.
 
         has_values = stream_opts["startAtOperationTime"] || stream_opts["startAfter"] || stream_opts["resumeAfter"]
-        op_time    = update_operation_time(op_time, has_values, docs, response["postBatchResumeToken"], wire_version)
+        op_time    = update_operation_time(op_time, has_values, docs, response["postBatchResumeToken"], Session.wire_version(session))
 
         # When the ChangeStream is started:
         # If startAfter is set, cache it.
@@ -145,7 +144,7 @@ defmodule Mongo.ChangeStream do
 
         case token_changes(old_token, new_token) do
           true  -> fun.(new_token)
-          false -> nil
+          false -> :noop
         end
 
         {:ok, %{cursor_id: new_cursor_id, docs: docs, change_stream: change_stream}}
@@ -154,22 +153,20 @@ defmodule Mongo.ChangeStream do
         {:error, %Mongo.Error{resumable: false} = not_resumable} -> {:error, not_resumable}
         {:error, _error} ->
 
-          with {:ok, wire_version} <- Mongo.wire_version(topology_pid) do
+          [%{"$changeStream" => stream_opts} | pipeline] = Keyword.get(aggregate_cmd, :pipeline) # extract the change stream options
 
-            [%{"$changeStream" => stream_opts} | pipeline] = Keyword.get(aggregate_cmd, :pipeline) # extract the change stream options
+          stream_opts   = update_stream_options(stream_opts, resume_token, op_time, Session.wire_version(session))
+          aggregate_cmd = Keyword.update!(aggregate_cmd, :pipeline, fn _ -> [%{"$changeStream" => stream_opts} | pipeline] end)
 
-            stream_opts   = update_stream_options(stream_opts, resume_token, op_time, wire_version)
-            aggregate_cmd = Keyword.update!(aggregate_cmd, :pipeline, fn _ -> [%{"$changeStream" => stream_opts} | pipeline] end)
+          # kill the cursor
+          kill_cursors(session, coll, [cursor_id], opts)
 
-            # kill the cursor
-            kill_cursors(session, coll, [cursor_id], opts)
-
-            # Start aggregation again...
-            with {:ok, state} <- aggregate(topology_pid, aggregate_cmd, fun, opts) do
-              {:resume, state}
-            end
+          # Start aggregation again...
+          with {:ok, state} <- aggregate(topology_pid, aggregate_cmd, fun, opts) do
+            {:resume, state}
           end
-
+        reason ->
+          {:error, reason}
       end
     end
 

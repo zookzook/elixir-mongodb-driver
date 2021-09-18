@@ -1,6 +1,5 @@
 # An Alternative Elixir Driver for MongoDB
 [![Build Status](https://travis-ci.org/zookzook/elixir-mongodb-driver.svg?branch=master)](https://travis-ci.org/zookzook/elixir-mongodb-driver)
-[![Coverage Status](https://coveralls.io/repos/github/zookzook/elixir-mongodb-driver/badge.svg?branch=master)](https://coveralls.io/github/zookzook/elixir-mongodb-driver?branch=master)
 [![Hex.pm](https://img.shields.io/hexpm/v/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
 [![Hex.pm](https://img.shields.io/hexpm/dt/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
 [![Hex.pm](https://img.shields.io/hexpm/dw/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
@@ -8,7 +7,7 @@
 
 ## Features
 
-  * Supports MongoDB versions 3.2, 3.4, 3.6, 4.0, 4.2, 4.4
+  * Supports MongoDB versions 3.2, 3.4, 3.6, 4.x, 5.x
   * Connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
   * Streaming cursors
   * Performant ObjectID generation

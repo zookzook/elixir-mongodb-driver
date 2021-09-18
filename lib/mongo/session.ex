@@ -122,6 +122,7 @@ defmodule Mongo.Session do
   defstruct [
     topology: nil,
     conn: nil,
+    address: nil,
     recovery_token: nil,
     server_session: nil,
     causal_consistency: false,
@@ -136,8 +137,8 @@ defmodule Mongo.Session do
   Start the generic state machine.
   """
   # @spec start_link(GenServer.server, ServerSession.t, atom, integer, keyword()) :: {:ok, Session.t} | :ignore | {:error, term()}
-  def start_link(topology, conn, server_session, type, wire_version, opts) do
-    {:ok, spawn_link(__MODULE__, :init, [topology, conn, server_session, type, wire_version, opts])}
+  def start_link(topology, conn, address, server_session, type, wire_version, opts) do
+    {:ok, spawn_link(__MODULE__, :init, [topology, conn, address, server_session, type, wire_version, opts])}
   end
 
   @doc """
@@ -153,8 +154,7 @@ defmodule Mongo.Session do
     with {:ok, session} <- Topology.checkout_session(topology_pid, type, :explicit, opts) do
       {:ok, session}
     else
-      {:new_connection, _server} ->
-        :timer.sleep(1000)
+      :new_connection ->
         start_session(topology_pid, type, opts)
     end
   end
@@ -170,8 +170,7 @@ defmodule Mongo.Session do
         with {:ok, session} <- Topology.checkout_session(topology_pid, type, :implicit, opts) do
           {:ok, session}
         else
-          {:new_connection, _server} ->
-            :timer.sleep(1000)
+          :new_connection ->
             start_implicit_session(topology_pid, type, opts)
           {:error, error} -> {:error, error}
           other           -> {:error, Mongo.Error.exception("Unknow result #{inspect other} while calling Topology.checkout_session/4")}
@@ -180,6 +179,9 @@ defmodule Mongo.Session do
     end
   end
 
+  def mark_server_unknown(pid) do
+    call(pid, :mark_server_unknown)
+  end
   def select_server(pid, opts) do
     call(pid, {:select_server, opts})
   end
@@ -358,6 +360,14 @@ defmodule Mongo.Session do
   end
 
   @doc """
+  Return the wire_version used in the session.
+  """
+  @spec connection(Session.t) :: pid
+  def wire_version(pid) do
+    call(pid, :wire_version)
+  end
+
+  @doc """
   Return the connection used in the session.
   """
   @spec connection(Session.t) :: pid
@@ -393,7 +403,7 @@ defmodule Mongo.Session do
     send(pid, {:cast, arguments})
   end
 
-  def init(topology, conn, server_session, type, wire_version, opts) do
+  def init(topology, conn, address, server_session, type, wire_version, opts) do
 
     server_session = case opts[:retryable_write] do       ## in case of `:retryable_write` we need to inc the transaction id
       true -> ServerSession.next_txn_num(server_session)
@@ -403,6 +413,7 @@ defmodule Mongo.Session do
     data = %Session{
       topology: topology,
       conn: conn,
+      address: address,
       server_session: server_session,
       implicit: (type == :implicit),
       wire_version: wire_version,
@@ -524,6 +535,9 @@ defmodule Mongo.Session do
   def handle_call_event(:abort_transaction, _state, _data) do
     {:keep_state_and_data, :ok}
   end
+  def handle_call_event(:wire_version, _state,  %{wire_version: wire_version}) do
+    {:keep_state_and_data, wire_version}
+  end
   def handle_call_event(:connection, _state,  %{conn: conn}) do
     {:keep_state_and_data, conn}
   end
@@ -545,6 +559,10 @@ defmodule Mongo.Session do
         {:keep_state, %Session{data | conn: conn}}
       _           -> {:keep_state_and_data, :noop}
     end
+  end
+  def handle_call_event(:mark_server_unknown, _state, %Session{topology: topology, address: address}) do
+    Topology.mark_server_unknown(topology, address)
+    {:keep_state_and_data, :ok}
   end
   def handle_cast_event({:update_recovery_token, recovery_token}, _state, %Session{} = data) do
     %Session{data | recovery_token: recovery_token}
