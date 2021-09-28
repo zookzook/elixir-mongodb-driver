@@ -84,7 +84,7 @@ defmodule BSON.Encoder do
     do: encode(Atom.to_string(value))
 
   def encode(value) when is_binary(value),
-    do: [<<byte_size(value)+1::int32>>, value, 0x00]
+    do: [<<byte_size(value) + 1::int32>>, value, 0x00]
 
   def encode(value) when is_float(value),
     do: <<value::little-float64>>
@@ -98,22 +98,32 @@ defmodule BSON.Encoder do
   def document(doc) do
     {_, iodata} =
       Enum.reduce(doc, {:unknown, ""}, fn
-        {:__struct__, _value}, {:binary, _acc} -> invalid_doc(doc)
-        {:__struct__, _value}, {_, acc}        -> {:atom, acc}
-        {key, _value}, {:binary, _acc} when is_atom(key) -> invalid_doc(doc)
-        {key, _value}, {:atom, _acc} when is_binary(key) -> invalid_doc(doc)
+        {:__struct__, _value}, {:binary, _acc} ->
+          invalid_doc(doc)
+
+        {:__struct__, _value}, {_, acc} ->
+          {:atom, acc}
+
+        {key, _value}, {:binary, _acc} when is_atom(key) ->
+          invalid_doc(doc)
+
+        {key, _value}, {:atom, _acc} when is_binary(key) ->
+          invalid_doc(doc)
+
         {key, value}, {_, acc} ->
           {key_type, key} = key(key)
           type = type(value)
+
           value =
-            if Mongo.Encoder.impl_for(value),
-              do: value |> Mongo.Encoder.encode() |> encode(),
-              else: value |> encode()
+            case Mongo.Encoder.impl_for(value) do
+              nil -> encode(value)
+              _ -> value |> Mongo.Encoder.encode() |> encode()
+            end
 
           {key_type, [acc, type, key, value]}
       end)
 
-    [<<IO.iodata_length(iodata)+5::int32>>, iodata, 0x00]
+    [<<IO.iodata_length(iodata) + 5::int32>>, iodata, 0x00]
   end
 
   defp cstring(string), do: [string, 0x00]
@@ -123,44 +133,45 @@ defmodule BSON.Encoder do
 
   defp array([], _ix),
     do: []
-  defp array([hd|tl], ix) when not is_tuple(hd),
-    do: [{Integer.to_string(ix), hd} | array(tl, ix+1)]
+
+  defp array([hd | tl], ix) when not is_tuple(hd),
+    do: [{Integer.to_string(ix), hd} | array(tl, ix + 1)]
 
   defp invalid_doc(doc) do
-    message = "invalid document containing atom and string keys: #{inspect doc}"
+    message = "invalid document containing atom and string keys: #{inspect(doc)}"
     raise ArgumentError, message
   end
 
-  defp type(%BSON.Binary{}),                do: @type_binary
-  defp type(%BSON.ObjectId{}),              do: @type_objectid
-  defp type(%DateTime{}),                   do: @type_datetime
-  defp type(%BSON.Regex{}),                 do: @type_regex
-  defp type(%BSON.JavaScript{scope: nil}),  do: @type_js
-  defp type(%BSON.JavaScript{}),            do: @type_js_scope
-  defp type(%BSON.Timestamp{}),             do: @type_timestamp
-  defp type(%BSON.LongNumber{}),            do: @type_int64
-  defp type(%Decimal{}),                    do: @type_decimal128
-  defp type(nil),                           do: @type_null
-  defp type(:BSON_min),                     do: @type_min
-  defp type(:BSON_max),                     do: @type_max
-  defp type(:inf),                          do: @type_float
-  defp type(:"-inf"),                       do: @type_float
-  defp type(:NaN),                          do: @type_float
-  defp type(value) when is_boolean(value),  do: @type_bool
-  defp type(value) when is_float(value),    do: @type_float
-  defp type(value) when is_atom(value),     do: @type_string
-  defp type(value) when is_binary(value),   do: @type_string
-  defp type(value) when is_map(value),      do: @type_document
-  defp type([{_,_}|_]),                     do: @type_document
-  defp type(value) when is_list(value),     do: @type_array
-  defp type(value) when is_int32(value),    do: @type_int32
-  defp type(value) when is_int64(value),    do: @type_int64
+  defp type(%BSON.Binary{}), do: @type_binary
+  defp type(%BSON.ObjectId{}), do: @type_objectid
+  defp type(%DateTime{}), do: @type_datetime
+  defp type(%BSON.Regex{}), do: @type_regex
+  defp type(%BSON.JavaScript{scope: nil}), do: @type_js
+  defp type(%BSON.JavaScript{}), do: @type_js_scope
+  defp type(%BSON.Timestamp{}), do: @type_timestamp
+  defp type(%BSON.LongNumber{}), do: @type_int64
+  defp type(%Decimal{}), do: @type_decimal128
+  defp type(nil), do: @type_null
+  defp type(:BSON_min), do: @type_min
+  defp type(:BSON_max), do: @type_max
+  defp type(:inf), do: @type_float
+  defp type(:"-inf"), do: @type_float
+  defp type(:NaN), do: @type_float
+  defp type(value) when is_boolean(value), do: @type_bool
+  defp type(value) when is_float(value), do: @type_float
+  defp type(value) when is_atom(value), do: @type_string
+  defp type(value) when is_binary(value), do: @type_string
+  defp type(value) when is_map(value), do: @type_document
+  defp type([{_, _} | _]), do: @type_document
+  defp type(value) when is_list(value), do: @type_array
+  defp type(value) when is_int32(value), do: @type_int32
+  defp type(value) when is_int64(value), do: @type_int64
 
-  defp subtype(:generic),    do: 0x00
-  defp subtype(:function),   do: 0x01
+  defp subtype(:generic), do: 0x00
+  defp subtype(:function), do: 0x01
   defp subtype(:binary_old), do: 0x02
-  defp subtype(:uuid_old),   do: 0x03
-  defp subtype(:uuid),       do: 0x04
-  defp subtype(:md5),        do: 0x05
+  defp subtype(:uuid_old), do: 0x03
+  defp subtype(:uuid), do: 0x04
+  defp subtype(:md5), do: 0x05
   defp subtype(int) when is_integer(int) and int in 0x80..0xFF, do: 0x80
 end

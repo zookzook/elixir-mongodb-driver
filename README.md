@@ -51,7 +51,7 @@ BSON symbols can only be decoded.
 ### Writing your own encoding info
 
 If you want to write a custom struct to your mongo collection - you can do that
-by implementing `Mongo.Encoder` protocol for your class. The output should be a map,
+by implementing `Mongo.Encoder` protocol for your module. The output should be a map,
 which will be passed to the Mongo database.
 
 Example:
