@@ -94,10 +94,27 @@ defmodule Mongo.BulkWriteResult do
 
    alias Mongo.BulkWriteResult
 
-  defstruct [acknowledged: true, matched_count: 0, modified_count: 0, inserted_count: 0, deleted_count: 0, upserted_count: 0, inserted_ids: [], upserted_ids: [], errors: []]
+  defstruct [acknowledged: true,
+    matched_count: 0,
+    modified_count: 0,
+    inserted_count: 0,
+    deleted_count: 0,
+    upserted_count: 0,
+    inserted_ids: [],
+    upserted_ids: [],
+    errors: []
+  ]
 
   def insert_result(count, ids, errors) do
+    ids = Enum.reduce(errors, ids, fn error, ids -> filter_ids(ids, error) end)
     %BulkWriteResult{inserted_count: count, inserted_ids: ids, errors: errors}
+  end
+
+  defp filter_ids(ids, %{"code" => 11000, "index" => index}) do
+    Enum.take(ids, index)
+  end
+  defp filter_ids(ids, _other) do
+    ids
   end
 
   def update_result(matched_count, modified_count, upserted_count, ids, errors) do

@@ -201,7 +201,7 @@ defmodule Mongo.Test do
       Mongo.find(c.pid, coll, %{}, sort: [foo: -1], batch_size: 2, limit: 2) |> Enum.to_list |> Enum.map(fn m ->  Map.pop(m, "_id") |> elem(1) end)
 
     # one of error types
-    assert {:error, %Mongo.Error{message: "unknown top level operator: $foo"}} =
+    assert {:error, %Mongo.Error{message: "unknown top level operator: $foo. If you have a field name that starts with a '$' symbol, consider using $getField or $setField."}} =
       Mongo.find(c.pid, coll, %{"$foo" => []})
   end
 
@@ -426,7 +426,7 @@ defmodule Mongo.Test do
 
     assert %Mongo.DeleteResult{deleted_count: 0} = Mongo.delete_one!(c.pid, coll, %{foo: 42})
 
-    assert nil == Mongo.delete_one!(c.pid, coll, %{}, w: 0)
+    assert %Mongo.DeleteResult{acknowledged: false, deleted_count: 0} == Mongo.delete_one!(c.pid, coll, %{}, w: 0)
   end
 
   test "delete_many", c do
@@ -446,7 +446,7 @@ defmodule Mongo.Test do
 
     assert %Mongo.DeleteResult{deleted_count: 0} = Mongo.delete_many!(c.pid, coll, %{foo: 42})
 
-    assert nil == Mongo.delete_many!(c.pid, coll, %{}, w: 0)
+    assert %Mongo.DeleteResult{acknowledged: false, deleted_count: 0} == Mongo.delete_many!(c.pid, coll, %{}, w: 0)
   end
 
   test "replace_one", c do
@@ -478,7 +478,7 @@ defmodule Mongo.Test do
 
     assert %Mongo.UpdateResult{acknowledged: true, matched_count: 0, modified_count: 0, upserted_ids: []} = Mongo.replace_one!(c.pid, coll, %{foo: 43}, %{foo: 0})
 
-    assert nil == Mongo.replace_one!(c.pid, coll, %{foo: 45}, %{foo: 0}, w: 0)
+    assert %Mongo.UpdateResult{acknowledged: false, matched_count: 0, modified_count: 0, upserted_ids: []} == Mongo.replace_one!(c.pid, coll, %{foo: 45}, %{foo: 0}, w: 0)
 
     assert_raise Mongo.WriteError, fn ->
       Mongo.replace_one!(c.pid, coll, %{foo: 42}, %{_id: 1})
@@ -514,7 +514,7 @@ defmodule Mongo.Test do
 
     assert %Mongo.UpdateResult{acknowledged: true, matched_count: 1, modified_count: 1, upserted_ids: []} = Mongo.update_one!(c.pid, coll, %{foo: 42}, %{"$set": %{foo: 0}})
 
-    assert nil == Mongo.update_one!(c.pid, coll, %{foo: 42}, %{}, w: 0)
+    assert %Mongo.UpdateResult{acknowledged: false, matched_count: 0, modified_count: 0, upserted_ids: []} == Mongo.update_one!(c.pid, coll, %{foo: 42}, %{}, w: 0)
 
     assert_raise Mongo.WriteError, fn ->
       Mongo.update_one!(c.pid, coll, %{foo: 0}, %{"$set": %{_id: 0}})
@@ -548,7 +548,7 @@ defmodule Mongo.Test do
 
     assert %Mongo.UpdateResult{acknowledged: true, matched_count: 2, modified_count: 2, upserted_ids: []} = Mongo.update_many!(c.pid, coll, %{foo: 42}, %{"$set": %{foo: 0}})
 
-    assert nil == Mongo.update_many!(c.pid, coll, %{foo: 0}, %{}, w: 0)
+    assert %Mongo.UpdateResult{acknowledged: false, matched_count: 0, modified_count: 0, upserted_ids: []} == Mongo.update_many!(c.pid, coll, %{foo: 0}, %{}, w: 0)
 
     assert_raise Mongo.WriteError, fn ->
       Mongo.update_many!(c.pid, coll, %{foo: 0}, %{"$set": %{_id: 1}})

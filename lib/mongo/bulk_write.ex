@@ -198,14 +198,25 @@ defmodule Mongo.BulkWrite do
     empty = %BulkWriteResult{acknowledged: acknowledged?(write_concern)}
 
     with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
-         {:ok, limits} <- Mongo.limits(topology_pid),
-         max_batch_size <- limits.max_write_batch_size,
-         result = ops
-                  |> get_op_sequence()
-                  |> Enum.map(fn {cmd, docs} -> one_bulk_write_operation(session, cmd, coll, docs, max_batch_size, opts) end)
-                  |> BulkWriteResult.reduce(empty) do
+         {:ok, limits} <- Mongo.limits(topology_pid) do
 
-      result
+      max_batch_size = limits.max_write_batch_size
+
+      ops
+      |> get_op_sequence()
+      |> Enum.reduce_while(empty, fn {cmd, docs}, acc ->
+
+        temp_result = one_bulk_write_operation(session, cmd, coll, docs, max_batch_size, opts)
+
+        case temp_result do
+          %{errors: []} ->
+            {:cont, BulkWriteResult.add(acc, temp_result)}
+
+          _other ->
+            {:halt, BulkWriteResult.add(acc, temp_result)}
+        end
+      end)
+
     end
 
   end
@@ -222,14 +233,24 @@ defmodule Mongo.BulkWrite do
   #
   defp one_bulk_write(topology_pid, session, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, opts) do
 
-    with {:ok, limits} <- Mongo.limits(topology_pid),
-         max_batch_size <- limits.max_write_batch_size,
-         insert_result <- one_bulk_write_operation(session, :insert, coll, inserts, max_batch_size, opts),
-         update_result <- one_bulk_write_operation(session, :update, coll, updates, max_batch_size, opts),
-         delete_result <- one_bulk_write_operation(session, :delete, coll, deletes, max_batch_size, opts)  do
+    with {:ok, limits} <- Mongo.limits(topology_pid) do
+      max_batch_size = limits.max_write_batch_size
 
-      [insert_result, update_result, delete_result]
-      |> BulkWriteResult.reduce(%BulkWriteResult{acknowledged: acknowledged?(opts)})
+      results = case one_bulk_write_operation(session, :insert, coll, inserts, max_batch_size, opts) do
+        %{errors: []} = insert_result ->
+          case one_bulk_write_operation(session, :update, coll, updates, max_batch_size, opts) do
+            %{errors: []} = update_result ->
+              delete_result = one_bulk_write_operation(session, :delete, coll, deletes, max_batch_size, opts)
+              [insert_result, update_result, delete_result]
+
+            update_result ->
+              [insert_result, update_result]
+          end
+        insert_result ->
+          [insert_result]
+      end
+
+      BulkWriteResult.reduce(results, %BulkWriteResult{acknowledged: acknowledged?(opts)})
     end
   end
 
@@ -237,7 +258,9 @@ defmodule Mongo.BulkWrite do
   # Executes the command `cmd` and collects the result.
   #
   defp one_bulk_write_operation(session, cmd, coll, docs, max_batch_size, opts) do
-    with result <- session |> run_commands(get_cmds(cmd, coll, docs, max_batch_size, opts), opts) |> collect(cmd) do
+    with result <- session
+                   |> run_commands(get_cmds(cmd, coll, docs, max_batch_size, opts), opts)
+                   |> collect(cmd) do
       result
     end
   end

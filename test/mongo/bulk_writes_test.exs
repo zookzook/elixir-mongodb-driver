@@ -2,6 +2,8 @@ defmodule Mongo.BulkWritesTest do
 
   use CollectionCase
 
+  require Logger
+
   alias Mongo.UnorderedBulk
   alias Mongo.OrderedBulk
   alias Mongo.BulkWrite
@@ -166,7 +168,7 @@ defmodule Mongo.BulkWritesTest do
 
   test "create one small document and one too large document", top do
     coll = unique_collection()
-    max_n = (16*1024*1024)
+    max_n = 16*1024*1024
 
     a_line_1k = Enum.reduce(1..1_024, "", fn _, acc -> acc <> "A" end)
     a_line_1m = Enum.reduce(1..1_024, "", fn _, acc -> acc <> a_line_1k end)
@@ -188,9 +190,48 @@ defmodule Mongo.BulkWritesTest do
     %BulkWriteResult{errors: [%{"code" => code}]} = result = BulkWrite.write(top.pid, bulk, w: 1)
 
     assert code == 2
-    assert %{:matched_count => 1, :deleted_count => 1, :modified_count => 1} ==  Map.take(result, [:matched_count, :deleted_count, :modified_count])
-    assert {:ok, 0} == Mongo.count(top.pid, coll, %{})
+    assert %{:matched_count => 0, :deleted_count => 0, :modified_count => 0} ==  Map.take(result, [:matched_count, :deleted_count, :modified_count])
+    assert {:ok, 1} == Mongo.count(top.pid, coll, %{})
 
+  end
+
+  test "stop when any operation fails: ordered", top do
+    coll = unique_collection()
+
+    bulk = coll
+           |> OrderedBulk.new()
+           |> OrderedBulk.insert_one([_id: 4, name: "Test4"])
+           |> OrderedBulk.insert_one([_id: 3, name: "Test4"])
+           |> OrderedBulk.insert_one([_id: 1, name: "Test1"])
+           |> OrderedBulk.insert_one([_id: 1, name: "Test2"])
+           |> OrderedBulk.delete_one([_id: 1])
+           |> OrderedBulk.insert_one([_id: 2, name: "Test2"])
+
+    %BulkWriteResult{errors: [%{"code" => code}]} = result = BulkWrite.write(top.pid, bulk, [])
+
+    assert code == 11000
+    assert %{:inserted_count => 3, :inserted_ids => [4, 3, 1]} ==  Map.take(result, [:inserted_count, :inserted_ids])
+    assert {:ok, 3} == Mongo.count(top.pid, coll, %{})
+
+  end
+
+  test "stop when any operation fails: unordered", top do
+    coll = unique_collection()
+
+    bulk = coll
+           |> UnorderedBulk.new()
+           |> UnorderedBulk.insert_one([_id: 4, name: "Test4"])
+           |> UnorderedBulk.insert_one([_id: 3, name: "Test4"])
+           |> UnorderedBulk.insert_one([_id: 1, name: "Test1"])
+           |> UnorderedBulk.insert_one([_id: 1, name: "Test2"])
+           |> UnorderedBulk.delete_one([_id: 1])
+           |> UnorderedBulk.insert_one([_id: 2, name: "Test2"])
+
+    %BulkWriteResult{errors: [%{"code" => code}]} = result = BulkWrite.write(top.pid, bulk, [])
+
+    assert code == 11000
+    assert %{:inserted_count => 2, :inserted_ids => [2, 1]} ==  Map.take(result, [:inserted_count, :inserted_ids])
+    assert {:ok, 2} == Mongo.count(top.pid, coll, %{})
   end
 
 end
