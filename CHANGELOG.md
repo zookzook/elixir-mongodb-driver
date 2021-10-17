@@ -1,8 +1,9 @@
 ## 0.7.5
 * Enhancements
   * replica set connection: faster topology update if the primary is down (thanks to p-mongo)
-  * Added custom mongo.encoder protocol (thanks to esse)
-  * added collection from yildun project 
+  * added custom `Mongo.Encoder` protocol (thanks to esse)
+  * added collection from yildun project
+  * fixed an issue that the bulk operation does not stop after any insert/update/delete failed (thanks to ja-jimenez)
 
 ## 0.7.4
 * Enhancements
