@@ -93,7 +93,7 @@ it will be written to database, as:
 }
 ```
 
-## Collections
+### Collections
 
 While using the `Mongo.Encoder` protocol give you the possibility to encode your structs into maps the opposite way to decode those maps into structs is missing. To handle it you can use the `Mongo.Collection` which provides some boilerplate code for a better support of structs while using the MongoDB driver
 
@@ -123,9 +123,7 @@ iex> label = %Label{name: label_map["name"], color: label_map["color"]}
 
 We have defined a module `Label` as `defstruct`, then we get the first label document
 the collection `labels`. The function `find_one` returns a map. We convert the map manually and
-get the desired struct.
-
-If we want to save a new structure, we have to do the reverse. We convert the struct into a map:
+get the desired struct. If we want to save a new structure, we have to do the reverse. We convert the struct into a map:
 
 ```elixir
 iex> label = %Label{}
@@ -134,7 +132,7 @@ iex> {:ok, _} = Mongo.insert_one(:mongo, "labels", label_map)
 ```
 
 Alternatively, you can also remove the `__struct__` key from `label`. The MongoDB driver automatically
-converts the atom keys into strings.
+converts the atom keys into strings (Or use the `Mongo.Encode` protocol)
 
 ```elixir
 iex>  Map.drop(label, [:__struct__])
@@ -150,7 +148,7 @@ convert manually, too. If you take a closer look at the necessary work, two basi
 
 ```elixir
 defmodule Label do
-    use Collection
+    use Mongo.Collection
     
     document do
       attribute :name, String.t(), default: "warning"
@@ -163,7 +161,7 @@ This results in the following module:
 ```elixir
 defmodule Label do
 
-    defstruct [name: "warning", color: "red"]
+    defstruct [name: "warning", color: "red"]X
     
     @type t() :: %Label{String.t(), String.t()}
     
