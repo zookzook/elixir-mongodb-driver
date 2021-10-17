@@ -137,7 +137,7 @@ defmodule Mongo.Collection do
           @collection nil
 
           collection "cards" do
-            attribute :title, String.t(), "new title"
+            attribute :title, String.t(), default: "new title"
           end
 
         end
