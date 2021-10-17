@@ -53,6 +53,7 @@ defmodule Mongo.EncoderTest do
 
     struct_to_insert = %CustomStructWithoutProtocol{a: 10, b: 20, c: 30, id: "x"}
 
+    assert {:ok, _} = Mongo.insert_one(c.pid, coll, struct_to_insert, [])
     assert [%{"a" => 10, "b" => 20, "c" => 30, "id" => "x"}] = Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
   end
 
