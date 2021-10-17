@@ -161,7 +161,7 @@ This results in the following module:
 ```elixir
 defmodule Label do
 
-    defstruct [name: "warning", color: "red"]X
+    defstruct [name: "warning", color: "red"]
     
     @type t() :: %Label{String.t(), String.t()}
     
