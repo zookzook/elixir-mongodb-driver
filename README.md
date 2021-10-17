@@ -8,21 +8,23 @@
 
 ## Features
 
-- Supports MongoDB versions 3.2, 3.4, 3.6, 4.x, 5.x
-- Connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
-- Streaming cursors
-- Performant ObjectID generation
-- Aggregation pipeline
-- Replica sets
-- Support for SCRAM-SHA-256 (MongoDB 4.x)
-- Support for GridFS ([See](https://github.com/mongodb/specifications/blob/master/source/gridfs/gridfs-spec.rst))
-- Support for change streams api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
-- Support for bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
+- supports MongoDB versions 3.2, 3.4, 3.6, 4.x, 5.x
+- connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
+- streaming cursors
+- performant ObjectID generation
+- aggregation pipeline
+- replica sets
+- support for SCRAM-SHA-256 (MongoDB 4.x)
+- support for GridFS ([See](https://github.com/mongodb/specifications/blob/master/source/gridfs/gridfs-spec.rst))
+- support for change streams api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
+- support for bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
 - support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
 - support for driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
 - support for command monitoring ([See](https://github.com/mongodb/specifications/blob/master/source/command-monitoring/command-monitoring.rst))
 - support for retryable reads ([See](https://github.com/mongodb/specifications/blob/master/source/retryable-reads/retryable-reads.rst))
 - support for retryable writes ([See](https://github.com/mongodb/specifications/blob/master/source/retryable-writes/retryable-writes.rst))
+- support for simple structs using the Mongo.Encoder protocol
+- support for complex and nested documents using the `Mongo.Collection` macros
 
 ## Data Representation
 
@@ -44,7 +46,7 @@
     max key             :BSON_max
     decimal128          Decimal{}
 
-Since BSON documents are ordered Elixir maps cannot be used to fully represent them. This driver chose to accept both maps and lists of key-value pairs when encoding but will only decode documents to lists. This has the side-effect that it's impossible to discern empty arrays from empty documents. Additionally the driver will accept both atoms and strings for document keys but will only decode to strings.
+Since BSON documents are ordered Elixir maps cannot be used to fully represent them. This driver chose to accept both maps and lists of key-value pairs when encoding but will only decode documents to lists. This has the side-effect that it's impossible to discern empty arrays from empty documents. Additionally, the driver will accept both atoms and strings for document keys but will only decode to strings.
 
 BSON symbols can only be decoded.
 
@@ -90,6 +92,118 @@ it will be written to database, as:
   "_id": "5ef27e73d2a57d358f812001"
 }
 ```
+
+## Collections
+
+While using the `Mongo.Encoder` protocol give you the possibility to encode your structs into maps the opposite way to decode those maps into structs is missing. To handle it you can use the `Mongo.Collection` which provides some boilerplate code for a better support of structs while using the MongoDB driver
+
+* automatic load and dump function
+* reflection functions
+* type specification
+* support for embedding one and many structs
+* support for `after load` function
+* support for `before dump` function
+* support for id generation
+* support for default values
+* support for derived values
+
+When using the MongoDB driver only maps and keyword lists are used to represent documents.
+If you would prefere to use structs instead of the maps to give the document a stronger meaning or to emphasize
+its importance, you have to create a `defstruct` and fill it from the map manually:
+
+```elixir
+defmodule Label do
+  defstruct name: "warning", color: "red"
+end
+
+iex> label_map = Mongo.find_one(:mongo, "labels", %{})
+  %{"name" => "warning", "color" => "red"}
+iex> label = %Label{name: label_map["name"], color: label_map["color"]}
+```
+
+We have defined a module `Label` as `defstruct`, then we get the first label document
+the collection `labels`. The function `find_one` returns a map. We convert the map manually and
+get the desired struct.
+
+If we want to save a new structure, we have to do the reverse. We convert the struct into a map:
+
+```elixir
+iex> label = %Label{}
+iex> label_map = %{"name" => label.name, "color" => label.color}
+iex> {:ok, _} = Mongo.insert_one(:mongo, "labels", label_map)
+```
+
+Alternatively, you can also remove the `__struct__` key from `label`. The MongoDB driver automatically
+converts the atom keys into strings.
+
+```elixir
+iex>  Map.drop(label, [:__struct__])
+%{color: :red, name: "warning"}
+```
+If you use nested structures, the work becomes a bit more complex. In this case, you have to use the inner structures
+convert manually, too. If you take a closer look at the necessary work, two basic functions can be derived:
+
+* `load` Conversion of the map into a struct.
+* `dump` Conversion of the struct into a map.
+
+`Mongo.Collection` provides the necessary macros to automate this boilerplate code. The above example can be rewritten as follows:
+
+```elixir
+defmodule Label do
+    use Collection
+    
+    document do
+      attribute :name, String.t(), default: "warning"
+      attribute :color, String.t(), default: :red
+    end
+end
+```
+This results in the following module:
+
+```elixir
+defmodule Label do
+
+    defstruct [name: "warning", color: "red"]
+    
+    @type t() :: %Label{String.t(), String.t()}
+    
+    def new()...
+    def load(map)...
+    def dump(%Label{})...
+    def __collection__(:attributes)...
+    def __collection__(:types)...
+    def __collection__(:collection)...
+    def __collection__(:id)...
+
+end
+```
+
+You can now create new structs with the default values and use the conversion functions between map and structs:
+
+```elixir
+iex(1)> x = Label.new()
+%Label{color: :red, name: "warning"}
+iex(2)> m = Label.dump(x)
+%{color: :red, name: "warning"}
+iex(3)> Label.load(m, true)
+%Label{color: :red, name: "warning"}
+```
+
+The `load/2` function distinguishes between keys of type binarys `load(map, false)` and keys of type atoms `load(map, true)`. The default is `load(map, false)`:
+
+```elixir
+iex(1)> m = %{"color" => :red, "name" => "warning"}
+iex(2)> Label.load(m)
+%Label{color: :red, name: "warning"}
+```
+If you would now expect atoms as keys, the result of the conversion is not correct in this case:
+
+```elixir
+iex(3)> Label.load(m, true)
+%Label{color: nil, name: nil}
+```
+
+The background is that MongoDB always returns binarys as keys and structs use atoms as keys. For more information look at the module documentation [Mongo.Collection](https://hexdocs.pm/mongodb_driver/Mongo.Collection.html#content)
 
 ## Usage
 
@@ -173,7 +287,7 @@ cursor
 |> IO.inspect
 ```
 
-If you're using pooling it is recommend to add it to your application supervisor:
+If you're using pooling it is recommended to add it to your application supervisor:
 
 ```elixir
 def start(_type, _args) do
