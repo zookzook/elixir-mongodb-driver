@@ -2,8 +2,16 @@ defmodule Mongo.Utils do
 
   def assign_ids(list) when is_list(list) do
     list
-    |> Enum.map(&Mongo.Encoder.encode/1)
-    |> Enum.map(&assign_id/1)
+    |> Enum.map(fn item ->
+      case Mongo.Encoder.impl_for(item) do
+        nil ->
+          item
+
+        _ ->
+          Mongo.Encoder.encode(item)
+      end
+    end)
+    |> Enum.map(fn item -> assign_id(item) end)
     |> Enum.unzip()
   end
 
@@ -17,7 +25,9 @@ defmodule Mongo.Utils do
   end
 
   defp assign_id(map) when is_map(map) do
-    map |> Map.to_list() |> add_id()
+    map
+    |> Map.to_list()
+    |> add_id()
   end
 
   ##
