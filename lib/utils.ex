@@ -1,8 +1,10 @@
 defmodule Mongo.Utils do
 
   def assign_ids(list) when is_list(list) do
-    Enum.map(list, &assign_id/1)
-    |> Enum.unzip
+    list
+    |> Enum.map(&Mongo.Encoder.encode/1)
+    |> Enum.map(&assign_id/1)
+    |> Enum.unzip()
   end
 
   defp assign_id(%{_id: id} = map) when id != nil,  do: {id, map}
