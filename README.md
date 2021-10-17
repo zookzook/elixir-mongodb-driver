@@ -201,7 +201,11 @@ iex(3)> Label.load(m, true)
 %Label{color: nil, name: nil}
 ```
 
-The background is that MongoDB always returns binarys as keys and structs use atoms as keys. For more information look at the module documentation [Mongo.Collection](https://hexdocs.pm/mongodb_driver/Mongo.Collection.html#content)
+The background is that MongoDB always returns binarys as keys and structs use atoms as keys. 
+
+For more information look at the module documentation [Mongo.Collection](https://hexdocs.pm/mongodb_driver/Mongo.Collection.html#content). 
+
+Of course, using the `Mongo.Collection` is not free. When loading and saving, the maps are converted into structures, which increases CPU usage somewhat. When it comes to speed, it is better to use the maps directly.
 
 ## Usage
 
