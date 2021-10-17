@@ -634,12 +634,6 @@ bulk operations.
 
 Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-driver) for providing a free JetBrains Open Source license for their complete toolbox.
 
-The [Documentation](https://hexdocs.pm/mongodb_driver/readme.html) is online, but currently not up to date.
-This will be done as soon as possible. In the meantime, look in the source code. Especially
-for the individual options.
-
-This driver is based on the [original Elixir driver for MongoDB](https://github.com/ankhers/mongodb).
-
 ## License
 
 Copyright 2015 Eric Meadows-Jönsson and Justin Wood
