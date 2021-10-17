@@ -640,7 +640,7 @@ This driver is based on the [original Elixir driver for MongoDB](https://github.
 
 Copyright 2015 Eric Meadows-Jönsson and Justin Wood
 
-Copyright 2019 - 2020 Michael Maier
+Copyright 2019 - 2021 Michael Maier
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
