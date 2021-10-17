@@ -506,11 +506,11 @@ defmodule Mongo.Collection do
             end)
 
           struct = unquote(embed_ones)
-                   |> Enum.map(fn {name, mod} -> {name, mod.load(map[name])} end)
+                   |> Enum.map(fn {name, mod} -> {name, mod.load(map[name], true)} end)
                    |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc)  end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, mod} -> {name, mod.load(map[name])} end)
+          |> Enum.map(fn {name, mod} -> {name, mod.load(map[name], true)} end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc)  end)
           |> @after_load_fun.()
         end
