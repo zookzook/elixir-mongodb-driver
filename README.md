@@ -593,9 +593,9 @@ iex> Mongo.find_one(conn, "test", %{})
 [info] Received command: %Mongo.Events.CommandSucceededEvent{command_name: :find, ...
 ```
 
-## Testing and Travis CI
+## Testing 
 
-The `travis.yml` file uses only the latest MongoDB. It creates a replica set of three nodes and disables the SSL test case. If you want to
+Latest MongoDB is used while running the tests. Replica set of three nodes is created and runs all test except the socket and ssl test. If you want to
 run the test cases against other MongoDB deployments or older versions, you can use the [mtools](https://github.com/rueckstiess/mtools) for deployment and run the test cases locally:
 
 ```bash
