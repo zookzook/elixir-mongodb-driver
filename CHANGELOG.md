@@ -1,4 +1,4 @@
-## 0.7.5
+## 0.8.0 (0.7.5 was not published)
 * Enhancements
   * replica set connection: faster topology update if the primary is down (thanks to p-mongo)
   * added custom `Mongo.Encoder` protocol (thanks to esse)
