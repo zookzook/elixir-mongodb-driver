@@ -5,7 +5,7 @@ This project shows a change stream example. You need to set up a replica set, be
 * https://www.mongodb.com/blog/post/an-introduction-to-change-streams
 * https://docs.mongodb.com/manual/changeStreams/
 
-If you creating a new replica set then you need to create the database `db-1` first, before starting the example. Otherwise you will get some errors, because the database which we will observe does not exsists.
+If you creating a new replica set then you need to create the database `db-1` first, before starting the example. Otherwise you will get some errors, because the database which we will observe does not exists.
 
 The `ChangeStream` module uses a GenServer for observing changes. It spawns a process to consume the documents returned by the change stream cursor:
 

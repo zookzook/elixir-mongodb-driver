@@ -41,7 +41,7 @@ defmodule Mongo.Session do
         {:ok, [id1, id2, id3]}
       end, w: 1)
 
-  If the callback is successfull then it returns a tupel with the keyword `:ok` and a used defined result like `{:ok, [id1, id2, id3]}`. In this example we use
+  If the callback is successful then it returns a tuple with the keyword `:ok` and a used defined result like `{:ok, [id1, id2, id3]}`. In this example we use
   the write concern `w: 1`. The write concern used in the insert operation will be removed by the driver. It is applied in the commit transaction command.
 
   ## Implicit vs explicit sessions
@@ -173,7 +173,7 @@ defmodule Mongo.Session do
           :new_connection ->
             start_implicit_session(topology_pid, type, opts)
           {:error, error} -> {:error, error}
-          other           -> {:error, Mongo.Error.exception("Unknow result #{inspect other} while calling Topology.checkout_session/4")}
+          other           -> {:error, Mongo.Error.exception("Unknown result #{inspect other} while calling Topology.checkout_session/4")}
         end
       session -> {:ok, session}
     end
@@ -187,7 +187,7 @@ defmodule Mongo.Session do
   end
 
   @doc """
-  Start a new transation.
+  Start a new transaction.
   """
   @spec start_transaction(Session.t) :: :ok | {:error, term()}
   def start_transaction(pid) do
@@ -195,7 +195,7 @@ defmodule Mongo.Session do
   end
 
   @doc """
-  Commit the current transation.
+  Commit the current transaction.
   """
   @spec commit_transaction(Session.t, DateTime.t) :: :ok | {:error, term()}
   def commit_transaction(pid) do
@@ -206,7 +206,7 @@ defmodule Mongo.Session do
   end
 
   @doc """
-  Abort the current transation and rollback all changes.
+  Abort the current transaction and rollback all changes.
   """
   @spec abort_transaction(Session.t) :: :ok | {:error, term()}
   def abort_transaction(pid) do

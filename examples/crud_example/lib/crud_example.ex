@@ -10,7 +10,7 @@ defmodule CrudExample do
         mobile: "+49 222192938383",
         fax: "+49 3332929292"
       },
-      addess: %{
+      address: %{
         street: "Fasanenweg 5",
         postal_code: "12345",
         city: "Berlin",

@@ -405,7 +405,7 @@ defmodule Mongo.Topology do
   defp update_monitor(%{topology: %{heartbeat_frequency_ms: heartbeat_frequency_ms}} = state) do
     arbiters = fetch_arbiters(state)
     old_addrs = Map.keys(state.monitors)
-    # remove arbiters from connection pool as descriptions are recieved
+    # remove arbiters from connection pool as descriptions are received
     new_addrs = Map.keys(state.topology.servers) -- arbiters
 
     added = new_addrs -- old_addrs

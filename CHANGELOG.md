@@ -1,22 +1,30 @@
-## 0.8.0 (0.7.5 was not published)
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+
+## 0.8.0 (2021-11-07) (0.7.5 was not published)
 * Enhancements
   * replica set connection: faster topology update if the primary is down (thanks to p-mongo)
   * added custom `Mongo.Encoder` protocol (thanks to esse)
   * added collection from yildun project
   * fixed an issue that the bulk operation does not stop after any insert/update/delete failed (thanks to ja-jimenez)
 
-## 0.7.4
+## 0.7.4 (2021-06-21)
 * Enhancements
-  * added a new option to specify a timeout, when increasing the connction pool is no option
+  * added a new option to specify a timeout, when increasing the connection pool is no option
 
-## 0.7.3
+## 0.7.3 (2021-05-29)
 
 * Enhancements
   * added support for OTP 24
   * Add support for tls setting in connection string (tschmittni)
   * Replace deprecated functions (OTP 24) (aenglisc )
-  
-## 0.7.2
+
+## 0.7.2 (2021-05-19)
 
 * Enhancements
   * Adds test to cover one of Mongo.find/4 errors (vukanac)
@@ -24,14 +32,14 @@
   * Fix build warnings and correct typespec (joeapearson)
   * Update db_connection version to remove System.stacktrace warnings (vukanac)
   * Update SCRAM auth procedure (LetThereBeDwight)
-  
-## 0.7.1
+
+## 0.7.1 (2021-01-01)
 
 * Enhancements
     * upgraded decimal to 2.0, jason to 1.2
     * Add proper support for tailable cursors and awaitData (PR #74)
 
-## 0.7.0
+## 0.7.0 (2020-04-17)
 
 * Enhancements
     * refactored event notification system
@@ -44,43 +52,43 @@
 * Bugfixes
     * Using `max_staleness_ms` > 0 results in a crash
     * Read preferences are sent to mongos
-     
-## 0.6.5
+
+## 0.6.5 (2020-03-30)
 
 * Enhancements
     * updated db_connection dependency
     * generalize inconsistent typespecs
     * new function `BSON.ObjectId.decode/1` and `BSON.ObjectId.encode/1`
-    * new function `Mongo.uuid/1` 
-    
-## 0.6.4
+    * new function `Mongo.uuid/1`
+
+## 0.6.4 (2020-01-24)
 
 * Bugfixes
-    * fixed bug in `Mongo.TopologyDescription` in case of a shard cluster deployment (#39)    
-    
-## 0.6.3
+    * fixed bug in `Mongo.TopologyDescription` in case of a shard cluster deployment (#39)
+
+## 0.6.3 (2020-01-23)
 
 * Enhancements
     * basic support for inserting structs
     * removed duplicated code
     * Cursor-API raises a `Mongo.Error` instead of a `FunctionClauseError`
-    
+
 * Bugfixes
     * `:appname` option (typo) #38
     * fixed index creation in `Mongo.GridFs.Bucket`
-    
-## 0.6.2
+
+## 0.6.2 (2019-11-15)
 
 * Enhancements
-    * refactored the api of `Mongo.limits` and `Mongo.wire_version` 
+    * refactored the api of `Mongo.limits` and `Mongo.wire_version`
     * add support for tracking recovery token from response in a sharded transaction
-    
-## 0.6.1
+
+## 0.6.1 (2019-11-01)
 
 * Enhancements
     * refactored `Mongo.Session` and `Mongo.Session.SessionPool` because of poor performance
-    
-## 0.6.0
+
+## 0.6.0 (2019-09-18)
 
 * Enhancements
     * refactored `writeConcern`
@@ -90,59 +98,59 @@
     * added support for transaction
     * added Decimal128 encoder
     * added support for transaction to gridfs and bulk operation
-    * added `create` command (explicitly creating a collection or view)    
-    
-## 0.5.7
+    * added `create` command (explicitly creating a collection or view)
+
+## 0.5.7 (2019-06-25)
 
 * Bug Fixes
    * Test for existing index in `Bucket` works right now
 
 * Enhancements
-   * Better handling for the `:timeout` options 
+   * Better handling for the `:timeout` options
 
-## 0.5.6
+## 0.5.6 (2019-06-14)
 
 * Bug Fixes
     * Fixed a match error in `after_fun` of cursor module
-    * Fixed a match error in the result of function `Monitor.force_check` 
+    * Fixed a match error in the result of function `Monitor.force_check`
     * Resolved decode problem for the Binary (Old) BinData subtype
-    
+
 * Enhancements
     * Added support for `Mongo.BulkWriteResult`
 
-## 0.5.5
+## 0.5.5 (2019-05-22)
 
 * Bug Fixes
     * Fixed a match error when using Windows OS
-    
-## 0.5.4
+
+## 0.5.4 (2019-05-21)
 
 * Enhancements
-   * The driver provides now client metadata 
+   * The driver provides now client metadata
    * Added support for connecting via UNIX sockets (`:socket` and `:socket_dir`)
    * Added support for bulk writes (ordered/unordered, in-memory/stream)
-   * Added support for `op_msg` with payload type 1 
+   * Added support for `op_msg` with payload type 1
    * Merged code from https://github.com/ankhers/mongodb/commit/63c20ff7e427744a5df915751adfaf6e5e39ae62
    * Merged changes from https://github.com/ankhers/mongodb/pull/283
    * Merged changes from https://github.com/ankhers/mongodb/pull/281
 
-## 0.5.3
+## 0.5.3 (2019-05-02)
 
 * Enhancements
    * Travis now using the right MongoDB version
-   
+
 * Bug Fixes
    * Added test unit for change streams
    * Removed debug code from change streams
 
-## 0.5.2
+## 0.5.2 (2019-05-01)
 
 * Enhancements
   * Added `op_msg` support ([See](https://docs.mongodb.com/manual/reference/mongodb-wire-protocol/#op-msg))
   * Fixed change streams in case of error codes: 11601, 136 and 237 from resuming
-  * Reorganized error handling   
-  
-## 0.5.1
+  * Reorganized error handling
+
+## 0.5.1 (2019-04-28)
 
 * Enhancements
   * Upgraded to DBConnection 2.0.6
@@ -166,14 +174,14 @@
   * Properly parse write concern for URL
   * Properly follow read preference for `secondary_preferred`
 
-## 0.4.7
+## v0.4.7 (2018-09-13)
 
 * Enhancements
   * Added 4.0 to supported versions
   * Initial support for mongodb+srv URLs
   * Support for Decimal128
 
-## 0.4.6
+## v0.4.6 (2018-05-20)
 
 * Enhancements
   * Added `:connect_timout_ms` to `Mongo.start_link/1`
