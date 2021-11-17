@@ -114,7 +114,6 @@ defmodule Mongo.UrlParser do
 
 
   defp parse_query_options(opts, %{"options" => options}) when is_binary(options) do
-    IO.puts("#{inspect(opts)} --- #{inspect(options)}")
     options
     |> String.split("&")
     |> Enum.map(fn option -> String.split(option, "=") end)
