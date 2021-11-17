@@ -137,7 +137,7 @@ defmodule Mongo.UrlParser do
 
     with url_char <- String.to_charlist(url),
          {:ok, {_, _, _, _, _, srv_record}} <-
-          :inet_res.getbyname('_mongodb._tcp.' ++ url_char, :srv),
+           :inet_res.getbyname('_mongodb._tcp.' ++ url_char, :srv),
          {:ok, host} <- get_host_srv(srv_record),
          {:ok, {_, _, _, _, _, txt_record}} <- :inet_res.getbyname(url_char, :txt),
          txt <- "#{orig_options}&#{txt_record}&ssl=true" do
