@@ -114,6 +114,7 @@ defmodule Mongo.UrlParser do
 
 
   defp parse_query_options(opts, %{"options" => options}) when is_binary(options) do
+    IO.puts("#{inspect(opts)} --- #{inspect(options)}")
     options
     |> String.split("&")
     |> Enum.map(fn option -> String.split(option, "=") end)
@@ -128,7 +129,7 @@ defmodule Mongo.UrlParser do
 
   defp parse_seeds(opts, _frags), do: opts
 
-  defp resolve_srv_url(%{"seeds" => url, "srv" => srv} = frags)
+  defp resolve_srv_url(%{"seeds" => url, "srv" => srv, "options" => orig_options} = frags)
        when is_bitstring(url) and srv == "+srv" do
     # Fix for windows only
     with {:win32, _} <- :os.type() do
@@ -137,10 +138,10 @@ defmodule Mongo.UrlParser do
 
     with url_char <- String.to_charlist(url),
          {:ok, {_, _, _, _, _, srv_record}} <-
-           :inet_res.getbyname('_mongodb._tcp.' ++ url_char, :srv),
+          :inet_res.getbyname('_mongodb._tcp.' ++ url_char, :srv),
          {:ok, host} <- get_host_srv(srv_record),
          {:ok, {_, _, _, _, _, txt_record}} <- :inet_res.getbyname(url_char, :txt),
-         txt <- "#{txt_record}&ssl=true" do
+         txt <- "#{orig_options}&#{txt_record}&ssl=true" do
       frags
       |> Map.put("seeds", host)
       |> Map.put("options", txt)

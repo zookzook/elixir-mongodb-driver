@@ -66,6 +66,20 @@ defmodule Mongo.UrlParserTest do
                ]
     end
 
+    test "url srv with auth source" do
+      assert UrlParser.parse_url(url: "mongodb+srv://test10.test.build.10gen.cc/db?replicaSet=r1&authSource=admin") ==
+               [
+                 database: "db",
+                 ssl: true,
+                 socket_timeout_ms: 500,
+                 auth_source: "admin",
+                 set_name: "r1",
+                 seeds: [
+                   "localhost.test.build.10gen.cc:27017"
+                 ]
+               ]
+    end
+
     test "url srv with user" do
       assert UrlParser.parse_url(url: "mongodb+srv://user:password@test5.test.build.10gen.cc") |> Keyword.drop([:pw_safe]) ==
                [
