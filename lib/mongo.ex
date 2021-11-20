@@ -409,7 +409,7 @@ defmodule Mongo do
   end
 
   @doc """
-  Executes an admin command against the `admin` database using alway the primary. Retryable writes are disabled.
+  Executes an admin command against the `admin` database using always the primary. Retryable writes are disabled.
 
   ## Example
 
@@ -439,7 +439,7 @@ defmodule Mongo do
         {:error, error} ->
           cond do
             Error.not_writable_primary_or_recovering?(error, opts) ->
-              ## in case of explicity
+              ## in case of explicitly
               issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
 
             Error.should_retry_read(error, cmd, opts) ->
@@ -466,7 +466,7 @@ defmodule Mongo do
         {:error, error} ->
           cond do
             Error.not_writable_primary_or_recovering?(error, opts) ->
-              ## in case of explicity
+              ## in case of explicitly
               issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
 
             Error.should_retry_write(error, cmd, opts) ->

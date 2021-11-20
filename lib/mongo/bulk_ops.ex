@@ -1,10 +1,10 @@
 defmodule Mongo.BulkOps do
   @moduledoc """
 
-  This module defines bulk operation for insert, update and delete. A bulk operation is a tupel of two elements
+  This module defines bulk operation for insert, update and delete. A bulk operation is a tuple of two elements
 
   1. an atom, which specify the type `:insert`, `:update` and `:delete`
-  2. a document or another tupel which contains all parameters of the operation.
+  2. a document or another tuple which contains all parameters of the operation.
 
   You use these function in streams:
 
@@ -32,7 +32,7 @@ defmodule Mongo.BulkOps do
   import Mongo.Utils
 
   @doc """
-  Returns an `insert_one` operation tupel for appending to a bulk. Used to perform stream bulk writes.
+  Returns an `insert_one` operation tuple for appending to a bulk. Used to perform stream bulk writes.
 
     Example
   ```
@@ -45,7 +45,7 @@ defmodule Mongo.BulkOps do
   def get_insert_one(doc), do: {:insert, doc}
 
   @doc """
-  Returns an `delete_one` operation tupel for appending to a bulk. Used to perform stream bulk writes.
+  Returns an `delete_one` operation tuple for appending to a bulk. Used to perform stream bulk writes.
 
     Example
 

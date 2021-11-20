@@ -2,9 +2,12 @@
 
 [![Build Status](https://travis-ci.org/zookzook/elixir-mongodb-driver.svg?branch=master)](https://travis-ci.org/zookzook/elixir-mongodb-driver)
 [![Hex.pm](https://img.shields.io/hexpm/v/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/mongo_driver/)
 [![Hex.pm](https://img.shields.io/hexpm/dt/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
 [![Hex.pm](https://img.shields.io/hexpm/dw/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
 [![Hex.pm](https://img.shields.io/hexpm/dd/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
+[![License](https://img.shields.io/hexpm/l/mongodb_driver.svg)](https://github.com/zookzook/elixir-mongodb-driver/blob/master/LICENSE)
+[![Last Updated](https://img.shields.io/github/last-commit/zookzook/elixir-mongodb-driver.svg)](https://github.com/zookzook/elixir-mongodb-driver/commits/master)
 
 ## Features
 
@@ -108,7 +111,7 @@ While using the `Mongo.Encoder` protocol give you the possibility to encode your
 * support for derived values
 
 When using the MongoDB driver only maps and keyword lists are used to represent documents.
-If you would prefere to use structs instead of the maps to give the document a stronger meaning or to emphasize
+If you would prefer to use structs instead of the maps to give the document a stronger meaning or to emphasize
 its importance, you have to create a `defstruct` and fill it from the map manually:
 
 ```elixir
@@ -149,7 +152,7 @@ convert manually, too. If you take a closer look at the necessary work, two basi
 ```elixir
 defmodule Label do
     use Mongo.Collection
-    
+
     document do
       attribute :name, String.t(), default: "warning"
       attribute :color, String.t(), default: :red
@@ -162,9 +165,9 @@ This results in the following module:
 defmodule Label do
 
     defstruct [name: "warning", color: "red"]
-    
+
     @type t() :: %Label{String.t(), String.t()}
-    
+
     def new()...
     def load(map)...
     def dump(%Label{})...
@@ -201,9 +204,9 @@ iex(3)> Label.load(m, true)
 %Label{color: nil, name: nil}
 ```
 
-The background is that MongoDB always returns binarys as keys and structs use atoms as keys. 
+The background is that MongoDB always returns binarys as keys and structs use atoms as keys.
 
-For more information look at the module documentation [Mongo.Collection](https://hexdocs.pm/mongodb_driver/Mongo.Collection.html#content). 
+For more information look at the module documentation [Mongo.Collection](https://hexdocs.pm/mongodb_driver/Mongo.Collection.html#content).
 
 Of course, using the `Mongo.Collection` is not free. When loading and saving, the maps are converted into structures, which increases CPU usage somewhat. When it comes to speed, it is better to use the maps directly.
 
@@ -593,7 +596,7 @@ iex> Mongo.find_one(conn, "test", %{})
 [info] Received command: %Mongo.Events.CommandSucceededEvent{command_name: :find, ...
 ```
 
-## Testing 
+## Testing
 
 Latest MongoDB is used while running the tests. Replica set of three nodes is created and runs all test except the socket and ssl test. If you want to
 run the test cases against other MongoDB deployments or older versions, you can use the [mtools](https://github.com/rueckstiess/mtools) for deployment and run the test cases locally:
@@ -634,17 +637,14 @@ bulk operations.
 
 Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-driver) for providing a free JetBrains Open Source license for their complete toolbox.
 
-## License
+## Copyright and License
 
-Copyright 2015 Eric Meadows-Jönsson and Justin Wood
-
+Copyright 2015 Eric Meadows-Jönsson and Justin Wood \
 Copyright 2019 - 2021 Michael Maier
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
+You may obtain a copy of the License at [https://www.apache.org/licenses/LICENSE-2.0](https://www.apache.org/licenses/LICENSE-2.0)
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,

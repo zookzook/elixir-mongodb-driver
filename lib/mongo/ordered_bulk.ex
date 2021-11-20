@@ -1,6 +1,6 @@
 defmodule Mongo.OrderedBulk do
   @moduledoc """
-  An **ordered** bulk is filled in the memeory with the bulk operations. If the ordered bulk is written to the database, the order
+  An **ordered** bulk is filled in the memory with the bulk operations. If the ordered bulk is written to the database, the order
   is preserved. Only same types of operation are grouped and only if they have been inserted one after the other.
 
 

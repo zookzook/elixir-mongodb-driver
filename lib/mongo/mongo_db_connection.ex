@@ -157,7 +157,7 @@ defmodule Mongo.MongoDBConnection do
       s                -> s
     end
 
-    plattform = "Elixir (" <> System.version() <> "), Erlang/OTP (" <> to_string(:erlang.system_info(:otp_release)) <> "), ERTS (" <> to_string(:erlang.system_info(:version)) <> ")"
+    platform = "Elixir (" <> System.version() <> "), Erlang/OTP (" <> to_string(:erlang.system_info(:otp_release)) <> "), ERTS (" <> to_string(:erlang.system_info(:version)) <> ")"
 
     type = elem(:os.type(), 1)
     %{
@@ -174,7 +174,7 @@ defmodule Mongo.MongoDBConnection do
         architecture: architecture,
         version: version
       },
-      platform: plattform
+      platform: platform
     }
   end
 

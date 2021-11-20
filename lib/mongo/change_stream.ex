@@ -92,7 +92,7 @@ defmodule Mongo.ChangeStream do
 
         [%{"$changeStream" => stream_opts} | _pipeline] = Keyword.get(cmd, :pipeline) # extract the change stream options
 
-        # The ChangeStream MUST save the operationTime from the initial aggregate response when the following critera are met:
+        # The ChangeStream MUST save the operationTime from the initial aggregate response when the following criteria are met:
         #
         # None of startAtOperationTime, resumeAfter, startAfter were specified in the ChangeStreamOptions.
         # The max wire version is >= 7.
@@ -208,7 +208,7 @@ defmodule Mongo.ChangeStream do
       postBatchResumeToken
     end
 
-    # The ChangeStream MUST save the operationTime from the initial aggregate response when the following critera are met:
+    # The ChangeStream MUST save the operationTime from the initial aggregate response when the following criteria are met:
     #
     # None of startAtOperationTime, resumeAfter, startAfter were specified in the ChangeStreamOptions.
     # The max wire version is >= 7.
@@ -281,7 +281,7 @@ defmodule Mongo.ChangeStream do
       coll
     end
 
-    # we cannot determinstically slice, so tell Enumerable to
+    # we cannot deterministically slice, so tell Enumerable to
     # fall back on brute force
     def slice(_cursor), do: { :error, __MODULE__ }
     def count(_stream), do: {:error, __MODULE__}
