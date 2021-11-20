@@ -399,7 +399,7 @@ defmodule Mongo.BulkWrite do
 
     [q: filter,
      limit: Keyword.get(opts, :limit),
-     collation: Keyword.get(opts, :collection)] |> filter_nils()
+     collation: Keyword.get(opts, :collation)] |> filter_nils()
 
   end
 

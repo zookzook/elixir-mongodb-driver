@@ -24,3 +24,11 @@ mongodb_driver-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Misc.
+.tool-versions
+.idea/
+*.iml
+*.code-workspace
+data/
+plt_core_path/*.plt
