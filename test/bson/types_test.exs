@@ -44,7 +44,7 @@ defmodule BSON.TypesTest do
 
   test "inspect BSON.Regex" do
     value = %BSON.Regex{pattern: "abc"}
-    assert inspect(value) == "#BSON.Regex<\"abc\">"
+    assert inspect(value) == "#BSON.Regex<\"abc\", \"\">"
 
     value = %BSON.Regex{pattern: "abc", options: "i"}
     assert inspect(value) == "#BSON.Regex<\"abc\", \"i\">"
