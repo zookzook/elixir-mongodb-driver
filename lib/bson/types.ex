@@ -160,7 +160,7 @@ defmodule BSON.Regex do
   """
 
   @type t :: %__MODULE__{pattern: binary, options: binary}
-  defstruct [:pattern, :options]
+  defstruct pattern: "", options: ""
 
   defimpl Inspect do
     def inspect(%BSON.Regex{pattern: pattern, options: nil}, _opts) do
