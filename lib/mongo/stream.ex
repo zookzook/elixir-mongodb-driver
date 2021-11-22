@@ -27,7 +27,7 @@ defmodule Mongo.Stream do
           true -> new(topology_pid, cmd, Keyword.put(opts, :read_counter, 2))
           false -> {:error, error}
         end
-      other -> {:error, Mongo.Error.exception("Unknow result #{inspect other} while calling Session.start_implicit_session/3")}
+      other -> {:error, Mongo.Error.exception("Unknown result #{inspect other} while calling Session.start_implicit_session/3")}
     end
   end
 
@@ -120,7 +120,7 @@ defmodule Mongo.Stream do
       coll
     end
 
-    # we cannot determinstically slice, so tell Enumerable to
+    # we cannot deterministically slice, so tell Enumerable to
     # fall back on brute force
     def slice(_cursor), do: { :error, __MODULE__ }
     def count(_stream), do: {:error, __MODULE__}

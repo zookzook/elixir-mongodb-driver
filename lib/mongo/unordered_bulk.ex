@@ -1,7 +1,7 @@
 defmodule Mongo.UnorderedBulk do
   @moduledoc"""
 
-  An **unordered** bulk is filled in the memeory with the bulk operations. These are divided into three lists (inserts, updates, deletes)
+  An **unordered** bulk is filled in the memory with the bulk operations. These are divided into three lists (inserts, updates, deletes)
   added. If the unordered bulk is written to the database, the groups are written in the following order:
 
   1. inserts

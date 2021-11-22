@@ -1,6 +1,6 @@
 defmodule Mongo.Query do
   @moduledoc """
-    This is the query implementation for the Query Protocoll
+    This is the query implementation for the Query Protocol
 
     Encoding and decoding does not take place at this point, but is directly performed
     into the functions of Mongo.MongoDBConnection.Utils.
