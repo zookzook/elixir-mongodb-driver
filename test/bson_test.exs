@@ -83,14 +83,17 @@ defmodule BSONTest do
   @map22 %{"regex" => %BSON.Regex{pattern: "acme.*corp", options: "i"}}
   @bin22 <<25, 0, 0, 0, 11, 114, 101, 103, 101, 120, 0, 97, 99, 109, 101, 46, 42, 99, 111, 114, 112, 0, 105, 0, 0>>
 
-  @map23 %{"number" => %BSON.LongNumber{value: 123}}
-  @bin23 <<21, 0, 0, 0, 18, 110, 117, 109, 98, 101, 114, 0, 123, 0, 0, 0, 0, 0, 0, 0, 0>>
+  @map23 %{"regex" => %BSON.Regex{pattern: "acme.*corp"}}
+  @bin23 <<24, 0, 0, 0, 11, 114, 101, 103, 101, 120, 0, 97, 99, 109, 101, 46, 42, 99, 111, 114, 112, 0, 0, 0>>
 
-  @map24 %{"number" => Decimal.new("0.33")}
-  @bin24 <<29, 0, 0, 0, 19, 110, 117, 109, 98, 101, 114, 0, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 60, 48, 0>>
+  @map24 %{"number" => %BSON.LongNumber{value: 123}}
+  @bin24 <<21, 0, 0, 0, 18, 110, 117, 109, 98, 101, 114, 0, 123, 0, 0, 0, 0, 0, 0, 0, 0>>
 
-  @map25 %TestUser{}
-  @bin25 <<29, 0, 0, 0, 16, 97, 103, 101, 0, 27, 0, 0, 0, 2, 110, 97, 109, 101, 0, 5, 0, 0, 0, 74, 111, 104, 110, 0, 0>>
+  @map25 %{"number" => Decimal.new("0.33")}
+  @bin25 <<29, 0, 0, 0, 19, 110, 117, 109, 98, 101, 114, 0, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 60, 48, 0>>
+
+  @map26 %TestUser{}
+  @bin26 <<29, 0, 0, 0, 16, 97, 103, 101, 0, 27, 0, 0, 0, 2, 110, 97, 109, 101, 0, 5, 0, 0, 0, 74, 111, 104, 110, 0, 0>>
 
 
   test "encode" do
@@ -119,6 +122,7 @@ defmodule BSONTest do
     assert encode(@map23) == @bin23
     assert encode(@map24) == @bin24
     assert encode(@map25) == @bin25
+    assert encode(@map26) == @bin26
   end
 
   test "decode" do
@@ -144,8 +148,10 @@ defmodule BSONTest do
     assert decode(@bin20) == @map20
     assert decode(@bin21) == @map21
     assert decode(@bin22) == @map22
-    assert decode(@bin23) == %{"number" => 123}
-    assert decode(@bin24) == @map24
+    assert decode(@bin23) == @map23
+    assert decode(@bin24) == %{"number" => 123}
+    assert decode(@bin25) == @map25
+    assert decode(@bin26) == %{"name" => "John", "age" => 27}
   end
 
   test "keywords" do
