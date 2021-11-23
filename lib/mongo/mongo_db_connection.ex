@@ -44,6 +44,7 @@ defmodule Mongo.MongoDBConnection do
   def disconnect(_error, %{connection: {mod, socket}} = state) do
     notify_disconnect(state)
     mod.close(socket)
+    :ok
   end
 
   defp notify_disconnect(%{connection_type: type, topology_pid: pid, host: host}) do
