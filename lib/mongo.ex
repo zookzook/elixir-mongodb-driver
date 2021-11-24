@@ -770,7 +770,7 @@ defmodule Mongo do
        Mongo.find_one(top, "jobs", %{}, read_concern: %{level: "local"})
   """
   @spec find_one(GenServer.server(), collection, BSON.document(), Keyword.t()) ::
-          BSON.document() | nil
+          BSON.document() | nil | {:error, any}
   def find_one(topology_pid, coll, filter, opts \\ []) do
     opts =
       opts
