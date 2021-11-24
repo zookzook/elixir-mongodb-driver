@@ -8,6 +8,12 @@ defmodule Mongo.EncoderTest do
     {:ok, [pid: pid]}
   end
 
+  defimpl Mongo.Encoder, for: Date do
+    def encode(date) do
+      Date.to_iso8601(date)
+    end
+  end
+
   defmodule CustomStructWithoutProtocol do
     @fields [:a, :b, :c, :id]
     @enforce_keys @fields
@@ -29,6 +35,16 @@ defmodule Mongo.EncoderTest do
         }
       end
     end
+  end
+
+  test "insert encoded date with protocol", c do
+    coll = unique_collection()
+
+    to_insert = %{date: ~D[2000-01-01]}
+
+    assert {:ok, _} = Mongo.insert_one(c.pid, coll, to_insert, [])
+
+    assert %{"date" => "2000-01-01"} = Mongo.find_one(c.pid, coll, %{})
   end
 
   test "insert encoded struct with protocol", c do
