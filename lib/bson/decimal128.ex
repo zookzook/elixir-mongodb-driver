@@ -15,7 +15,7 @@ defmodule BSON.Decimal128 do
   @max_exponent 6111
   @min_exponent -6176
   @s_nan_mask  0x1 <<< 57
-  @significand_mask ((0x1 <<< 49)-1)
+  @significand_mask ((0x1 <<< 49) - 1)
   @low_mask 0xffffffffffffffff
 
   def decode(<<_::little-64, high::little-64>> = bits) do
@@ -83,7 +83,7 @@ defmodule BSON.Decimal128 do
     raise ArgumentError, message
   end
 
-  defp exponent(high, _two_highest_bits_set = true) do
+  defp exponent(high, true) do
     biased_exponent = (high >>> 47) &&& @exponent_mask
     biased_exponent - @exponent_bias
   end

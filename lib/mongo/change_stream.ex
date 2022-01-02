@@ -283,7 +283,7 @@ defmodule Mongo.ChangeStream do
 
     # we cannot deterministically slice, so tell Enumerable to
     # fall back on brute force
-    def slice(_cursor), do: { :error, __MODULE__ }
+    def slice(_cursor), do: {:error, __MODULE__}
     def count(_stream), do: {:error, __MODULE__}
     def member?(_stream, _term), do: {:error, __MODULE__}
 

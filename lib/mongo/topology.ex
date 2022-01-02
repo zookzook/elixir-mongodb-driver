@@ -421,14 +421,14 @@ defmodule Mongo.Topology do
       args = [server_description.address, self(), heartbeat_frequency_ms, Keyword.put(connopts, :pool, DBConnection.ConnectionPool)]
       {:ok, pid} = Monitor.start_link(args)
 
-      %{ state | monitors: Map.put(state.monitors, address, pid) }
+      %{state | monitors: Map.put(state.monitors, address, pid)}
     end)
 
     Enum.reduce(removed, state, &remove_address/2)
   end
 
   defp update_session_pool(%{session_pool:  nil, opts: opts} = state, logical_session_timeout) do
-    %{ state | session_pool: SessionPool.new(logical_session_timeout, opts)}
+    %{state | session_pool: SessionPool.new(logical_session_timeout, opts)}
   end
   defp update_session_pool(state, _logical_session_timeout) do
     state

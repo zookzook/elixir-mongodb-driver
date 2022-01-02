@@ -154,7 +154,7 @@ defmodule Mongo.Monitor do
   #
   defp get_server_description(%{connection_pid: conn_pid, address: address, round_trip_time: last_rtt, opts: opts} = state, counter) do
 
-    Mongo.Events.notify(%ServerHeartbeatStartedEvent{ connection_pid: conn_pid})
+    Mongo.Events.notify(%ServerHeartbeatStartedEvent{connection_pid: conn_pid})
 
     {result, finish_time, rtt} = call_is_master_command(conn_pid, opts)
     case result do

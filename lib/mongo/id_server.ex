@@ -58,7 +58,7 @@ defmodule Mongo.IdServer do
 
   defp gen_counters(range) do
     for ix <- range do
-      {ix, :rand.uniform(@counter_max)-1}
+      {ix, :rand.uniform(@counter_max) - 1}
     end
   end
 
@@ -74,7 +74,7 @@ defmodule Mongo.IdServer do
     window      = @num_counters
     half_window = div window, 2
 
-    rem secs+half_window, window
+    rem secs + half_window, window
   end
 
   defp machine_id() do

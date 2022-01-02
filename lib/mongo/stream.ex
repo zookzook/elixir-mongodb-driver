@@ -74,7 +74,7 @@ defmodule Mongo.Stream do
               maxTimeMS: opts[:max_time]
             ] |> filter_nils()
 
-      with {:ok, %{"cursor" => %{ "id" => cursor_id, "nextBatch" => docs}, "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
+      with {:ok, %{"cursor" => %{"id" => cursor_id, "nextBatch" => docs}, "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
         {:ok, %{cursor_id: cursor_id, docs: docs}}
       end
 
@@ -122,7 +122,7 @@ defmodule Mongo.Stream do
 
     # we cannot deterministically slice, so tell Enumerable to
     # fall back on brute force
-    def slice(_cursor), do: { :error, __MODULE__ }
+    def slice(_cursor), do: {:error, __MODULE__}
     def count(_stream), do: {:error, __MODULE__}
     def member?(_stream, _term), do: {:error, __MODULE__}
 

@@ -139,7 +139,7 @@ defmodule Mongo.BulkWritesTest do
 
   test "create one small document and one large 16mb document", top do
     coll = unique_collection()
-    max_n = (16*1024*1024) - 44 # 44 bytes for 'key: "big" and v:'
+    max_n = (16 * 1024 * 1024) - 44 # 44 bytes for 'key: "big" and v:'
 
 
     a_line_1k = Enum.reduce(1..1_024, "", fn _, acc -> acc <> "A" end)
@@ -168,7 +168,7 @@ defmodule Mongo.BulkWritesTest do
 
   test "create one small document and one too large document", top do
     coll = unique_collection()
-    max_n = 16*1024*1024
+    max_n = 16 * 1024 * 1024
 
     a_line_1k = Enum.reduce(1..1_024, "", fn _, acc -> acc <> "A" end)
     a_line_1m = Enum.reduce(1..1_024, "", fn _, acc -> acc <> a_line_1k end)

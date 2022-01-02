@@ -102,13 +102,13 @@ defmodule Mongo.Test do
     query = [
       %{
         "$match" => %{
-          "foo" => %{ "$gt" => 43 }
+          "foo" => %{"$gt" => 43}
         }
       },
       %{
         "$group" => %{
           "_id" => "foo",
-          "total" => %{ "$sum" => "$foo" }
+          "total" => %{"$sum" => "$foo"}
         }
       }
     ]
@@ -258,7 +258,7 @@ defmodule Mongo.Test do
 
     # sort
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 42, bar: 10})
-    assert {:ok, value} = Mongo.find_one_and_update( c.pid, coll,
+    assert {:ok, value} = Mongo.find_one_and_update(c.pid, coll,
       %{"foo" => 42},
       %{"$set" => %{baz: 1}},
       [sort: %{"bar" => -1}, return_document: :after])

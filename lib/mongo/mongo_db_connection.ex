@@ -56,9 +56,8 @@ defmodule Mongo.MongoDBConnection do
     result =
       with {:ok, state} <- tcp_connect(opts, state),
            {:ok, state} <- maybe_ssl(opts, state),
-           {:ok, state} <- hand_shake(opts, state),
-           {:ok, state} <- maybe_auth(opts, state) do
-        {:ok, state}
+           {:ok, state} <- hand_shake(opts, state)do
+        {:ok, state} <- maybe_auth(opts, state)
       end
 
     case result do
@@ -240,6 +239,11 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
+  ##
+  # hier apiVersion hinzufügen?
+  # hello Command
+  # https://github.com/mongodb/specifications/blob/63b0451b4969f6bf7464e8d86d78b7552f65ba58/source/versioned-api/versioned-api.rst
+  ##
   defp execute_action(:command, [cmd], opts, %{wire_version: version} = state) when version >= 6 do
 
     {command_name, data} = provide_cmd_data(cmd)
@@ -265,8 +269,8 @@ defmodule Mongo.MongoDBConnection do
 
     Events.notify(event, :commands)
 
-    with {duration, {:ok, doc}} <- :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end),
-         state = %{state | request_id: state.request_id + 1} do
+    with {duration, {:ok, doc}} <- :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end) do
+      state = %{state | request_id: state.request_id + 1}
       {:ok, {doc, {event, duration}}, state}
     end
   end
@@ -284,8 +288,8 @@ defmodule Mongo.MongoDBConnection do
     flags    = Keyword.take(opts, @find_one_flags)
     op       = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: cmd, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
     timeout  = Keyword.get(opts, :timeout, state.timeout)
-    with {duration, {:ok, doc}} <- :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end),
-         state = %{state | request_id: state.request_id + 1}  do
+    with {duration, {:ok, doc}} <- :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end) do
+      state = %{state | request_id: state.request_id + 1}
       {:ok, {doc, {event, duration}}, state}
     end
   end

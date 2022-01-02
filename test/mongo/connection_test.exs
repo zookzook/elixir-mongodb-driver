@@ -70,7 +70,7 @@ defmodule Mongo.ConnectionTest do
 
   defp connect_ssl do
     assert {:ok, pid} =
-      Mongo.start_link(hostname: "localhost", database: "mongodb_test", ssl: true, ssl_opts: [ ciphers: ['AES256-GCM-SHA384'], versions: [:"tlsv1.2"] ])
+      Mongo.start_link(hostname: "localhost", database: "mongodb_test", ssl: true, ssl_opts: [ciphers: ['AES256-GCM-SHA384'], versions: [:"tlsv1.2"]])
     pid
   end
 
@@ -172,7 +172,7 @@ defmodule Mongo.ConnectionTest do
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 42}, [])
     assert {:ok, _} = Mongo.insert_one(pid, coll, %{foo: 43}, [])
 
-    assert [%{ "foo" => 42}, %{"foo" => 43}] = find(pid, coll, %{}, nil, [])
+    assert [%{"foo" => 42}, %{"foo" => 43}] = find(pid, coll, %{}, nil, [])
     assert [%{"foo" => 43}]                  = find(pid, coll, %{}, nil, skip: 1)
 
   end
@@ -180,7 +180,7 @@ defmodule Mongo.ConnectionTest do
   test "big response" do
     pid    = connect_auth()
     coll   = unique_collection()
-    size   = 1024*1024
+    size   = 1024 * 1024
     binary = <<0::size(size)>>
 
     Mongo.delete_many(pid, coll, %{})

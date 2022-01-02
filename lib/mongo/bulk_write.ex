@@ -258,11 +258,9 @@ defmodule Mongo.BulkWrite do
   # Executes the command `cmd` and collects the result.
   #
   defp one_bulk_write_operation(session, cmd, coll, docs, max_batch_size, opts) do
-    with result <- session
-                   |> run_commands(get_cmds(cmd, coll, docs, max_batch_size, opts), opts)
-                   |> collect(cmd) do
-      result
-    end
+    session
+    |> run_commands(get_cmds(cmd, coll, docs, max_batch_size, opts), opts)
+    |> collect(cmd)
   end
 
   ##
@@ -413,24 +411,28 @@ defmodule Mongo.BulkWrite do
 
   defp get_update_cmd(coll, updates, opts) do
 
-    [ update: coll,
+    [
+      update: coll,
       updates: Enum.map(updates, fn update -> get_update_doc(update) end),
       ordered: Keyword.get(opts, :ordered),
       writeConcern: write_concern(opts),
       bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
-    ] |> filter_nils()
+    ]
+    |> filter_nils()
 
   end
 
   defp get_update_doc({filter, update, update_opts}) do
 
-    [ q: filter,
+    [
+      q: filter,
       u: update,
       upsert: Keyword.get(update_opts, :upsert),
       multi: Keyword.get(update_opts, :multi) || false,
       collation: Keyword.get(update_opts, :collation),
       arrayFilters: Keyword.get(update_opts, :array_filters)
-    ] |> filter_nils()
+    ]
+    |> filter_nils()
 
   end
 

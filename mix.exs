@@ -61,9 +61,9 @@ defmodule Mongodb.Mixfile do
       {:decimal, "~> 2.0"},
       {:excoveralls, "~> 0.12.1", only: :test},
       {:benchee, "~> 1.0", only: :dev},
-      {:jason, "~> 1.2", only: :test},
+      {:jason, "~> 1.2", only: [:dev, :test]},
       {:ex_doc, ">= 0.0.0", only: :docs, runtime: false},
-      {:dialyxir, "~> 0.5", only: :dev, runtime: false}
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false}
     ]
   end
 
