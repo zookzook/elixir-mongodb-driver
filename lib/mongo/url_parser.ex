@@ -153,10 +153,7 @@ defmodule Mongo.UrlParser do
 
   @spec get_host_srv([{term, term, term, term}]) :: {:ok, String.t()}
   defp get_host_srv(srv) when is_list(srv) do
-    hosts =
-      srv
-      |> Enum.map(fn {_, _, port, host} -> "#{host}:#{port}" end)
-      |> Enum.join(",")
+    hosts = Enum.map_join(srv, ",", fn {_, _, port, host} -> "#{host}:#{port}" end)
 
     {:ok, hosts}
   end

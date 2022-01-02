@@ -1,4 +1,5 @@
 defmodule Mongo.Specification.CRUD do
+  # credo:disable-for-this-file
   @moduledoc false
 
   defmacro create_tests(json) do
