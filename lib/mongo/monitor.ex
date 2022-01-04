@@ -16,30 +16,27 @@ defmodule Mongo.Monitor do
 
   use GenServer
 
-  alias Mongo.Topology
+  alias Mongo.Events.ServerHeartbeatFailedEvent
+  alias Mongo.Events.ServerHeartbeatStartedEvent
+  alias Mongo.Events.ServerHeartbeatSucceededEvent
+  alias Mongo.Monitor
   alias Mongo.ServerDescription
-  alias Mongo.Events.{ServerHeartbeatStartedEvent, ServerHeartbeatFailedEvent,ServerHeartbeatSucceededEvent}
+  alias Mongo.StreamingHelloMonitor
+  alias Mongo.Topology
+
+  @monitor_modes [
+    :polling_mode,
+    :streaming_mode
+  ]
+
+  @min_wire_version_streaming_protocol 9
 
   # this is not configurable because the specification says so
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#minheartbeatfrequencyms
   # not used @min_heartbeat_frequency_ms 500
 
   def start_link(args) do
-    GenServer.start_link(__MODULE__, args)
-  end
-
-  # We need to stop asynchronously because a Monitor can call the Topology
-  # which may try to stop the same Monitor that called it. Ending in a timeout.
-  # See issues #139 for some information.
-
-  @doc """
-  Stop the monitor process.
-
-  We need to stop asynchronously because a Monitor can call the Topology
-  which may try to stop the same Monitor that called it. Ending in a timeout.
-  """
-  def stop(pid) do
-    GenServer.cast(pid, :stop)
+    GenServer.start_link(Monitor, args)
   end
 
   @doc """
@@ -53,16 +50,22 @@ defmodule Mongo.Monitor do
     GenServer.cast(pid, {:update, heartbeat_frequency_ms})
   end
 
+  def get_state(pid) do
+    GenServer.call(pid, :get_state)
+  end
+
   @doc """
   Initialize the monitor process
   """
   def init([address, topology_pid, heartbeat_frequency_ms, connection_opts]) do
 
+    info("Starting monitor process with pid #{inspect self()}")
+
     # monitors don't authenticate and use the "admin" database
     opts = connection_opts
            |> Keyword.put(:database, "admin")
            |> Keyword.put(:skip_auth, true)
-           |> Keyword.put(:after_connect, {__MODULE__, :connected, [self(), topology_pid]})
+           |> Keyword.put(:after_connect, {Monitor, :connected, [self(), topology_pid]})
            |> Keyword.put(:backoff_min, heartbeat_frequency_ms)
            |> Keyword.put(:backoff_max, heartbeat_frequency_ms)
            |> Keyword.put(:backoff_type, :rand)
@@ -73,12 +76,14 @@ defmodule Mongo.Monitor do
 
     with {:ok, pid} <- DBConnection.start_link(Mongo.MongoDBConnection, opts) do
       {:ok, %{
+        mode: :polling_mode,                            ## we are starting with the polling mode
         connection_pid: pid,                            ## our connection pid to the mongodb server
         topology_pid: topology_pid,                     ## the topology_pid to which we report
         address: address,                               ## the address of the server, needed to make updates
         round_trip_time: nil,                           ## current round_trip_time, needed to make average value
         heartbeat_frequency_ms: heartbeat_frequency_ms, ## current heartbeat_frequency_ms
-        opts: opts ## options
+        opts: opts,                                     ## options
+        streaming_pid: nil
       }}
 
     end
@@ -86,10 +91,23 @@ defmodule Mongo.Monitor do
   end
 
   @doc """
-  In this case we stop the DBConnection.
+  In case of terminating we stop the our linked processes as well:
+  * connection
+  * streaming process
   """
-  def terminate(reason, state) do
-    GenServer.stop(state.connection_pid, reason)
+  def terminate(reason, %{connection_pid: connection_pid, streaming_pid: nil}) do
+    info("Terminating monitor for reason #{inspect reason}")
+    GenServer.stop(connection_pid, reason)
+  end
+
+  def terminate(reason, %{connection_pid: connection_pid, streaming_pid: streaming_pid}) do
+    info("Terminating monitor for reason #{inspect reason}")
+
+    info("Stopping connection")
+    GenServer.stop(connection_pid, reason)
+
+    info("Stopping streaming")
+    GenServer.stop(streaming_pid, reason)
   end
 
   @doc """
@@ -100,72 +118,138 @@ defmodule Mongo.Monitor do
     GenServer.cast(me, :update)
   end
 
-  @doc """
-  Time to update the topology. Calling `isMaster` and updating the server description
-  """
-  def handle_cast(:update, state) do
-    new_state = update_server_description(state)
-    # we return with heartbeat_frequency_ms, so after heartbeat_frequency_ms handle_info(:timeout...) gets called.
-    {:noreply, new_state, new_state.heartbeat_frequency_ms}
+  def handle_call(:get_state, _from, state) do
+    {:reply, Map.put(state, :pid, self()), state}
   end
 
+  ##
+  # Update the server description or the rrt value
+  ##
+  def handle_cast(:update, state) do
+    handle_info(:update, state)
+  end
+
+  ##
+  # Update the server description or the rrt value and set new heartbeat value
+  ##
   def handle_cast({:update, heartbeat_frequency_ms}, state) do
     new_state = state
-    |> update_server_description()
-    |> Map.put(:heartbeat_frequency_ms, heartbeat_frequency_ms)
-    # we return with heartbeat_frequency_ms, so after heartbeat_frequency_ms handle_info(:timeout...) gets called.
-    {:noreply, new_state, new_state.heartbeat_frequency_ms}
+                |> update_server_description()
+                |> Map.put(:heartbeat_frequency_ms, heartbeat_frequency_ms)
+    {:noreply, new_state}
   end
 
-  def handle_cast(:stop, state) do
-    exit(:normal)
-    {:noreply, state}
-  end
-
-  @doc """
-  The `:timeout` call is the periodic call defined by the heartbeat frequency
-  The ':update' call updates the server description for the topology process
-  """
-  def handle_info(:timeout, state) do
-    new_state = update_server_description(state)
-
-    ## todo Logger.info("XXX: heartbeat_frequency_ms: #{inspect new_state.heartbeat_frequency_ms}")
-    {:noreply, new_state, new_state.heartbeat_frequency_ms}
-  end
+  ##
+  # Updates the server description or the rrt value
+  ##
   def handle_info(:update, state) do
     new_state = update_server_description(state)
-    # we return with heartbeat_frequency_ms, so after heartbeat_frequency_ms handle_info(:timeout...) gets called.
-    {:noreply, new_state, new_state.heartbeat_frequency_ms}
+    Process.send_after(self(), :update, new_state.heartbeat_frequency_ms)
+
+    {:noreply, new_state}
+  end
+
+  ##
+  # Polling mode: get a new server description from the server and new round_trip_time value
+  # and send it to the topology process. If possible start the streaming mode.
+  ##
+  defp update_server_description(%{connection_pid: conn_pid, topology_pid: topology_pid, mode: :polling_mode} = state) do
+    with %{round_trip_time: round_trip_time,
+           max_wire_version: max_wire_version} = server_description <- get_server_description(state) do
+
+      info("Updating server description: #{inspect(server_description, pretty: true)}")
+
+      Mongo.Events.notify(%ServerHeartbeatStartedEvent{connection_pid: conn_pid})
+      Topology.update_server_description(topology_pid, server_description)
+      state = %{state | round_trip_time: round_trip_time}
+
+      case max_wire_version >= @min_wire_version_streaming_protocol do
+        true ->
+          start_streaming_mode(state, server_description)
+
+        false ->
+          state
+      end
+
+    else
+      error ->
+        Logger.warn("Unable to update server description because of #{inspect error}")
+        state
+    end
   end
 
   ##
   # Get a new server description from the server and send it to the Topology process.
-  #
-  defp update_server_description(%{topology_pid: topology_pid} = state) do
-    %{:round_trip_time => round_trip_time} = server_description = get_server_description(state, 0)
-    Topology.update_server_description(topology_pid, server_description)
-    %{state | round_trip_time: round_trip_time}
+  ##
+  defp update_server_description(%{topology_pid: topology_pid, address: address, mode: :streaming_mode} = state) do
+    with %{round_trip_time: round_trip_time} <- get_server_description(state) do
+      info("Updating round_trip_time: #{inspect round_trip_time}")
+      Topology.update_rrt(topology_pid, address, round_trip_time)
+
+      %{state | round_trip_time: round_trip_time}
+    else
+      error ->
+        Logger.warn("Unable to update server description because of #{inspect error}")
+        state
+    end
   end
 
-  # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#network-error-when-calling-ismaster
   ##
-  # Calls isMaster and parses the result to update the server description
-  # In case of one network error, the function tries one more time to call isMaster command
-  #
-  defp get_server_description(%{connection_pid: conn_pid, address: address, round_trip_time: last_rtt, opts: opts} = state, counter) do
+  # Starts the streaming mode
+  ##
+  defp start_streaming_mode(%{address: address, topology_pid: topology_pid, heartbeat_frequency_ms: heartbeat_frequency_ms, opts: opts} = state, _server_description) do
+    args = [topology_pid, address, heartbeat_frequency_ms, opts]
+    with {:ok, pid} <- StreamingHelloMonitor.start_link(args) do
+      %{state | mode: :streaming_mode, streaming_pid: pid}
+      else
+      error ->
+        Logger.warn("Unable to start the streaming hello monitor, because of #{inspect error}")
+        state
+    end
+  end
 
-    Mongo.Events.notify(%ServerHeartbeatStartedEvent{ connection_pid: conn_pid})
+  ##
+  # Streaming mode: calls hello command and updated the round trip time for the command.
+  ##
+  defp get_server_description(%{connection_pid: conn_pid, round_trip_time: last_rtt, mode: :streaming_mode, opts: opts} = state) do
 
-    {result, finish_time, rtt} = call_is_master_command(conn_pid, opts)
-    case result do
-      {:ok, is_master_reply} ->
-        notify_success(rtt, is_master_reply, conn_pid)
-        ServerDescription.from_is_master(address, average_rtt(last_rtt, rtt), finish_time, is_master_reply)
+    {rtt, response} = :timer.tc(fn -> Mongo.exec_command(conn_pid, [isMaster: 1], opts) end)
 
-      {:error, error} when counter == 1 ->
+    case response do
+      {:ok, {_flags, _hello_doc}} ->
+        %{round_trip_time: average_rtt(last_rtt, div(rtt, 1000))}
+
+      error ->
+        error
+    end
+  end
+
+  ##
+  # Polling mode: updating the server description and the round trip time together
+  ##
+  defp get_server_description(%{connection_pid: conn_pid, address: address, round_trip_time: last_rtt, opts: opts} = state) do
+
+    {rtt, response} = :timer.tc(fn -> Mongo.exec_command(conn_pid, [isMaster: 1], opts) end)
+    case response do
+      {:ok, {_flags, hello_doc}} ->
+
+        notify_success(rtt, hello_doc, conn_pid)
+
+        hello_doc
+        |> ServerDescription.parse_hello_response()
+        |> Map.put(:round_trip_time, average_rtt(last_rtt, div(rtt, 1000)))
+        |> Map.put(:address, address)
+        |> Map.put(:last_update_time, DateTime.utc_now())
+        |> Map.put(:error, nil)
+
+      {:error, error} ->
+
         notify_error(rtt, error, conn_pid)
-        ServerDescription.from_is_master_error(address, error)
-      {:error, _error} -> get_server_description(state, counter + 1)
+
+        ServerDescription.new()
+        |> Map.put(:address, address)
+        |> Map.put(:error, error)
+
     end
   end
 
@@ -176,26 +260,23 @@ defmodule Mongo.Monitor do
     round(0.2 * rtt + 0.8 * last_rtt)
   end
 
-  defp call_is_master_command(conn_pid, opts) do
-    {rtt, result} = :timer.tc(fn -> Mongo.exec_command(conn_pid, [isMaster: 1], opts) end)
-    finish_time   = DateTime.utc_now()
-    {result, finish_time, div(rtt, 1000)}
-  end
-
   defp notify_error(rtt, error, conn_pid) do
-    :ok = Mongo.Events.notify(%ServerHeartbeatFailedEvent{
-            duration: rtt,
-             failure: error,
-      connection_pid: conn_pid
-    })
+    Mongo.Events.notify(%ServerHeartbeatFailedEvent{duration: rtt, failure: error, connection_pid: conn_pid})
   end
 
   defp notify_success(rtt, reply, conn_pid) do
-    :ok = Mongo.Events.notify(%ServerHeartbeatSucceededEvent{
-      duration: rtt,
-      reply: reply,
-      connection_pid: conn_pid
-    })
+    Mongo.Events.notify(%ServerHeartbeatSucceededEvent{duration: rtt, reply: reply, connection_pid: conn_pid})
+  end
+
+  @doc """
+  Returns the possible modes of the monitor process.
+  """
+  def modes() do
+    @monitor_modes
+  end
+
+  defp info(message) do
+    Logger.info(IO.ANSI.format([:light_magenta, :bright, message]))
   end
 
 end

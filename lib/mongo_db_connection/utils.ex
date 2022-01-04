@@ -1,5 +1,8 @@
 defmodule Mongo.MongoDBConnection.Utils do
   @moduledoc false
+
+  require Logger
+
   import Kernel, except: [send: 2]
   import Mongo.Messages
   use Bitwise
@@ -11,21 +14,29 @@ defmodule Mongo.MongoDBConnection.Utils do
 
   @doc"""
     Sends a request id and waits for the response with the same id
-
   """
   def post_request(op, id, state) do
 
     with :ok <- send_data(encode(id, op), state),
          {:ok, ^id, response} <- recv_data(nil, "", state),
-         {:ok, doc} <- get_doc(response),
-         do: {:ok, doc}
+         {:ok, flags, doc} <- get_doc(response),
+         do: {:ok, flags, doc}
+  end
+
+  @doc """
+  In case of the flag :exhaust_allowed is used, the driver should read further data from the server.
+  """
+  def get_response(_id, state) do
+    with {:ok, _new_id, response} <- recv_data(nil, "", state) do
+      get_doc(response)
+    end
   end
 
   @doc """
     Invoking a command using connection stored in state, that means within a DBConnection call. Therefore
     we cannot call DBConnect.execute() to reuse the command function in Monto.exec_command()
 
-    Using op_query structure to invoke the command
+    Using op_msg structure to invoke the command
   """
   def command(id, command, %{wire_version: version} = state) when is_integer(version) and version >= 6 do
 
@@ -38,10 +49,11 @@ defmodule Mongo.MongoDBConnection.Utils do
 
     command = command ++ ["$db": db]
 
-    op_msg(flags: 0, sections: [section(payload_type: 0, payload: payload(doc: command))])
-    |> post_request(id, state)
+    request = op_msg(flags: 0, sections: [section(payload_type: 0, payload: payload(doc: command))])
 
+    post_request(request, id, state)
   end
+
   def command(id, command, state)  do
 
     # In case of authenticate sometimes the namespace has to be modified
@@ -58,16 +70,16 @@ defmodule Mongo.MongoDBConnection.Utils do
 
   def get_doc(op_reply() = response) do
     case response do
-      op_reply(docs: [])    -> {:ok, nil}
-      op_reply(docs: [doc]) -> {:ok, doc}
-      op_reply(docs: docs)  -> {:ok, docs}
+      op_reply(docs: [])    -> {:ok, 0x0, nil}
+      op_reply(docs: [doc]) -> {:ok, 0x0, doc}
+      op_reply(docs: docs)  -> {:ok, 0x0, docs}
     end
   end
-  def get_doc(op_msg(flags: _flags, sections: sections)) do
+  def get_doc(op_msg(flags: flags, sections: sections)) do
     case Enum.map(sections, fn sec -> get_doc(sec) end) do
-      []    -> {:ok, nil}
-      [doc] -> {:ok, doc}
-      docs  -> {:ok, List.flatten(docs)}
+      []    -> {:ok, flags, nil}
+      [doc] -> {:ok, flags, doc}
+      docs  -> {:ok, flags, List.flatten(docs)}
     end
   end
   def get_doc(section(payload_type: 0, payload: payload(doc: doc))), do: doc

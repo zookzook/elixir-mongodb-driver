@@ -22,20 +22,6 @@ defmodule Mongodb.Mixfile do
         "coveralls.post": :test,
         "coveralls.html": :test
       ],
-      dialyzer: [
-        flags: [:underspecs, :unknown, :unmatched_returns],
-        plt_add_apps: [
-          :logger,
-          :connection,
-          :db_connection,
-          :mix,
-          :elixir,
-          :ssl,
-          :public_key
-        ],
-        plt_add_deps: :transitive,
-        plt_core_path: "plt_core_path"
-      ],
       consolidate_protocols: Mix.env() != :test
     ]
   end
@@ -63,7 +49,7 @@ defmodule Mongodb.Mixfile do
       {:benchee, "~> 1.0", only: :dev},
       {:jason, "~> 1.2", only: :test},
       {:ex_doc, ">= 0.0.0", only: :docs, runtime: false},
-      {:dialyxir, "~> 0.5", only: :dev, runtime: false}
+      #{:dialyxir, "~> 0.5", only: :dev, runtime: false}
     ]
   end
 

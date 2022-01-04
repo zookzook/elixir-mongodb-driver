@@ -1,15 +1,17 @@
 defmodule Mongo.Topology do
   @moduledoc false
 
+  require Logger
+
   use GenServer
 
+  alias Mongo.Events.ServerClosedEvent
   alias Mongo.Events.ServerDescriptionChangedEvent
+  alias Mongo.Events.ServerOpeningEvent
   alias Mongo.Events.ServerSelectionEmptyEvent
   alias Mongo.Events.TopologyClosedEvent
   alias Mongo.Events.TopologyDescriptionChangedEvent
   alias Mongo.Events.TopologyOpeningEvent
-  alias Mongo.Events.ServerClosedEvent
-  alias Mongo.Events.ServerOpeningEvent
   alias Mongo.Monitor
   alias Mongo.ServerDescription
   alias Mongo.Session
@@ -51,6 +53,13 @@ defmodule Mongo.Topology do
   end
 
   @doc """
+  Update async the rrt value received from the Monitor-Process
+  """
+  def update_rrt(pid, address, round_trip_time) do
+    GenServer.cast(pid, {:update_rrt, address, round_trip_time})
+  end
+
+  @doc """
   Called from the monitor in case that a connection was established.
   """
   def monitor_connected(pid, monitor_pid) do
@@ -65,13 +74,17 @@ defmodule Mongo.Topology do
     GenServer.call(pid, :topology)
   end
 
+  def get_state(pid) do
+    GenServer.call(pid, :get_state)
+  end
+
   def select_server(pid, type, opts \\ []) do#97
     timeout = Keyword.get(opts, :checkout_timeout,  @default_checkout_timeout)
     GenServer.call(pid, {:select_server, type, opts}, timeout)
   end
 
   def mark_server_unknown(pid, address) do
-    server_description = ServerDescription.from_is_master_error(address, "not writable primary or recovering")
+    server_description = ServerDescription.parse_hello_response(address, "not writable primary or recovering")
     update_server_description(pid, server_description)
   end
 
@@ -102,6 +115,9 @@ defmodule Mongo.Topology do
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#configuration
   @doc false
   def init(opts) do
+
+    Logger.info("Starting topology!!")
+
     seeds              = Keyword.get(opts, :seeds, [seed(opts)])
     type               = Keyword.get(opts, :type, :unknown)
     set_name           = Keyword.get(opts, :set_name, nil)
@@ -142,6 +158,9 @@ defmodule Mongo.Topology do
   end
 
   def terminate(_reason, state) do
+
+    Logger.info("Terminating Topology")
+
     case state.opts[:pw_safe] do
        nil -> nil
        pid -> GenServer.stop(pid)
@@ -153,9 +172,9 @@ defmodule Mongo.Topology do
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#updating-the-topologydescription
   def handle_cast({:server_description, server_description}, state) do
-    new_state = handle_server_description(state, server_description)
+    new_state = do_update_server_description(state, server_description)
     if state.topology != new_state.topology do
-      :ok = Mongo.Events.notify(%TopologyDescriptionChangedEvent{
+      Mongo.Events.notify(%TopologyDescriptionChangedEvent{
         topology_pid: self(),
         previous_description: state.topology,
         new_description: new_state.topology
@@ -164,15 +183,26 @@ defmodule Mongo.Topology do
     {:noreply, new_state}
   end
 
+  ##
+  # Updates the measured round trip time value for the specified address in the topology data structure
+  ##
+  def handle_cast({:update_rrt, address, round_trip_time}, state) do
+    {:noreply, do_update_rrt(state, address, round_trip_time)}
+  end
+
   def handle_cast(:reconcile, state) do
     new_state = update_monitor(state)
     {:noreply, new_state}
   end
-  def handle_cast({:disconnect, :monitor, host}, state) do
+
+  def handle_cast({:disconnect, kind, host}, state) do
+
+    Logger.info("Disconnection by #{inspect kind}")
     new_state = remove_address(host, state)
     maybe_reinit(new_state)
     {:noreply, new_state}
   end
+
   def handle_cast({:disconnect, :client, _host}, state) do
     {:noreply, state}
   end
@@ -230,7 +260,7 @@ defmodule Mongo.Topology do
   ##
   # Update server description: in case of logical session the function creates a session pool for the `deployment`.
   #
-  defp handle_server_description(state, %{:logical_session_timeout => logical_session_timeout} = server_description) do
+  defp do_update_server_description(state, %{:logical_session_timeout => logical_session_timeout} = server_description) do
     state
     |> get_and_update_in([:topology], &TopologyDescription.update(&1, server_description, length(state.seeds)))
     |> process_events()
@@ -238,12 +268,19 @@ defmodule Mongo.Topology do
     |> update_monitor()
     |> update_session_pool(logical_session_timeout)
   end
-  defp handle_server_description(state, server_description) do
+  defp do_update_server_description(state, server_description) do
     state
     |> get_and_update_in([:topology], &TopologyDescription.update(&1, server_description, length(state.seeds)))
     |> process_events()
     |> update_heartbeat_frequency()
     |> update_monitor()
+  end
+
+  ##
+  # Updates the rrt
+  #
+  defp do_update_rrt(state, address, round_trip_time) do
+    update_in(state, [:topology], fn topology -> TopologyDescription.update_rrt(topology, address, round_trip_time) end)
   end
 
   defp update_heartbeat_frequency(%{:topology => %{heartbeat_frequency_ms: current} = topology, monitors: monitors} = state) do
@@ -276,7 +313,7 @@ defmodule Mongo.Topology do
       {:force_check, _} = message -> :ok = GenServer.cast(self(), message)
       {previous, next} ->
         if previous != next do
-          :ok = Mongo.Events.notify(%ServerDescriptionChangedEvent{
+            Mongo.Events.notify(%ServerDescriptionChangedEvent{
             address: next.address,
             topology_pid: self(),
             previous_description: previous,
@@ -291,6 +328,10 @@ defmodule Mongo.Topology do
 
   def handle_call(:topology, _from, state) do
     {:reply, state.topology, state}
+  end
+
+  def handle_call(:get_state, _from, state) do
+    {:reply, state, state}
   end
 
   def handle_call({:connection, address}, _from, state) do
@@ -421,7 +462,7 @@ defmodule Mongo.Topology do
       args = [server_description.address, self(), heartbeat_frequency_ms, Keyword.put(connopts, :pool, DBConnection.ConnectionPool)]
       {:ok, pid} = Monitor.start_link(args)
 
-      %{ state | monitors: Map.put(state.monitors, address, pid) }
+      %{state | monitors: Map.put(state.monitors, address, pid)}
     end)
 
     Enum.reduce(removed, state, &remove_address/2)
@@ -451,8 +492,13 @@ defmodule Mongo.Topology do
   end
 
   defp remove_address(address, state) do
+
+    IO.inspect(Process.info(self(), :current_stacktrace), label: "STACKTRACE")
+
+    Logger.info("Removing address #{inspect address}")
+
     :ok = Mongo.Events.notify(%ServerClosedEvent{address: address, topology_pid: self()})
-    :ok = Monitor.stop(state.monitors[address])
+    :ok = GenServer.stop(state.monitors[address])
 
     :ok = case state.connection_pools[address] do
             nil -> :ok

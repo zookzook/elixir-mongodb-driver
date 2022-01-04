@@ -1,0 +1,9 @@
+<h6>Monitor process <%= inspect @monitor.pid %></h6>
+<ul class="list-group stripes">
+    <li class="list-group-item d-flex justify-content-between"><label>Address:</label><%= @monitor.address%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Mode:</label><%= @monitor.mode%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Heartbeat frequency ms:</label><%= @monitor.heartbeat_frequency_ms%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Round trip time:</label><%= @monitor.round_trip_time%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Connection pid:</label><%= inspect @monitor.connection_pid%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Streaming hello pid:</label><%= inspect @monitor.streaming_pid%></li>
+</ul>

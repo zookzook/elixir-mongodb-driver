@@ -28,6 +28,12 @@ defmodule Mongo.Messages do
     partial:           0x80
   ]
 
+  @msg_flags [
+    checksum_present:  0x00001,   # Checksum present
+    more_to_come:      0x00002,   # Sender will send another message and is not prepared for overlapping messages
+    exhaust_allowed:   0x10000,   # Client is prepared for multiple replies (using the moreToCome bit) to this request
+  ]
+
   @header_size 4 * 4
 
   defrecordp :msg_header, [:length, :request_id, :response_to, :op_code]
@@ -133,9 +139,8 @@ defmodule Mongo.Messages do
       BSON.Encoder.document(query),
       select]
   end
-  defp encode_op(op_msg(flags: _flags, sections: sections)) do
-    # todo: flags encoding
-    [<<0::int32>> | encode_sections(sections)]
+  defp encode_op(op_msg(flags: flags, sections: sections)) do
+    [<<blit_flags(:msg, flags)::int32>> | encode_sections(sections)]
   end
 
   defp encode_sections(sections) do
@@ -164,6 +169,10 @@ defmodule Mongo.Messages do
 
   Enum.each(@query_flags, fn {flag, bit} ->
     defp flag_to_bit(:query, unquote(flag)), do: unquote(bit)
+  end)
+
+  Enum.each(@msg_flags, fn {flag, bit} ->
+    defp flag_to_bit(:msg, unquote(flag)), do: unquote(bit)
   end)
 
   defp flag_to_bit(_op, _flag), do: 0x0

@@ -65,6 +65,14 @@ defmodule Mongo.Events do
     ]
   end
 
+  defmodule MoreToComeEvent do
+    @moduledoc false
+    defstruct [
+      :command,         ## Returns the command.
+      :command_name,    ## Returns the command name.
+    ]
+  end
+
   defmodule RetryReadEvent do
     @moduledoc false
     defstruct [

@@ -804,10 +804,9 @@ defmodule Mongo do
           {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
   def exec_command_session(session, cmd, opts) do
     with {:ok, conn, new_cmd} <- Session.bind_session(session, cmd),
-         {:ok, _cmd, {doc, event}} <-
-           DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
-         doc <- Session.update_session(session, doc, opts),
-         {:ok, doc} <- check_for_error(doc, event) do
+         {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
+         doc <- Session.update_session(session, response, opts), ## todo
+         {:ok, _flags, doc} <- check_for_error(response) do
       {:ok, doc}
     else
       {:error, error} ->
@@ -826,30 +825,36 @@ defmodule Mongo do
   @spec exec_command(GenServer.server(), BSON.document(), Keyword.t()) ::
           {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
   def exec_command(conn, cmd, opts) do
-    with {:ok, _cmd, {doc, event}} <-
-           DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
-         {:ok, doc} <- check_for_error(doc, event) do
-      {:ok, doc}
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)) do
+      check_for_error(response)
     end
   end
 
-  defp check_for_error(%{"ok" => ok} = response, {event, duration}) when ok == 1 do
+  def exec_more_to_come(conn, opts) do
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [:more_to_come], defaults(opts)) do
+      check_for_error(response)
+    end
+  end
+
+  defp check_for_error({%{"ok" => ok} = response, event, flags, duration}) when ok == 1 do
     Events.notify(
       %CommandSucceededEvent{
         reply: response,
         duration: duration,
         command_name: event.command_name,
-        request_id: event.request_id,
-        operation_id: event.operation_id,
-        connection_id: event.connection_id
+        #request_id: event.request_id,
+        #operation_id: event.operation_id,
+        #connection_id: event.connection_id
       },
       :commands
     )
 
-    {:ok, response}
+    {:ok, {flags, response}}
   end
 
-  defp check_for_error(doc, {event, duration}) do
+  defp check_for_error({doc, event, _flags, duration}) do
+
+    Logger.info("Checking Error: #{inspect doc}")
     error = Mongo.Error.exception(doc)
 
     Events.notify(
@@ -857,9 +862,9 @@ defmodule Mongo do
         failure: error,
         duration: duration,
         command_name: event.command_name,
-        request_id: event.request_id,
-        operation_id: event.operation_id,
-        connection_id: event.connection_id
+        #request_id: event.request_id,
+        #operation_id: event.operation_id,
+        #connection_id: event.connection_id
       },
       :commands
     )

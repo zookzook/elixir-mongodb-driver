@@ -1,0 +1,21 @@
+<h6><%= @server.address%></h6>
+<ul class="list-group stripes">
+    <li class="list-group-item d-flex justify-content-between"><label>Address:</label><%= @server.address%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Type:</label><%= @server.type%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Round trip time:</label><%= @server.round_trip_time%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Last update time:</label><%= @server.last_update_time%></li>
+    <li class="list-group-item separator"></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Min wire version:</label><%= @server.min_wire_version%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Max wire version:</label><%= @server.max_wire_version%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Error:</label><%= inspect @server.error%></li>
+    <li class="list-group-item separator"></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Max message size bytes:</label><%= @server.max_message_size_bytes%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Max write batch_size:</label><%= @server.max_write_batch_size%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Max bson object size:</label><%= @server.max_bson_object_size%></li>
+    <li class="list-group-item separator"></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Set name:</label><%= inspect @server.set_name%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Set version:</label><%= inspect @server.set_version%></li>
+    <li class="list-group-item separator"></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Support retryable writes:</label><%= @server.support_retryable_writes%></li>
+    <li class="list-group-item d-flex justify-content-between"><label>Read only:</label><%= @server.read_only%></li>
+</ul>
