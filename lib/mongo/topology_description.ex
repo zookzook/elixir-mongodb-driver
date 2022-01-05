@@ -67,10 +67,7 @@ defmodule Mongo.TopologyDescription do
   end
 
   @doc """
-  Returns a tuple of three values:
-  * servers: possible list of servers, maybe []
-  * slave_ok:
-  * mongod?:
+  Selects the next possible server from the current topology.
   """
   def select_servers(topology, type, opts \\ [])
   def select_servers(%{:compatible => false}, _type, _opts) do
@@ -85,6 +82,7 @@ defmodule Mongo.TopologyDescription do
     end
 
     addr = servers
+           |> Enum.filter(fn {_, %{type: type}} -> type != :unknown end) ## only valid servers
            |> Enum.map(fn {server, _} -> server end)
            |> Enum.take_random(1)
 

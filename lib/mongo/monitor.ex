@@ -108,6 +108,7 @@ defmodule Mongo.Monitor do
 
     info("Stopping streaming")
     GenServer.stop(streaming_pid, reason)
+    info("stopped streaming")
   end
 
   @doc """
@@ -189,7 +190,7 @@ defmodule Mongo.Monitor do
       %{state | round_trip_time: round_trip_time}
     else
       error ->
-        Logger.warn("Unable to update server description because of #{inspect error}")
+        Logger.warn("Unable to round trip time because of #{inspect error}")
         state
     end
   end

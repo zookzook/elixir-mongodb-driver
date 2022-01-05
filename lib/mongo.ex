@@ -841,7 +841,7 @@ defmodule Mongo do
       %CommandSucceededEvent{
         reply: response,
         duration: duration,
-        command_name: event.command_name,
+        command_name: event.command_name, ## todo
         #request_id: event.request_id,
         #operation_id: event.operation_id,
         #connection_id: event.connection_id

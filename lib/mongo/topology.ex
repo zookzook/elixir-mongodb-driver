@@ -113,10 +113,7 @@ defmodule Mongo.Topology do
   ## GenServer Callbacks
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#configuration
-  @doc false
   def init(opts) do
-
-    Logger.info("Starting topology!!")
 
     seeds              = Keyword.get(opts, :seeds, [seed(opts)])
     type               = Keyword.get(opts, :type, :unknown)
@@ -158,9 +155,6 @@ defmodule Mongo.Topology do
   end
 
   def terminate(_reason, state) do
-
-    Logger.info("Terminating Topology")
-
     case state.opts[:pw_safe] do
        nil -> nil
        pid -> GenServer.stop(pid)
@@ -195,18 +189,27 @@ defmodule Mongo.Topology do
     {:noreply, new_state}
   end
 
-  def handle_cast({:disconnect, kind, host}, state) do
+  ##
+  # In case of :monitor or :stream_monitor we mark the server description of the address as unknown
+  ##
+  def handle_cast({:disconnect, kind, address}, state) when kind in [:monitor, :stream_monitor] do
+    server_description = ServerDescription.parse_hello_response(address, "#{inspect kind} disconnected")
 
-    Logger.info("Disconnection by #{inspect kind}")
-    new_state = remove_address(host, state)
-    maybe_reinit(new_state)
-    {:noreply, new_state}
+    new_state = address
+                |> remove_address(state)
+                |> maybe_reinit()
+
+    handle_cast({:server_description, server_description}, new_state)
   end
 
-  def handle_cast({:disconnect, :client, _host}, state) do
+  def handle_cast({:disconnect, _kind, _host}, state) do
     {:noreply, state}
   end
 
+  ##
+  # After the monitor is connected to the server, the connection pool is started and
+  # the "waiting pids" are informed to call the command again
+  ##
   def handle_cast({:connected, monitor_pid}, state) do
     monitor = Enum.find(state.monitors, fn {_key, value} -> value == monitor_pid end)
     new_state = case monitor do
@@ -475,8 +478,9 @@ defmodule Mongo.Topology do
     state
   end
 
-  defp maybe_reinit(%{monitors: monitors} = state) when map_size(monitors) > 0,
-    do: state
+  defp maybe_reinit(%{monitors: monitors} = state) when map_size(monitors) > 0 do
+    state
+  end
   defp maybe_reinit(state) do
     servers = servers_from_seeds(state.seeds)
 
@@ -493,17 +497,13 @@ defmodule Mongo.Topology do
 
   defp remove_address(address, state) do
 
-    IO.inspect(Process.info(self(), :current_stacktrace), label: "STACKTRACE")
+    Mongo.Events.notify(%ServerClosedEvent{address: address, topology_pid: self()})
+    GenServer.stop(state.monitors[address])
 
-    Logger.info("Removing address #{inspect address}")
-
-    :ok = Mongo.Events.notify(%ServerClosedEvent{address: address, topology_pid: self()})
-    :ok = GenServer.stop(state.monitors[address])
-
-    :ok = case state.connection_pools[address] do
-            nil -> :ok
-            pid -> GenServer.stop(pid)
-          end
+    case state.connection_pools[address] do
+      nil -> :ok
+      pid -> GenServer.stop(pid)
+    end
 
     %{state | monitors: Map.delete(state.monitors, address),
       connection_pools: Map.delete(state.connection_pools, address)}

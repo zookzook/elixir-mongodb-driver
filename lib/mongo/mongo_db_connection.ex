@@ -8,8 +8,6 @@ defmodule Mongo.MongoDBConnection do
   use DBConnection
   use Mongo.Messages
 
-  ## todo import Keywords
-
   alias Mongo.Events
   alias Mongo.Events.CommandStartedEvent
   alias Mongo.MongoDBConnection.Utils
@@ -223,7 +221,7 @@ defmodule Mongo.MongoDBConnection do
   @impl true
   def ping(%{wire_version: _wire_version} = state) do
     ###with {:ok, %{wire_version: ^wire_version}} <- wire_version(state), do: {:ok, state}
-    ## Logger.info("Ignoring ping")
+    ## todo Logger.info("Ignoring ping")
     {:ok, state}
   end
 
@@ -268,11 +266,9 @@ defmodule Mongo.MongoDBConnection do
     Events.notify(event, :commands)
 
     with {duration, {:ok, flags, doc}} <- :timer.tc(fn -> Utils.get_response(state.request_id, %{state | timeout: timeout}) end)do
-      Logger.info("more_to_come-Response: flags: #{inspect  Integer.to_string(flags, 2)} and docs #{inspect doc}")
       {:ok, {doc, event, flags, duration}, state}
     else
       {_duration, error} ->
-        Logger.info("More to come error")
         error
     end
   end
@@ -305,11 +301,9 @@ defmodule Mongo.MongoDBConnection do
 
     with {duration, {:ok, flags, doc}} <- :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end),
          state = %{state | request_id: state.request_id + 1} do
-      Logger.info("Post-Request ok")
       {:ok, {doc, event, flags, duration}, state}
     else
       {_duration, error} ->
-      Logger.info("Post-Request error")
         error
     end
   end
