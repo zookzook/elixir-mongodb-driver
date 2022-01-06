@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Enhancements
   * Fix for serializing BSON Regex without options (thanks to MillionIntegrals)
   * Misc doc changes (thanks to kianmeng)
+  * Added support for OP_MSG exhaustAllowed flag
+  * Added support for streaming protocol 
+  * Added Insights app for development 
 
 ## 0.8.0 (2021-11-07) (0.7.5 was not published)
 * Enhancements
@@ -22,7 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * added a new option to specify a timeout, when increasing the connection pool is no option
 
 ## 0.7.3 (2021-05-29)
-
 * Enhancements
   * added support for OTP 24
   * Add support for tls setting in connection string (tschmittni)

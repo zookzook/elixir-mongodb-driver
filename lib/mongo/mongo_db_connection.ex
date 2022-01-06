@@ -16,6 +16,7 @@ defmodule Mongo.MongoDBConnection do
   @timeout        5_000
   @find_one_flags ~w(slave_ok exhaust partial)a
   @write_concern  ~w(w j wtimeout)a
+  @insecure_cmds [:authenticate, :saslStart, :saslContinue, :getnonce, :createUser, :updateUser, :copydbgetnonce, :copydbsaslstart, :copydb, :isMaster, :ismaster]
 
   @impl true
   def connect(opts) do
@@ -38,17 +39,6 @@ defmodule Mongo.MongoDBConnection do
     }
 
     connect(opts, state)
-  end
-
-  @impl true
-  def disconnect(_error, %{connection: {mod, socket}} = state) do
-    notify_disconnect(state)
-    mod.close(socket)
-    :ok
-  end
-
-  defp notify_disconnect(%{connection_type: type, topology_pid: pid, host: host}) do
-    GenServer.cast(pid, {:disconnect, type, host})
   end
 
   defp connect(opts, state) do
@@ -127,24 +117,27 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp wire_version(state, client) do
-    # wire version
-    # https://github.com/mongodb/mongo/blob/master/src/mongo/db/wire_version.h
-
+  defp post_hello_command(state, client) do
     cmd = [ismaster: 1, client: client]
 
     case Utils.command(-1, cmd, state) do
-      {:ok, _flags, %{"ok" => ok, "maxWireVersion" => version}}  when ok == 1 -> {:ok, %{state | wire_version: version}}
-      {:ok, _flags, %{"ok" => ok}} when ok == 1 ->  {:ok, %{state | wire_version: 0}}
+      {:ok, _flags, %{"ok" => ok, "maxWireVersion" => version}} when ok == 1 ->
+        {:ok, %{state | wire_version: version}}
+
+      {:ok, _flags, %{"ok" => ok}} when ok == 1 ->
+        {:ok, %{state | wire_version: 0}}
+
       {:ok, _flags, %{"ok" => ok, "errmsg" => msg, "code" => code}} when ok == 0 ->
         err = Mongo.Error.exception(message: msg, code: code)
         {:disconnect, err, state}
-      {:disconnect, _, _} = error -> error
+
+      {:disconnect, _, _} = error ->
+        error
     end
   end
 
   defp hand_shake(opts, state) do
-    wire_version(state, driver(opts[:appname] || "My killer app"))
+    post_hello_command(state, driver(opts[:appname] || "My killer app"))
   end
 
   defp driver(appname) do
@@ -195,6 +188,13 @@ defmodule Mongo.MongoDBConnection do
   defp pretty_name(name), do: name
 
   @impl true
+  def disconnect(_error, %{connection: {mod, socket}, connection_type: type, topology_pid: pid, host: host}) do
+    GenServer.cast(pid, {:disconnect, type, host})
+    mod.close(socket)
+    :ok
+  end
+
+  @impl true
   def checkout(state), do: {:ok, state}
   @impl true
   def checkin(state), do: {:ok, state}
@@ -219,23 +219,23 @@ defmodule Mongo.MongoDBConnection do
   def handle_status(_opts, state), do: {:idle, state}
 
   @impl true
-  def ping(%{wire_version: _wire_version} = state) do
-    ###with {:ok, %{wire_version: ^wire_version}} <- wire_version(state), do: {:ok, state}
-    ## todo Logger.info("Ignoring ping")
-    {:ok, state}
+  def ping(%{connection_type: :client} = state) do
+    cmd = [ping: 1]
+    case Utils.command(-1, cmd, state) do
+      {:ok, _flags, %{"ok" => ok}} when ok == 1 ->
+        {:ok, state}
+
+      {:ok, _flags, %{"ok" => ok, "errmsg" => msg, "code" => code}} when ok == 0 ->
+        err = Mongo.Error.exception(message: msg, code: code)
+        {:disconnect, err, state}
+
+      {:disconnect, _, _} = error ->
+        error
+    end
   end
-
-  @doc """
-  Execute a query prepared by `c:handle_prepare/3`. Return
-  `{:ok, query, result, state}` to return altered query `query` and result
-  `result` and continue, `{:error, exception, state}` to return an error and
-  continue or `{:disconnect, exception, state}` to return an error and
-  disconnect.
-
-  This callback is called in the client process.
-  """
-  def handle_execute_close(query, params, opts, s) do
-    handle_execute(query, params, opts, s)
+  @impl true
+  def ping(state) do
+    {:ok, state}
   end
 
   @impl true
@@ -246,7 +246,7 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  @insecure_cmds [:authenticate, :saslStart, :saslContinue, :getnonce, :createUser, :updateUser, :copydbgetnonce, :copydbsaslstart, :copydb, :isMaster, :ismaster]
+
   defp provide_cmd_data([{command_name,_}|_] = cmd) do
     case Enum.member?(@insecure_cmds, command_name) do
       true  -> {command_name, %{}}
