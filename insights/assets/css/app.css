@@ -39,6 +39,10 @@
   background-color: #cbe2fc;
 }
 
+a.list-group-item.selected {
+  font-weight: bold;
+}
+
 .separator {
   height: 5px;
   background-color: rgba(0, 0, 0, 0.125) !important;

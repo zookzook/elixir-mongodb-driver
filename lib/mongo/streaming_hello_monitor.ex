@@ -1,6 +1,6 @@
 defmodule Mongo.StreamingHelloMonitor do
   @moduledoc """
-   See https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-monitoring.rst#streaming-protocol
+  See https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-monitoring.rst#streaming-protocol
 
   The streaming protocol is used to monitor MongoDB 4.4+ servers and optimally reduces the time it takes for a client to discover server state changes.
   Multi-threaded or asynchronous drivers MUST use the streaming protocol when connected to a server that supports the awaitable hello or legacy hello commands.
@@ -39,7 +39,7 @@ defmodule Mongo.StreamingHelloMonitor do
            |> Keyword.put(:after_connect, {StreamingHelloMonitor, :connected, [self()]})
            |> Keyword.put(:connection_type, :stream_monitor)
 
-    info("Starting stream hello monitor with options #{inspect(opts, pretty: true)}")
+    ## debug info("Starting stream hello monitor with options #{inspect(opts, pretty: true)}")
 
     with {:ok, pid} <- DBConnection.start_link(Mongo.MongoDBConnection, opts) do
       {:ok, %{
@@ -79,9 +79,7 @@ defmodule Mongo.StreamingHelloMonitor do
   end
 
   def handle_info(:update, state) do
-    new_state = update_server_description(state)
-    send(self(), :update)
-    {:noreply, new_state}
+    {:noreply, update_server_description(state)}
   end
 
   ##
@@ -89,7 +87,7 @@ defmodule Mongo.StreamingHelloMonitor do
   #
   defp update_server_description(%{topology_pid: topology_pid} = state) do
     with {topology_version, flags, server_description} <- get_server_description(state) do
-      info("Updating server description")
+      ## debug info("Updating server description")
       Topology.update_server_description(topology_pid, server_description)
       state = %{state | topology_version: topology_version}
 
@@ -98,9 +96,9 @@ defmodule Mongo.StreamingHelloMonitor do
           state = %{state | more_to_come: true}
           update_server_description(state)
         _other ->
+          Process.send_after(self(), :update, state. heartbeat_frequency_ms)
           %{state | more_to_come: false}
       end
-
     end
   end
 

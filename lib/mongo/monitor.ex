@@ -1,4 +1,3 @@
-# see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#monitoring
 defmodule Mongo.Monitor do
   @moduledoc """
   Each server has a monitor process. The monitor process is created by the topology process.
@@ -9,8 +8,10 @@ defmodule Mongo.Monitor do
   After waiting for `heartbeat_frequency_ms` milliseconds, the monitor process calls `isMaster` command and
   reports the result to the topology process.
 
-  The result of the `isMaster` command is mapped the `ServerDescription` structure and sent to the topology process, which
+  The result of the hello command is mapped the `ServerDescription` structure and sent to the topology process, which
   updates it internal data structure.
+
+  see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#monitoring
   """
   require Logger
 
@@ -59,16 +60,15 @@ defmodule Mongo.Monitor do
   """
   def init([address, topology_pid, heartbeat_frequency_ms, connection_opts]) do
 
-    info("Starting monitor process with pid #{inspect self()}")
+    ## debug info("Starting monitor process with pid #{inspect self()}, #{inspect address}")
 
     # monitors don't authenticate and use the "admin" database
     opts = connection_opts
            |> Keyword.put(:database, "admin")
            |> Keyword.put(:skip_auth, true)
            |> Keyword.put(:after_connect, {Monitor, :connected, [self(), topology_pid]})
-           |> Keyword.put(:backoff_min, heartbeat_frequency_ms)
-           |> Keyword.put(:backoff_max, heartbeat_frequency_ms)
-           |> Keyword.put(:backoff_type, :rand)
+           |> Keyword.put(:backoff_min, 500)
+           |> Keyword.put(:backoff_max, 1_000)
            |> Keyword.put(:connection_type, :monitor)
            |> Keyword.put(:topology_pid, topology_pid)
            |> Keyword.put(:pool_size, 1)
@@ -96,19 +96,15 @@ defmodule Mongo.Monitor do
   * streaming process
   """
   def terminate(reason, %{connection_pid: connection_pid, streaming_pid: nil}) do
-    info("Terminating monitor for reason #{inspect reason}")
+    ## debug info("Terminating monitor for reason #{inspect reason}")
     GenServer.stop(connection_pid, reason)
   end
 
   def terminate(reason, %{connection_pid: connection_pid, streaming_pid: streaming_pid}) do
-    info("Terminating monitor for reason #{inspect reason}")
+    ## debug info("Terminating monitor for reason #{inspect reason}")
 
-    info("Stopping connection")
     GenServer.stop(connection_pid, reason)
-
-    info("Stopping streaming")
     GenServer.stop(streaming_pid, reason)
-    info("stopped streaming")
   end
 
   @doc """
@@ -145,6 +141,8 @@ defmodule Mongo.Monitor do
   ##
   def handle_info(:update, state) do
     new_state = update_server_description(state)
+
+    ## debug info("Calling update: #{inspect new_state.address}, #{inspect new_state.heartbeat_frequency_ms}")
     Process.send_after(self(), :update, new_state.heartbeat_frequency_ms)
 
     {:noreply, new_state}
@@ -158,7 +156,7 @@ defmodule Mongo.Monitor do
     with %{round_trip_time: round_trip_time,
            max_wire_version: max_wire_version} = server_description <- get_server_description(state) do
 
-      info("Updating server description: #{inspect(server_description, pretty: true)}")
+      ## debug info("Updating server description: #{inspect(server_description, pretty: true)}")
 
       Mongo.Events.notify(%ServerHeartbeatStartedEvent{connection_pid: conn_pid})
       Topology.update_server_description(topology_pid, server_description)
@@ -184,7 +182,7 @@ defmodule Mongo.Monitor do
   ##
   defp update_server_description(%{topology_pid: topology_pid, address: address, mode: :streaming_mode} = state) do
     with %{round_trip_time: round_trip_time} <- get_server_description(state) do
-      info("Updating round_trip_time: #{inspect round_trip_time}")
+      ## debug info("Updating round_trip_time: #{inspect round_trip_time}")
       Topology.update_rrt(topology_pid, address, round_trip_time)
 
       %{state | round_trip_time: round_trip_time}
@@ -201,7 +199,8 @@ defmodule Mongo.Monitor do
   defp start_streaming_mode(%{address: address, topology_pid: topology_pid, heartbeat_frequency_ms: heartbeat_frequency_ms, opts: opts} = state, _server_description) do
     args = [topology_pid, address, heartbeat_frequency_ms, opts]
     with {:ok, pid} <- StreamingHelloMonitor.start_link(args) do
-      %{state | mode: :streaming_mode, streaming_pid: pid}
+      ## debug info("Starting streaming mode")
+      %{state | mode: :streaming_mode, streaming_pid: pid, heartbeat_frequency_ms: 10_000}
       else
       error ->
         Logger.warn("Unable to start the streaming hello monitor, because of #{inspect error}")
@@ -212,7 +211,7 @@ defmodule Mongo.Monitor do
   ##
   # Streaming mode: calls hello command and updated the round trip time for the command.
   ##
-  defp get_server_description(%{connection_pid: conn_pid, round_trip_time: last_rtt, mode: :streaming_mode, opts: opts} = state) do
+  defp get_server_description(%{connection_pid: conn_pid, round_trip_time: last_rtt, mode: :streaming_mode, opts: opts}) do
 
     {rtt, response} = :timer.tc(fn -> Mongo.exec_command(conn_pid, [isMaster: 1], opts) end)
 
@@ -228,7 +227,7 @@ defmodule Mongo.Monitor do
   ##
   # Polling mode: updating the server description and the round trip time together
   ##
-  defp get_server_description(%{connection_pid: conn_pid, address: address, round_trip_time: last_rtt, opts: opts} = state) do
+  defp get_server_description(%{connection_pid: conn_pid, address: address, round_trip_time: last_rtt, opts: opts}) do
 
     {rtt, response} = :timer.tc(fn -> Mongo.exec_command(conn_pid, [isMaster: 1], opts) end)
     case response do
@@ -276,7 +275,7 @@ defmodule Mongo.Monitor do
     @monitor_modes
   end
 
-  defp info(message) do
+  def info(message) do
     Logger.info(IO.ANSI.format([:light_magenta, :bright, message]))
   end
 

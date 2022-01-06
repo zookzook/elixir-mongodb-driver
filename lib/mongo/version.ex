@@ -1,6 +1,8 @@
 defmodule Mongo.Version do
   @moduledoc """
   This module contains the constant of all wire versions.
+
+  see https://github.com/mongodb/mongo/blob/master/src/mongo/db/wire_version.h
   """
 
   values = [
@@ -14,8 +16,11 @@ defmodule Mongo.Version do
     replica_set_transactions:      7, # Supports replica set transactions (4.0+).
     sharded_transactions:          8, # Supports sharded transactions (4.2+).
     resumable_initial_sync:        9, # Supports resumable initial sync (4.4+).
-    release_5_0:                  13,
-    release_5_1:                  14
+    wire_version_47:              10, # Supports features available from 4.7 and onwards.
+    wire_version_48:              11, # Supports features available from 4.8 and onwards.
+    wire_version_49:              12, # Supports features available from 4.9 and onwards.
+    wire_version_50:              13, # Supports features available from 5.0 and onwards.
+    wire_version_51:              14, # Supports features available from 5.1 and onwards.
   ]
 
   for {key, value} <- values do

@@ -139,7 +139,7 @@ defmodule Mongo.MongoDBConnection do
       {:ok, _flags, %{"ok" => ok, "errmsg" => msg, "code" => code}} when ok == 0 ->
         err = Mongo.Error.exception(message: msg, code: code)
         {:disconnect, err, state}
-      {:disconnect, _, _} = error ->   error
+      {:disconnect, _, _} = error -> error
     end
   end
 

@@ -69,8 +69,6 @@ defmodule Mongo do
   # 5000
   @timeout 15000
 
-  @dialyzer [no_match: [count_documents!: 4]]
-
   @type conn :: DbConnection.Conn
   @type collection :: String.t()
   @opaque cursor :: Mongo.Cursor.t()
@@ -805,19 +803,12 @@ defmodule Mongo do
   def exec_command_session(session, cmd, opts) do
     with {:ok, conn, new_cmd} <- Session.bind_session(session, cmd),
          {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
-         doc <- Session.update_session(session, response, opts), ## todo
-         {:ok, _flags, doc} <- check_for_error(response) do
+         :ok <- Session.update_session(session, response, opts),
+         {:ok, {_flags, doc}} <- check_for_error(response) do
       {:ok, doc}
     else
       {:error, error} ->
-        case Error.not_writable_primary_or_recovering?(error, opts) do
-          true ->
-            Session.mark_server_unknown(session)
-            {:error, error}
-
-          false ->
-            {:error, error}
-        end
+        {:error, error}
     end
   end
 
@@ -853,8 +844,6 @@ defmodule Mongo do
   end
 
   defp check_for_error({doc, event, _flags, duration}) do
-
-    Logger.info("Checking Error: #{inspect doc}")
     error = Mongo.Error.exception(doc)
 
     Events.notify(
@@ -996,8 +985,7 @@ defmodule Mongo do
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} ->
-          {:error,
-           %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+          {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
 
         _ ->
           case acknowledged?(write_concern) do
@@ -1480,13 +1468,7 @@ defmodule Mongo do
   ##
   # Checks the validity of the document structure. that means either you use binaries or atoms as a key, but not in combination of both.
   #
-  # todo support for structs
   defp normalize_doc(doc) do
-    # doc = case Map.has_key?(doc, :__struct__) do
-    #  true  -> Map.to_list(doc)
-    #  false -> doc
-    # end
-
     Enum.reduce(doc, {:unknown, []}, fn
       {key, _value}, {:binary, _acc} when is_atom(key) -> invalid_doc(doc)
       {key, _value}, {:atom, _acc} when is_binary(key) -> invalid_doc(doc)

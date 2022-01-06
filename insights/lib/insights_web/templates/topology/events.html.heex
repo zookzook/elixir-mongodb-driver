@@ -1,0 +1,24 @@
+<div class="row">
+    <div class="col-8">
+        <div class="list-group stripes">
+            <%= for event <- @events do %>
+            <%= if @event do %>
+            <%= render InsightsWeb.TopologyView, "event.html", event: event, select_event_id: @event.id %>
+            <% else %>
+            <%= render InsightsWeb.TopologyView, "event.html", event: event, select_event_id: nil %>
+            <% end %>
+            <% end %>
+        </div>
+    </div>
+</div>
+
+<%= if @event do %>
+<h5 class="mt-3"><%= event_name(@event)%></h5>
+<div class="row mt-3">
+    <div class="col-8">
+        <ul class="list-group stripes">
+            <li class="list-group-item d-flex justify-content-between"><label>Timestamp:</label><%= @event.time_stamp%></li>
+        </ul>
+    </div>
+</div>
+<% end %>

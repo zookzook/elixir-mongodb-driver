@@ -12,6 +12,7 @@ defmodule InsightsWeb.TopologyLive do
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Insights.PubSub, "topology")
+      Phoenix.PubSub.subscribe(Insights.PubSub, "commands")
     end
 
     {:ok, reset_defaults(socket)}
@@ -23,16 +24,45 @@ defmodule InsightsWeb.TopologyLive do
   end
 
   @impl true
-  def handle_info(%Mongo.Events.ServerDescriptionChangedEvent{}, socket) do
-    {:noreply, reset_defaults(socket)}
-  end
+  def handle_info(%Mongo.Events.ServerDescriptionChangedEvent{} = event, %{assigns: %{events: events}} = socket) do
 
-  def handle_info(_message, socket) do
+    event = event
+            |> Map.put(:time_stamp, DateTime.utc_now())
+            |> Map.put(:id, random_string(10))
+    events = [event | events] |> Enum.take(10)
+    socket = socket
+             |> set_topology(Topology.get_state(:mongo))
+             |> assign(events: events)
+
     {:noreply, socket}
   end
 
+  def handle_info(event, %{assigns: %{events: events}} = socket) do
+    event = event
+            |> Map.put(:time_stamp, DateTime.utc_now())
+            |> Map.put(:id, random_string(10))
+    events = [event | events] |> Enum.take(10)
+    {:noreply, assign(socket, events: events)}
+  end
+
+  def handle_event("show-events", _params, socket) do
+    {:noreply, assign(socket, tab: "events")}
+  end
+
+  def handle_event("show-details", _params, socket) do
+    {:noreply, assign(socket, tab: "details")}
+  end
+
+  def handle_event("select-event", %{"id" => event_id}, %{assigns: %{events: events}} = socket) do
+    {:noreply, assign(socket, event: Enum.find(events, fn %{id: id} -> event_id == id end))}
+  end
+
   defp reset_defaults(socket) do
-    set_topology(socket, Topology.get_state(:mongo))
+    socket
+    |> set_topology(Topology.get_state(:mongo))
+    |> assign(events: [])
+    |> assign(tab: "details")
+    |> assign(event: nil)
   end
 
   def set_topology(socket, %{topology: %{servers: servers} = topology, monitors: monitors}) do
@@ -52,6 +82,10 @@ defmodule InsightsWeb.TopologyLive do
     |> assign(topology: nil)
     |> assign(servers: [])
     |> assign(monitors: [])
+  end
+
+  def random_string(length) do
+    :crypto.strong_rand_bytes(length) |> Base.url_encode64 |> binary_part(0, length)
   end
 
 

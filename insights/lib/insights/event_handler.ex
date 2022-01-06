@@ -25,8 +25,12 @@ defmodule Insights.EventHandler do
   end
 
   def handle_info({:broadcast, :topology, event}, state) do
-    ## info("Receiving topology event: #{inspect event}")
     Phoenix.PubSub.local_broadcast(Insights.PubSub, "topology", event)
+    {:noreply, state}
+  end
+
+  def handle_info({:broadcast, :commands, event}, state) do
+    Phoenix.PubSub.local_broadcast(Insights.PubSub, "commands", event)
     {:noreply, state}
   end
 

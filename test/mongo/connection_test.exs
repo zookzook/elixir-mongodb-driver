@@ -55,12 +55,6 @@ defmodule Mongo.ConnectionTest do
     pid
   end
 
-  defp connect_auth_invalid do
-    assert {:ok, pid} = Mongo.start_link(hostname: "localhost", database: "mongodb_test",
-                                 username: "mongodb_user", password: "wrong_password")
-    pid
-  end
-
   defp connect_auth_on_db do
     assert {:ok, pid} = Mongo.start_link(hostname: "localhost", database: "mongodb_test",
                                  username: "mongodb_admin_user", password: "mongodb_admin_user",
@@ -72,15 +66,6 @@ defmodule Mongo.ConnectionTest do
     assert {:ok, pid} =
       Mongo.start_link(hostname: "localhost", database: "mongodb_test", ssl: true, ssl_opts: [ ciphers: ['AES256-GCM-SHA384'], versions: [:"tlsv1.2"] ])
     pid
-  end
-
-  defp tcp_count do
-    Enum.count(:erlang.ports(), fn port ->
-      case :erlang.port_info(port, :name) do
-        {:name, 'tcp_inet'} -> true
-        _ -> false
-      end
-    end)
   end
 
   defp connect_socket_dir do
@@ -192,19 +177,4 @@ defmodule Mongo.ConnectionTest do
     assert 10 = find(pid, coll, %{}, nil, batch_size: 100) |> Enum.count()
   end
 
-  test "auth connection leak" do
-    assert capture_log(fn ->
-
-      :timer.sleep(1000)
-
-      assert tcp_count() == 6
-      Enum.each(1..10, fn _ ->
-        connect_auth_invalid()
-      end)
-      :timer.sleep(1000)
-      # there should be 36 connections with connection_type: :monitor
-      # 6 of setup, and 10*3 for three nodes
-      assert tcp_count() == 36
-    end)
-  end
 end

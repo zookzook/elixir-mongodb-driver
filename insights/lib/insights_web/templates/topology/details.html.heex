@@ -1,0 +1,31 @@
+<div class="row">
+    <div class="col-6">
+        <%= if @topology do %>
+        <ul class="list-group stripes">
+            <li class="list-group-item d-flex justify-content-between"><label>Type:</label><%= @topology.type%></li>
+            <li class="list-group-item d-flex justify-content-between"><label>Heartbeat frequency ms:</label><%= @topology.heartbeat_frequency_ms%></li>
+            <li class="list-group-item d-flex justify-content-between"><label>Local threshold ms:</label><%= @topology.local_threshold_ms%></li>
+            <li class="list-group-item d-flex justify-content-between"><label>Compatible:</label><%= @topology.compatible%></li>
+        </ul>
+        <% else %>
+        <div class="alert alert-warning">
+            <p>No topology entry found!</p>
+        </div>
+        <% end %>
+    </div>
+</div>
+<div class="row mt-3">
+    <div class="col-12">
+        <h2 class="mt-3">Servers</h2>
+        <%= for server <- @servers do %>
+        <div class="row mt-3">
+            <div class="col-6">
+                <%= render InsightsWeb.TopologyView, "server.html", server: server %>
+            </div>
+            <div class="col-6">
+                <%= render InsightsWeb.TopologyView, "monitor.html", monitor: Map.get(@monitors, server.address) %>
+            </div>
+        </div>
+        <% end %>
+    </div>
+</div>

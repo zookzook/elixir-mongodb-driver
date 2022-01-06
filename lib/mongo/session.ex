@@ -227,15 +227,19 @@ defmodule Mongo.Session do
   @doc """
   Update the `operationTime` for causally consistent read commands. There is no need to call this function directly. It is called automatically.
   """
-  @spec update_session(Session.t, %{key: BSON.Timestamp.t}, keyword()) :: BSON.document
-  def update_session(pid, doc, opts \\ [])
-  def update_session(pid, doc, opts) do
-    case opts |> write_concern() |> acknowledged?() do
-      true  -> advance_operation_time(pid, doc["operationTime"])
-      false -> []
+  def update_session(pid, {doc, _event, _flags, _duration}, opts \\ []) do
+    case opts
+         |> write_concern()
+         |> acknowledged?() do
+
+      true  ->
+        advance_operation_time(pid, doc["operationTime"])
+      false ->
+        :noop
     end
+
     update_recovery_token(pid, doc["recoveryToken"])
-    doc
+    :ok
   end
 
   @doc """
