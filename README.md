@@ -27,6 +27,7 @@
 - support for retryable writes ([See](https://github.com/mongodb/specifications/blob/master/source/retryable-writes/retryable-writes.rst))
 - support for simple structs using the Mongo.Encoder protocol
 - support for complex and nested documents using the `Mongo.Collection` macros
+- support for streaming protocol ([See](https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-monitoring.rst#streaming-protocol))
 
 ## Data Representation
 
