@@ -827,20 +827,54 @@ defmodule Mongo do
     end
   end
 
-  defp check_for_error({%{"ok" => ok} = response, event, flags, duration}) when ok == 1 do
+  ##
+  # Checks for an error and broadcast the event.
+  ##
+  defp check_for_error({%{"ok" => ok} = response, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, flags, duration}) when ok == 1 do
     Events.notify(
       %CommandSucceededEvent{
         reply: response,
         duration: duration,
-        command_name: event.command_name, ## todo
-        #request_id: event.request_id,
-        #operation_id: event.operation_id,
-        #connection_id: event.connection_id
+        command_name: event.command_name,
+        request_id: request_id,
+        operation_id: operation_id,
+        connection_id: connection_id
       },
       :commands
     )
 
     {:ok, {flags, response}}
+  end
+
+  defp check_for_error({%{"ok" => ok} = response, event, flags, duration}) when ok == 1 do
+    Events.notify(
+      %CommandSucceededEvent{
+        reply: response,
+        duration: duration,
+        command_name: event.command_name
+      },
+      :commands
+    )
+
+    {:ok, {flags, response}}
+  end
+
+  defp check_for_error({doc, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, _flags, duration}) do
+    error = Mongo.Error.exception(doc)
+
+    Events.notify(
+      %CommandFailedEvent{
+        failure: error,
+        duration: duration,
+        command_name: event.command_name,
+        request_id: request_id,
+        operation_id: operation_id,
+        connection_id: connection_id
+      },
+      :commands
+    )
+
+    {:error, error}
   end
 
   defp check_for_error({doc, event, _flags, duration}) do
@@ -850,10 +884,7 @@ defmodule Mongo do
       %CommandFailedEvent{
         failure: error,
         duration: duration,
-        command_name: event.command_name,
-        #request_id: event.request_id,
-        #operation_id: event.operation_id,
-        #connection_id: event.connection_id
+        command_name: event.command_name
       },
       :commands
     )

@@ -30,7 +30,7 @@ defmodule Mongo.StreamingHelloMonitor do
   @doc """
   Initialize the monitor process
   """
-  def init([topology_pid, address, heartbeat_frequency_ms, opts]) do
+  def init([topology_pid, address, opts]) do
 
     heartbeat_frequency_ms = 10_000
 

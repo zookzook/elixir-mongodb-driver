@@ -196,8 +196,8 @@ defmodule Mongo.Monitor do
   ##
   # Starts the streaming mode
   ##
-  defp start_streaming_mode(%{address: address, topology_pid: topology_pid, heartbeat_frequency_ms: heartbeat_frequency_ms, opts: opts} = state, _server_description) do
-    args = [topology_pid, address, heartbeat_frequency_ms, opts]
+  defp start_streaming_mode(%{address: address, topology_pid: topology_pid, opts: opts} = state, _server_description) do
+    args = [topology_pid, address, opts]
     with {:ok, pid} <- StreamingHelloMonitor.start_link(args) do
       ## debug info("Starting streaming mode")
       %{state | mode: :streaming_mode, streaming_pid: pid, heartbeat_frequency_ms: 10_000}
