@@ -1,0 +1,1 @@
+<a href="javascript:void(0);" phx-click="select-event" phx-value-id={@event.id} class={"list-group-item d-flex justify-content-between #{event_selected?(@event.id == @select_event_id)}"}><label><%= @event.time_stamp%>:</label><%= event_name(@event)%></a>

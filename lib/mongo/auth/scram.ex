@@ -14,17 +14,17 @@ defmodule Mongo.Auth.SCRAM do
     message             = [saslStart: 1, mechanism: mechanism, payload: payload]
 
     result =
-      with {:ok, %{"ok" => ok} = reply} when ok == 1 <- Utils.command(-3, message, s),
+      with {:ok, _flags, %{"ok" => ok} = reply} when ok == 1 <- Utils.command(-3, message, s),
            {message, signature} = first(reply, first_bare, username, password, nonce, digest),
-           {:ok, %{"ok" => ok} = reply} when ok == 1 <- Utils.command(-4, message, s),
+           {:ok, _flags, %{"ok" => ok} = reply} when ok == 1 <- Utils.command(-4, message, s),
            message = second(reply, signature),
-           {:ok, %{"ok" => ok} = reply} when ok == 1 <- Utils.command(-5, message, s),
+           {:ok, _flags, %{"ok" => ok} = reply} when ok == 1 <- Utils.command(-5, message, s),
            do: final(reply)
 
     case result do
       :ok ->
         :ok
-      {:ok, %{"ok" => z, "errmsg" => reason, "code" => code}} when z == 0 ->
+      {:ok, _flags, %{"ok" => z, "errmsg" => reason, "code" => code}} when z == 0 ->
         {:error, Mongo.Error.exception(message: "auth failed for user #{username}: #{reason}", code: code)}
       error ->
         error
@@ -127,8 +127,8 @@ defmodule Mongo.Auth.SCRAM do
   # It calls isMaster with saslSupportedMechs option to ask for the selected user which mechanism is supported
   #
   defp select_digest(database, username, state) do
-    with {:ok, reply} <- Utils.command(-2, [isMaster: 1, saslSupportedMechs: database <> "." <> username], state ) do
-      select_digest(reply)
+    with {:ok, _flags, doc} <- Utils.command(-2, [isMaster: 1, saslSupportedMechs: database <> "." <> username], state ) do
+      select_digest(doc)
     end
   end
   defp select_digest(%{"saslSupportedMechs" => mechs}) do

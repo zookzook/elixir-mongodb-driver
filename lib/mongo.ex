@@ -69,8 +69,6 @@ defmodule Mongo do
   # 5000
   @timeout 15000
 
-  @dialyzer [no_match: [count_documents!: 4]]
-
   @type conn :: DbConnection.Conn
   @type collection :: String.t()
   @opaque cursor :: Mongo.Cursor.t()
@@ -804,21 +802,13 @@ defmodule Mongo do
           {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
   def exec_command_session(session, cmd, opts) do
     with {:ok, conn, new_cmd} <- Session.bind_session(session, cmd),
-         {:ok, _cmd, {doc, event}} <-
-           DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
-         doc <- Session.update_session(session, doc, opts),
-         {:ok, doc} <- check_for_error(doc, event) do
+         {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
+         :ok <- Session.update_session(session, response, opts),
+         {:ok, {_flags, doc}} <- check_for_error(response) do
       {:ok, doc}
     else
       {:error, error} ->
-        case Error.not_writable_primary_or_recovering?(error, opts) do
-          true ->
-            Session.mark_server_unknown(session)
-            {:error, error}
-
-          false ->
-            {:error, error}
-        end
+        {:error, error}
     end
   end
 
@@ -826,30 +816,50 @@ defmodule Mongo do
   @spec exec_command(GenServer.server(), BSON.document(), Keyword.t()) ::
           {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
   def exec_command(conn, cmd, opts) do
-    with {:ok, _cmd, {doc, event}} <-
-           DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)),
-         {:ok, doc} <- check_for_error(doc, event) do
-      {:ok, doc}
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)) do
+      check_for_error(response)
     end
   end
 
-  defp check_for_error(%{"ok" => ok} = response, {event, duration}) when ok == 1 do
+  def exec_more_to_come(conn, opts) do
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [:more_to_come], defaults(opts)) do
+      check_for_error(response)
+    end
+  end
+
+  ##
+  # Checks for an error and broadcast the event.
+  ##
+  defp check_for_error({%{"ok" => ok} = response, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, flags, duration}) when ok == 1 do
     Events.notify(
       %CommandSucceededEvent{
         reply: response,
         duration: duration,
         command_name: event.command_name,
-        request_id: event.request_id,
-        operation_id: event.operation_id,
-        connection_id: event.connection_id
+        request_id: request_id,
+        operation_id: operation_id,
+        connection_id: connection_id
       },
       :commands
     )
 
-    {:ok, response}
+    {:ok, {flags, response}}
   end
 
-  defp check_for_error(doc, {event, duration}) do
+  defp check_for_error({%{"ok" => ok} = response, event, flags, duration}) when ok == 1 do
+    Events.notify(
+      %CommandSucceededEvent{
+        reply: response,
+        duration: duration,
+        command_name: event.command_name
+      },
+      :commands
+    )
+
+    {:ok, {flags, response}}
+  end
+
+  defp check_for_error({doc, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, _flags, duration}) do
     error = Mongo.Error.exception(doc)
 
     Events.notify(
@@ -857,9 +867,24 @@ defmodule Mongo do
         failure: error,
         duration: duration,
         command_name: event.command_name,
-        request_id: event.request_id,
-        operation_id: event.operation_id,
-        connection_id: event.connection_id
+        request_id: request_id,
+        operation_id: operation_id,
+        connection_id: connection_id
+      },
+      :commands
+    )
+
+    {:error, error}
+  end
+
+  defp check_for_error({doc, event, _flags, duration}) do
+    error = Mongo.Error.exception(doc)
+
+    Events.notify(
+      %CommandFailedEvent{
+        failure: error,
+        duration: duration,
+        command_name: event.command_name
       },
       :commands
     )
@@ -991,8 +1016,7 @@ defmodule Mongo do
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} ->
-          {:error,
-           %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+          {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
 
         _ ->
           case acknowledged?(write_concern) do
@@ -1475,13 +1499,7 @@ defmodule Mongo do
   ##
   # Checks the validity of the document structure. that means either you use binaries or atoms as a key, but not in combination of both.
   #
-  # todo support for structs
   defp normalize_doc(doc) do
-    # doc = case Map.has_key?(doc, :__struct__) do
-    #  true  -> Map.to_list(doc)
-    #  false -> doc
-    # end
-
     Enum.reduce(doc, {:unknown, []}, fn
       {key, _value}, {:binary, _acc} when is_atom(key) -> invalid_doc(doc)
       {key, _value}, {:atom, _acc} when is_binary(key) -> invalid_doc(doc)

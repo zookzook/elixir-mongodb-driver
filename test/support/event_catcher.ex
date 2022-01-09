@@ -3,6 +3,8 @@ defmodule EventCatcher do
 
   use GenServer
 
+  require Logger
+
   alias Mongo.Events.CommandSucceededEvent
   alias Mongo.Events.CommandFailedEvent
   alias Mongo.Events.RetryReadEvent

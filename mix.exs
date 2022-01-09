@@ -14,28 +14,6 @@ defmodule Mongodb.Mixfile do
       deps: deps(),
       docs: docs(),
       package: package(),
-      test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [
-        docs: :docs,
-        coveralls: :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        "coveralls.html": :test
-      ],
-      dialyzer: [
-        flags: [:underspecs, :unknown, :unmatched_returns],
-        plt_add_apps: [
-          :logger,
-          :connection,
-          :db_connection,
-          :mix,
-          :elixir,
-          :ssl,
-          :public_key
-        ],
-        plt_add_deps: :transitive,
-        plt_core_path: "plt_core_path"
-      ],
       consolidate_protocols: Mix.env() != :test
     ]
   end
@@ -57,13 +35,10 @@ defmodule Mongodb.Mixfile do
 
   defp deps do
     [
-      {:db_connection, "~> 2.3"},
+      {:db_connection, "~> 2.4"},
       {:decimal, "~> 2.0"},
-      {:excoveralls, "~> 0.12.1", only: :test},
-      {:benchee, "~> 1.0", only: :dev},
-      {:jason, "~> 1.2", only: :test},
+      {:jason, "~> 1.3", only: :test},
       {:ex_doc, ">= 0.0.0", only: :docs, runtime: false},
-      {:dialyxir, "~> 0.5", only: :dev, runtime: false}
     ]
   end
 

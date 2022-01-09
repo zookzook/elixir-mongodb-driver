@@ -60,10 +60,14 @@ defmodule Mongo.TopologyDescription do
   end
 
   @doc """
-  Returns a tuple of three values:
-  * servers: possible list of servers, maybe []
-  * slave_ok:
-  * mongod?:
+  Updates the current measured round trip time for the specified server (address)
+  """
+  def update_rrt(topology, address, round_trip_time) do
+    put_in(topology.servers[address][:round_trip_time], round_trip_time)
+  end
+
+  @doc """
+  Selects the next possible server from the current topology.
   """
   def select_servers(topology, type, opts \\ [])
   def select_servers(%{:compatible => false}, _type, _opts) do
@@ -78,6 +82,7 @@ defmodule Mongo.TopologyDescription do
     end
 
     addr = servers
+           |> Enum.filter(fn {_, %{type: type}} -> type != :unknown end) ## only valid servers
            |> Enum.map(fn {server, _} -> server end)
            |> Enum.take_random(1)
 
@@ -267,12 +272,8 @@ defmodule Mongo.TopologyDescription do
   end
 
   defp check_server_supported(topology, server_description, num_seeds) do
-    server_supported_range =
-      server_description.min_wire_version ..
-      server_description.max_wire_version
-    server_supported? = Enum.any?(server_supported_range, fn version ->
-      version in @wire_protocol_range
-    end)
+    server_supported_range = server_description.min_wire_version..server_description.max_wire_version
+    server_supported? = Enum.any?(server_supported_range, fn version -> version in @wire_protocol_range end)
 
     if server_supported? do
       check_for_single_topology(topology, server_description, num_seeds)
@@ -294,27 +295,30 @@ defmodule Mongo.TopologyDescription do
   defp check_for_single_topology(topology, server_description, num_seeds) do
     case topology.type do
       :single ->
-        previous_description = topology.servers |> Map.values |> hd
-        {[{previous_description, server_description}],  put_in(topology.servers[server_description.address], server_description)}
+        previous_description = topology.servers
+                               |> Map.values()
+                               |> hd()
+        {[{previous_description, server_description}], put_in(topology.servers[server_description.address], Map.merge(previous_description, server_description))}
       _ ->
         check_server_in_topology(topology, server_description, num_seeds)
     end
   end
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#other-topologytypes
-  defp check_server_in_topology(topology, server_description, num_seeds) do
-    if not (server_description.address in Map.keys(topology.servers)) do
-      {[], topology}
-    else
-      address = server_description.address
-      old_description = topology.servers[address]
+  defp check_server_in_topology(%{type: type} = topology, %{address: address} = server_description, num_seeds) do
 
-      {actions, topology} =
-        topology
-        |> put_in([:servers, address], server_description)
-        |> update_topology(topology.type, server_description, num_seeds)
+    case topology.servers[address] do
+      nil ->
+        {[], topology}
 
-      {[{old_description, server_description} | actions], topology}
+      previous_description ->
+        server_description = Map.merge(previous_description, server_description)
+
+        {actions, topology} = topology
+                              |> put_in([:servers, address], server_description)
+                              |> update_topology(type, server_description, num_seeds)
+
+        {[{previous_description, server_description} | actions], topology}
     end
   end
 

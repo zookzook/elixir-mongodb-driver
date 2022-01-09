@@ -2,7 +2,7 @@ defmodule Mongo.Error do
 
   alias Mongo.Events
 
-  defexception [:message, :code, :host, :error_labels, :resumable, :retryable_reads, :retryable_writes, :not_writable_primary_or_recovering]
+  defexception [:message, :code, :host, :fail_command, :error_labels, :resumable, :retryable_reads, :retryable_writes, :not_writable_primary_or_recovering]
 
   @exceeded_time_limit                  262
   @failed_to_satisfy_read_preference    133
@@ -87,6 +87,7 @@ defmodule Mongo.Error do
     code: number,
     host: String.t,
     error_labels: [String.t] | nil,
+    fail_command: boolean,
     resumable: boolean,
     retryable_reads: boolean,
     retryable_writes: boolean,
@@ -109,6 +110,7 @@ defmodule Mongo.Error do
   end
 
   def exception(%{"code" => code, "errmsg" => msg} = doc) do
+
     errorLabels     = doc["errorLabels"] || []
     resumable       = Enum.any?(@resumable, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "ResumableChangeStreamError"))
     retryable_reads = Enum.any?(@retryable_reads, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "RetryableReadError"))
@@ -117,6 +119,7 @@ defmodule Mongo.Error do
 
     %Mongo.Error{message: msg,
       code: code,
+      fail_command: String.contains?(msg, "failCommand") || String.contains?(msg, "failpoint"),
       error_labels: errorLabels,
       resumable: resumable,
       retryable_reads: retryable_reads,
@@ -191,6 +194,14 @@ defmodule Mongo.Error do
     ## no explicit session, no retry counter but not_writable_primary_or_recovering
     Keyword.get(opts, :session, nil) == nil && Keyword.get(opts, :retry_counter, nil) == nil && result
   end
+
+  @doc """
+  Returns true if the error is issued by the failCommand
+  """
+  def fail_command?(%Mongo.Error{fail_command: fail_command}) do
+    fail_command
+  end
+
 end
 
 defmodule Mongo.WriteError do

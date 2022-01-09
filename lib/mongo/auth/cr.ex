@@ -3,7 +3,7 @@ defmodule Mongo.Auth.CR do
   alias Mongo.MongoDBConnection.Utils
 
   def auth({username, password}, _db, s) do
-    with {:ok, message} <- Utils.command(-2, [getnonce: 1], s),
+    with {:ok, _flags, message} <- Utils.command(-2, [getnonce: 1], s),
          do: nonce(message, username, password, s)
   end
 
@@ -14,11 +14,11 @@ defmodule Mongo.Auth.CR do
     command = [authenticate: 1, user: username, nonce: nonce, key: digest]
 
     case Utils.command(-3, command, s) do
-      {:ok, %{"ok" => ok}} when ok == 1 ->
+      {:ok, _flags, %{"ok" => ok}} when ok == 1 ->
         :ok
-      {:ok, %{"ok" => 0.0, "errmsg" => reason, "code" => code}} ->
+      {:ok, _flags, %{"ok" => 0.0, "errmsg" => reason, "code" => code}} ->
         {:error, Mongo.Error.exception(message: "auth failed for '#{username}': #{reason}", code: code)}
-      {:ok, nil} ->
+      {:ok, _flags, nil} ->
         {:error, Mongo.Error.exception(message: "auth failed for '#{username}'")}
       error ->
         error

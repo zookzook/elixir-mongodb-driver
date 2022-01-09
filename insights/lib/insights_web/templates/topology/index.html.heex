@@ -1,0 +1,21 @@
+<div class="container mt-5">
+    <h1>Topology</h1>
+
+    <ul class="nav nav-tabs">
+        <li class="nav-item">
+            <a class={"nav-link #{tab_active("details", @tab)}"} phx-click="show-details" href="javascript:void(0);">Details</a>
+        </li>
+        <li class="nav-item">
+            <a class={"nav-link #{tab_active("events", @tab)}"} phx-click="show-events" href="javascript:void(0);">Events</a>
+        </li>
+    </ul>
+    <div class="tab-content pt-3 bg-white p-3 border-bottom border-end border-start">
+        <div class={"tab-pane fade show #{tab_active("details", @tab)}"} id="details">
+            <%= render InsightsWeb.TopologyView, "details.html", assigns %>
+        </div>
+        <div class={"tab-pane fade show #{tab_active("events", @tab)}"} id="events">
+            <%= render InsightsWeb.TopologyView, "events.html", assigns %>
+        </div>
+    </div>
+
+</div>
