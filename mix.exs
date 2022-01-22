@@ -2,7 +2,7 @@ defmodule Mongodb.Mixfile do
   use Mix.Project
 
   @source_url "https://github.com/zookzook/elixir-mongodb-driver"
-  @version "0.8.0"
+  @version "0.8.1"
 
   def project() do
     [
@@ -38,7 +38,7 @@ defmodule Mongodb.Mixfile do
       {:db_connection, "~> 2.4"},
       {:decimal, "~> 2.0"},
       {:jason, "~> 1.3", only: :test},
-      {:ex_doc, ">= 0.0.0", only: :docs, runtime: false},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
     ]
   end
 

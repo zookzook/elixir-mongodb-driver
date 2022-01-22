@@ -218,7 +218,7 @@ Add `mongodb_driver` to your mix.exs `deps`.
 
 ```elixir
 defp deps do
-  [{:mongodb_driver, "~> 0.7.5"}]
+  [{:mongodb_driver, "~> 0.8.1"}]
 end
 ```
 
