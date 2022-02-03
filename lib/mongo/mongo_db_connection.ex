@@ -197,9 +197,6 @@ defmodule Mongo.MongoDBConnection do
   @impl true
   def checkout(state), do: {:ok, state}
   @impl true
-  def checkin(state), do: {:ok, state}
-
-  @impl true
   def handle_begin(_opts, state), do: {:ok, nil, state}
   @impl true
   def handle_close(_query, _opts, state), do: {:ok, nil, state}
