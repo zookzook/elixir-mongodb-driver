@@ -1,6 +1,8 @@
 defmodule Mongo.ErrorsTest do
   use ExUnit.Case, async: false
 
+  alias Mongo.Error
+
   @host_unreachable                     6
   @host_not_found                       7
   @network_timeout                      89
@@ -52,7 +54,15 @@ defmodule Mongo.ErrorsTest do
 
     assert {:ok, _} = Mongo.admin_command(top, fail_cmd)
     assert {:error, msg} = Mongo.find_one(top, "test", %{})
+
     assert msg.resumable == true
 
   end
+
+  test "handle connection error" do
+    the_error = %DBConnection.ConnectionError{}
+    assert false == Error.not_writable_primary_or_recovering?(the_error, [])
+    assert false == Error.should_retry_read(the_error, [ping: 1], [])
+  end
+
 end

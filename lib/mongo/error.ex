@@ -195,6 +195,11 @@ defmodule Mongo.Error do
     Keyword.get(opts, :session, nil) == nil && Keyword.get(opts, :retry_counter, nil) == nil && result
   end
 
+  # catch all function
+  def not_writable_primary_or_recovering?(_other, opts) do
+    false
+  end
+
   @doc """
   Returns true if the error is issued by the failCommand
   """
