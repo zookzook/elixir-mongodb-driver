@@ -706,6 +706,12 @@ defmodule Mongo.Collection do
   defp ensure_nested_map(%{__struct__: NaiveDateTime} = data) , do: data
   defp ensure_nested_map(%{__struct__: Time} = data), do: data
   defp ensure_nested_map(%{__struct__: BSON.ObjectId} = data), do: data
+  defp ensure_nested_map(%{__struct__: BSON.Binary} = data), do: data
+  defp ensure_nested_map(%{__struct__: BSON.Regex} = data), do: data
+  defp ensure_nested_map(%{__struct__: BSON.JavaScript} = data), do: data
+  defp ensure_nested_map(%{__struct__: BSON.Timestamp} = data), do: data
+  defp ensure_nested_map(%{__struct__: BSON.LongNumber} = data), do: data
+
   defp ensure_nested_map(%{__struct__: _} = struct) do
     map = Map.from_struct(struct)
     :maps.map(&dump/2, map) |> filter_nils()
