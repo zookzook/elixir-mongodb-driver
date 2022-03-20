@@ -13,7 +13,7 @@ jobs:
 
     strategy:
       matrix:
-        mongodb-version: ["4.4"]
+        mongodb-version: ["5.0"]
 
     runs-on: ubuntu-latest
     steps:
@@ -49,7 +49,7 @@ jobs:
         run: mix deps.get
 
       - name: Run tests
-        run: mix test --exclude ssl --exclude socket
+        run: mix test --exclude ssl --exclude socket test/mongo_test.exs
 
       - name: Run Credo
         run: mix credo
