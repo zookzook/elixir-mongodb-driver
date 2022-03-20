@@ -196,7 +196,7 @@ defmodule Mongo.Error do
   end
 
   # catch all function
-  def not_writable_primary_or_recovering?(_other, opts) do
+  def not_writable_primary_or_recovering?(_other, _opts) do
     false
   end
 
