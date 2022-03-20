@@ -1,5 +1,4 @@
 defmodule Mongo.ReadPreference do
-
   import Keywords
 
   @moduledoc ~S"""
@@ -27,15 +26,16 @@ defmodule Mongo.ReadPreference do
 
   """
   @type t :: %{
-    mode: :primary |
-          :secondary |
-          :primary_preferred |
-          :secondary_preferred |
-          :nearest,
-    tag_sets: [%{String.t => String.t}],
-    max_staleness_ms: non_neg_integer,
-    hedge: BSON.document
-  }
+          mode:
+            :primary
+            | :secondary
+            | :primary_preferred
+            | :secondary_preferred
+            | :nearest,
+          tag_sets: [%{String.t() => String.t()}],
+          max_staleness_ms: non_neg_integer,
+          hedge: BSON.document()
+        }
 
   @primary %{
     mode: :primary,
@@ -44,9 +44,11 @@ defmodule Mongo.ReadPreference do
   }
 
   def primary(map \\ nil)
+
   def primary(map) when is_map(map) do
     Map.merge(@primary, map)
   end
+
   def primary(_), do: @primary
 
   @doc """
@@ -54,7 +56,7 @@ defmodule Mongo.ReadPreference do
   """
   def add_read_preference(cmd, opts) do
     case Keyword.get(opts, :read_preference) do
-      nil  -> cmd
+      nil -> cmd
       pref -> cmd ++ ["$readPreference": pref]
     end
   end
@@ -73,16 +75,18 @@ defmodule Mongo.ReadPreference do
   def slave_ok(%{:mode => :primary}) do
     %{:mode => :primary}
   end
+
   def slave_ok(config) do
+    mode =
+      case config[:mode] do
+        :primary_preferred -> :primaryPreferred
+        :secondary_preferred -> :secondaryPreferred
+        other -> other
+      end
 
-    mode = case config[:mode] do
-      :primary_preferred   -> :primaryPreferred
-      :secondary_preferred -> :secondaryPreferred
-      other                -> other
-    end
-
-    filter_nils([mode: mode, tag_sets: config[:tag_sets]])
+    filter_nils(mode: mode, tag_sets: config[:tag_sets])
   end
+
   ##
   # Therefore, when sending queries to a mongos, the following rules apply:
   #
@@ -90,20 +94,24 @@ defmodule Mongo.ReadPreference do
   def mongos(%{mode: :primary}) do
     nil
   end
+
   # For mode 'secondary', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
   def mongos(%{mode: :secondary} = config) do
     transform(config)
   end
+
   # For mode 'primaryPreferred', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
   def mongos(%{mode: :primary_preferred} = config) do
     transform(config)
   end
+
   # For mode 'secondaryPreferred', drivers MUST set the slaveOK wire protocol flag. If the read preference contains a
   # non-empty tag_sets parameter, maxStalenessSeconds is a positive integer, or the hedge parameter is non-empty,
   # drivers MUST use $readPreference; otherwise, drivers MUST NOT use $readPreference
   def mongos(%{mode: :secondary_preferred} = config) do
     transform(config)
   end
+
   # For mode 'nearest', drivers MUST set the slaveOK wire protocol flag and MUST also use $readPreference
   def mongos(%{mode: :nearest} = config) do
     transform(config)
@@ -112,25 +120,22 @@ defmodule Mongo.ReadPreference do
   defp transform(%{:mode => :primary}) do
     %{:mode => :primary}
   end
+
   defp transform(config) do
+    mode =
+      case config[:mode] do
+        :primary_preferred -> :primaryPreferred
+        :secondary_preferred -> :secondaryPreferred
+        other -> other
+      end
 
-    mode = case config[:mode] do
-      :primary_preferred   -> :primaryPreferred
-      :secondary_preferred -> :secondaryPreferred
-      other -> other
-    end
+    max_staleness_seconds =
+      case config[:max_staleness_ms] do
+        i when is_integer(i) -> div(i, 1000)
+        nil -> nil
+      end
 
-    max_staleness_seconds = case config[:max_staleness_ms] do
-      i when is_integer(i) -> div(i, 1000)
-      nil                  -> nil
-    end
-
-    [mode: mode,
-      tag_sets: config[:tag_sets],
-      maxStalenessSeconds: max_staleness_seconds,
-      hedge: config[:hedge]]
+    [mode: mode, tag_sets: config[:tag_sets], maxStalenessSeconds: max_staleness_seconds, hedge: config[:hedge]]
     |> filter_nils()
-
   end
-
 end

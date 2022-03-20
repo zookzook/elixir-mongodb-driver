@@ -1,5 +1,4 @@
 defmodule Collections.SimpleTest do
-
   use MongoTest.Case, async: false
 
   require Logger
@@ -8,41 +7,39 @@ defmodule Collections.SimpleTest do
   alias Mongo.Collection
 
   setup_all do
-    assert {:ok, pid} = Mongo.TestConnection.connect
+    assert {:ok, pid} = Mongo.TestConnection.connect()
     Mongo.drop_database(pid)
     {:ok, [pid: pid]}
   end
 
   defmodule Label do
-
     use Collection
 
     document do
       attribute :name, String.t(), default: "warning"
       attribute :color, String.t(), default: :red
-      after_load  &Label.after_load/1
+      after_load &Label.after_load/1
     end
 
     def after_load(%Label{color: color} = label) when is_binary(color) do
       %Label{label | color: String.to_existing_atom(color)}
     end
-    def after_load(label)  do
+
+    def after_load(label) do
       label
     end
-
   end
 
   defmodule Card do
-
     use Collection
 
     @collection nil
 
     collection "cards" do
-      attribute :title, String.t(),  default: "new title"
+      attribute :title, String.t(), default: "new title"
       attribute :created, DateString.t(), default: &DateTime.utc_now/0
       attribute :modified, DateString.t(), default: &DateTime.utc_now/0
-      embeds_one :label, Label, default: &Label.new/0
+      embeds_one(:label, Label, default: &Label.new/0)
     end
 
     def insert_one(%Card{} = card, top) do
@@ -57,11 +54,9 @@ defmodule Collections.SimpleTest do
       |> Mongo.find_one(@collection, %{@id => id})
       |> load()
     end
-
   end
 
   test "load and dump", _c do
-
     alias Collections.SimpleTest.Card
     alias Collections.SimpleTest.Label
 
@@ -76,7 +71,6 @@ defmodule Collections.SimpleTest do
   end
 
   test "save and find", c do
-
     alias Collections.SimpleTest.Card
     alias Collections.SimpleTest.Label
 

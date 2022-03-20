@@ -6,12 +6,11 @@ defmodule Mongo.Auth.SCRAM do
   alias Mongo.MongoDBConnection.Utils
 
   def auth({username, password}, db, s) do
-
     {mechanism, digest} = select_digest(db, username, s)
-    nonce               = nonce()
-    first_bare          = first_bare(username, nonce)
-    payload             = first_message(first_bare)
-    message             = [saslStart: 1, mechanism: mechanism, payload: payload]
+    nonce = nonce()
+    first_bare = first_bare(username, nonce)
+    payload = first_message(first_bare)
+    message = [saslStart: 1, mechanism: mechanism, payload: payload]
 
     result =
       with {:ok, _flags, %{"ok" => ok} = reply} when ok == 1 <- Utils.command(-3, message, s),
@@ -24,37 +23,38 @@ defmodule Mongo.Auth.SCRAM do
     case result do
       :ok ->
         :ok
+
       {:ok, _flags, %{"ok" => z, "errmsg" => reason, "code" => code}} when z == 0 ->
         {:error, Mongo.Error.exception(message: "auth failed for user #{username}: #{reason}", code: code)}
+
       error ->
         error
     end
   end
 
   defp first(%{"conversationId" => conversation_id, "payload" => server_payload, "done" => false}, first_bare, username, password, client_nonce, digest) do
-
-    params          = parse_payload(server_payload)
-    server_nonce    = params["r"]
-    salt            = params["s"] |> Base.decode64!
-    iter            = params["i"] |> String.to_integer
-    pass            = Utils.digest_password(username, password, digest)
+    params = parse_payload(server_payload)
+    server_nonce = params["r"]
+    salt = params["s"] |> Base.decode64!()
+    iter = params["i"] |> String.to_integer()
+    pass = Utils.digest_password(username, password, digest)
     salted_password = hi(pass, salt, iter, digest)
 
     <<^client_nonce::binary(24), _::binary>> = server_nonce
 
-    client_message       = "c=biws,r=#{server_nonce}"
-    auth_message         = "#{first_bare},#{server_payload.binary},#{client_message}"
-    server_signature     = generate_signature(salted_password, auth_message, digest)
-    proof                = generate_proof(salted_password, auth_message, digest)
+    client_message = "c=biws,r=#{server_nonce}"
+    auth_message = "#{first_bare},#{server_payload.binary},#{client_message}"
+    server_signature = generate_signature(salted_password, auth_message, digest)
+    proof = generate_proof(salted_password, auth_message, digest)
     client_final_message = %BSON.Binary{binary: "#{client_message},#{proof}"}
-    message              = [saslContinue: 1, conversationId: conversation_id, payload: client_final_message]
+    message = [saslContinue: 1, conversationId: conversation_id, payload: client_final_message]
 
     {message, server_signature}
   end
 
   defp second(%{"conversationId" => conversation_id, "payload" => payload}, signature) do
     params = parse_payload(payload)
-    ^signature = params["v"] |> Base.decode64!
+    ^signature = params["v"] |> Base.decode64!()
     [saslContinue: 1, conversationId: conversation_id, payload: %BSON.Binary{binary: ""}]
   end
 
@@ -77,9 +77,9 @@ defmodule Mongo.Auth.SCRAM do
   ## support for OTP 22.x
   if Code.ensure_loaded?(:crypto) and function_exported?(:crypto, :hmac, 3) do
     defp generate_proof(salted_password, auth_message, digest) do
-      client_key   = :crypto.hmac(digest, salted_password, "Client Key")
-      stored_key   = :crypto.hash(digest, client_key)
-      signature    = :crypto.hmac(digest, stored_key, auth_message)
+      client_key = :crypto.hmac(digest, salted_password, "Client Key")
+      stored_key = :crypto.hash(digest, client_key)
+      signature = :crypto.hmac(digest, stored_key, auth_message)
       client_proof = xor_keys(client_key, signature, "")
       "p=#{Base.encode64(client_proof)}"
     end
@@ -90,9 +90,9 @@ defmodule Mongo.Auth.SCRAM do
     end
   else
     defp generate_proof(salted_password, auth_message, digest) do
-      client_key   = :crypto.mac(:hmac, digest, salted_password, "Client Key")
-      stored_key   = :crypto.hash(digest, client_key)
-      signature    = :crypto.mac(:hmac, digest, stored_key, auth_message)
+      client_key = :crypto.mac(:hmac, digest, salted_password, "Client Key")
+      stored_key = :crypto.hash(digest, client_key)
+      signature = :crypto.mac(:hmac, digest, stored_key, auth_message)
       client_proof = xor_keys(client_key, signature, "")
       "p=#{Base.encode64(client_proof)}"
     end
@@ -107,7 +107,7 @@ defmodule Mongo.Auth.SCRAM do
   defp xor_keys(<<fa, ra::binary>>, <<fb, rb::binary>>, result), do: xor_keys(ra, rb, <<result::binary, bxor(fa, fb)>>)
 
   defp nonce do
-    :crypto.strong_rand_bytes(18) |> Base.encode64
+    :crypto.strong_rand_bytes(18) |> Base.encode64()
   end
 
   defp encode_username(username) do
@@ -127,16 +127,17 @@ defmodule Mongo.Auth.SCRAM do
   # It calls isMaster with saslSupportedMechs option to ask for the selected user which mechanism is supported
   #
   defp select_digest(database, username, state) do
-    with {:ok, _flags, doc} <- Utils.command(-2, [isMaster: 1, saslSupportedMechs: database <> "." <> username], state ) do
+    with {:ok, _flags, doc} <- Utils.command(-2, [isMaster: 1, saslSupportedMechs: database <> "." <> username], state) do
       select_digest(doc)
     end
   end
+
   defp select_digest(%{"saslSupportedMechs" => mechs}) do
     case Enum.member?(mechs, "SCRAM-SHA-256") do
-      true  -> {"SCRAM-SHA-256", :sha256}
+      true -> {"SCRAM-SHA-256", :sha256}
       false -> {"SCRAM-SHA-1", :sha}
     end
   end
-  defp select_digest(_), do: {"SCRAM-SHA-1", :sha}
 
+  defp select_digest(_), do: {"SCRAM-SHA-1", :sha}
 end

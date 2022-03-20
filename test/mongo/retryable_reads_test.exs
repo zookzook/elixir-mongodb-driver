@@ -5,7 +5,6 @@ defmodule Mongo.RetryableReadsTest do
   alias Mongo.Session
 
   test "find_one", %{pid: top, catcher: catcher} do
-
     coll = unique_collection()
 
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})
@@ -31,7 +30,6 @@ defmodule Mongo.RetryableReadsTest do
   end
 
   test "find_one in transaction", %{pid: top, catcher: catcher} do
-
     coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})
     Mongo.insert_one(top, coll, %{name: "Tom", age: 13})
@@ -57,7 +55,6 @@ defmodule Mongo.RetryableReadsTest do
   end
 
   test "count", %{pid: top, catcher: catcher} do
-
     coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})
     Mongo.insert_one(top, coll, %{name: "Tom", age: 13})

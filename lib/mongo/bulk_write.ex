@@ -45,7 +45,7 @@ defmodule Mongo.BulkWrite do
 
   Sometimes the order of execution is important for successive operations to yield a correct result.
   In this case, one uses ordered bulk writes. The following example would not work with unordered bulk writes
-  because the order within the update operations is undefinite. The `update_many()` will only work, if it is
+  because the order within the update operations is undefined. The `update_many()` will only work, if it is
   executed after the `update_one()` functions.
 
   ```
@@ -180,32 +180,27 @@ defmodule Mongo.BulkWrite do
   If a group (inserts, updates or deletes) exceeds the limit `maxWriteBatchSize` it will be split into chunks.
   Everything is done in memory, so this use case is limited by memory. A better approach seems to use streaming bulk writes.
   """
-  @spec write(GenServer.server, (UnorderedBulk.t | OrderedBulk.t), Keyword.t) :: Mongo.BulkWriteResult.t
+  @spec write(GenServer.server(), UnorderedBulk.t() | OrderedBulk.t(), Keyword.t()) :: Mongo.BulkWriteResult.t()
   def write(topology_pid, %UnorderedBulk{} = bulk, opts) do
-
     with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
-         result         = one_bulk_write(topology_pid, session, bulk, opts),
-         :ok            <- Session.end_implict_session(topology_pid, session) do
+         result = one_bulk_write(topology_pid, session, bulk, opts),
+         :ok <- Session.end_implict_session(topology_pid, session) do
       result
     end
-
   end
 
   def write(topology_pid, %OrderedBulk{coll: coll, ops: ops}, opts) do
-
     write_concern = write_concern(opts)
 
     empty = %BulkWriteResult{acknowledged: acknowledged?(write_concern)}
 
     with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
          {:ok, limits} <- Mongo.limits(topology_pid) do
-
       max_batch_size = limits.max_write_batch_size
 
       ops
       |> get_op_sequence()
       |> Enum.reduce_while(empty, fn {cmd, docs}, acc ->
-
         temp_result = one_bulk_write_operation(session, cmd, coll, docs, max_batch_size, opts)
 
         case temp_result do
@@ -216,9 +211,7 @@ defmodule Mongo.BulkWrite do
             {:halt, BulkWriteResult.add(acc, temp_result)}
         end
       end)
-
     end
-
   end
 
   ##
@@ -232,23 +225,24 @@ defmodule Mongo.BulkWrite do
   # For the details see https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#results
   #
   defp one_bulk_write(topology_pid, session, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, opts) do
-
     with {:ok, limits} <- Mongo.limits(topology_pid) do
       max_batch_size = limits.max_write_batch_size
 
-      results = case one_bulk_write_operation(session, :insert, coll, inserts, max_batch_size, opts) do
-        %{errors: []} = insert_result ->
-          case one_bulk_write_operation(session, :update, coll, updates, max_batch_size, opts) do
-            %{errors: []} = update_result ->
-              delete_result = one_bulk_write_operation(session, :delete, coll, deletes, max_batch_size, opts)
-              [insert_result, update_result, delete_result]
+      results =
+        case one_bulk_write_operation(session, :insert, coll, inserts, max_batch_size, opts) do
+          %{errors: []} = insert_result ->
+            case one_bulk_write_operation(session, :update, coll, updates, max_batch_size, opts) do
+              %{errors: []} = update_result ->
+                delete_result = one_bulk_write_operation(session, :delete, coll, deletes, max_batch_size, opts)
+                [insert_result, update_result, delete_result]
 
-            update_result ->
-              [insert_result, update_result]
-          end
-        insert_result ->
-          [insert_result]
-      end
+              update_result ->
+                [insert_result, update_result]
+            end
+
+          insert_result ->
+            [insert_result]
+        end
 
       BulkWriteResult.reduce(results, %BulkWriteResult{acknowledged: acknowledged?(opts)})
     end
@@ -258,9 +252,10 @@ defmodule Mongo.BulkWrite do
   # Executes the command `cmd` and collects the result.
   #
   defp one_bulk_write_operation(session, cmd, coll, docs, max_batch_size, opts) do
-    with result <- session
-                   |> run_commands(get_cmds(cmd, coll, docs, max_batch_size, opts), opts)
-                   |> collect(cmd) do
+    with result <-
+           session
+           |> run_commands(get_cmds(cmd, coll, docs, max_batch_size, opts), opts)
+           |> collect(cmd) do
       result
     end
   end
@@ -280,13 +275,13 @@ defmodule Mongo.BulkWrite do
   defp get_op_sequence(ops) do
     get_op_sequence(ops, [])
   end
+
   defp get_op_sequence([], acc), do: acc
+
   defp get_op_sequence(ops, acc) do
-
     [{kind, _doc} | _rest] = ops
-    {docs, rest}           = find_max_sequence(kind, ops)
+    {docs, rest} = find_max_sequence(kind, ops)
     get_op_sequence(rest, [{kind, docs} | acc])
-
   end
 
   ###
@@ -297,12 +292,15 @@ defmodule Mongo.BulkWrite do
   defp find_max_sequence(kind, rest) do
     find_max_sequence(kind, rest, [])
   end
+
   defp find_max_sequence(_kind, [], acc) do
     {acc, []}
   end
+
   defp find_max_sequence(kind, [{other, desc} | rest], acc) when kind == other do
     find_max_sequence(kind, rest, [desc | acc])
   end
+
   defp find_max_sequence(_kind, rest, acc) do
     {acc, rest}
   end
@@ -313,39 +311,42 @@ defmodule Mongo.BulkWrite do
   # the update operation is more complex than insert or delete operation
   #
   defp collect({docs, ids}, :insert) do
-
     docs
     |> Enum.map(fn
       {:ok, %{"n" => n} = doc} -> BulkWriteResult.insert_result(n, ids, doc["writeErrors"] || [])
-      {:ok, _other}            -> BulkWriteResult.empty()
-      {:error, reason}         -> BulkWriteResult.error(reason)
+      {:ok, _other} -> BulkWriteResult.empty()
+      {:error, reason} -> BulkWriteResult.error(reason)
     end)
     |> BulkWriteResult.reduce()
   end
 
   defp collect(docs, :update) do
-
     docs
     |> Enum.map(fn
-      {:ok, %{"n" => n, "nModified" => modified, "upserted" => ids} = doc} -> l = length(ids)
-                                                                              BulkWriteResult.update_result(n - l, modified, l, filter_upsert_ids(ids), doc["writeErrors"] || [])
-      {:ok, %{"n" => matched, "nModified" => modified} = doc}              -> BulkWriteResult.update_result(matched, modified, 0, [], doc["writeErrors"] || [])
-      {:ok, _other}                                                        -> BulkWriteResult.empty()
-      {:error, reason}                                                     -> BulkWriteResult.error(reason)
+      {:ok, %{"n" => n, "nModified" => modified, "upserted" => ids} = doc} ->
+        l = length(ids)
+        BulkWriteResult.update_result(n - l, modified, l, filter_upsert_ids(ids), doc["writeErrors"] || [])
+
+      {:ok, %{"n" => matched, "nModified" => modified} = doc} ->
+        BulkWriteResult.update_result(matched, modified, 0, [], doc["writeErrors"] || [])
+
+      {:ok, _other} ->
+        BulkWriteResult.empty()
+
+      {:error, reason} ->
+        BulkWriteResult.error(reason)
     end)
     |> BulkWriteResult.reduce()
-
   end
-  defp collect(docs, :delete) do
 
+  defp collect(docs, :delete) do
     docs
     |> Enum.map(fn
-      {:ok, %{"n" => n} = doc } -> BulkWriteResult.delete_result(n, doc["writeErrors"] || [])
-      {:ok, _other}             -> BulkWriteResult.empty()
-      {:error, reason}          -> BulkWriteResult.error(reason)
+      {:ok, %{"n" => n} = doc} -> BulkWriteResult.delete_result(n, doc["writeErrors"] || [])
+      {:ok, _other} -> BulkWriteResult.empty()
+      {:error, reason} -> BulkWriteResult.error(reason)
     end)
     |> BulkWriteResult.reduce()
-
   end
 
   defp filter_upsert_ids(nil), do: []
@@ -354,84 +355,52 @@ defmodule Mongo.BulkWrite do
   defp run_commands(session, {cmds, ids}, opts) do
     {Enum.map(cmds, fn cmd -> Mongo.exec_command_session(session, cmd, opts) end), ids}
   end
+
   defp run_commands(session, cmds, opts) do
     Enum.map(cmds, fn cmd -> Mongo.exec_command_session(session, cmd, opts) end)
   end
 
   defp get_insert_cmds(coll, docs, max_batch_size, opts) do
-
     {ids, docs} = assign_ids(docs)
 
-    cmds = docs
-           |> Enum.chunk_every(max_batch_size)
-           |> Enum.map(fn inserts -> get_insert_cmd(coll, inserts, opts) end)
+    cmds =
+      docs
+      |> Enum.chunk_every(max_batch_size)
+      |> Enum.map(fn inserts -> get_insert_cmd(coll, inserts, opts) end)
 
     {cmds, ids}
-
   end
 
   defp get_insert_cmd(coll, inserts, opts) do
-
-    [insert: coll,
-     documents: inserts,
-     writeConcern: write_concern(opts)] |> filter_nils()
-
+    [insert: coll, documents: inserts, writeConcern: write_concern(opts)] |> filter_nils()
   end
 
   defp get_delete_cmds(coll, docs, max_batch_size, opts) do
-
     docs
     |> Enum.chunk_every(max_batch_size)
     |> Enum.map(fn deletes -> get_delete_cmd(coll, deletes, opts) end)
-
   end
 
-  defp get_delete_cmd(coll, deletes, opts ) do
-
-    [delete: coll,
-     deletes: Enum.map(deletes, fn delete -> get_delete_doc(delete) end),
-     ordered: Keyword.get(opts, :ordered),
-     writeConcern: write_concern(opts)] |> filter_nils()
-
+  defp get_delete_cmd(coll, deletes, opts) do
+    [delete: coll, deletes: Enum.map(deletes, fn delete -> get_delete_doc(delete) end), ordered: Keyword.get(opts, :ordered), writeConcern: write_concern(opts)] |> filter_nils()
   end
 
   defp get_delete_doc({filter, opts}) do
-
-    [q: filter,
-     limit: Keyword.get(opts, :limit),
-     collation: Keyword.get(opts, :collation)] |> filter_nils()
-
+    [q: filter, limit: Keyword.get(opts, :limit), collation: Keyword.get(opts, :collation)] |> filter_nils()
   end
 
   defp get_update_cmds(coll, docs, max_batch_size, opts) do
-
     docs
     |> Enum.chunk_every(max_batch_size)
     |> Enum.map(fn updates -> get_update_cmd(coll, updates, opts) end)
-
   end
 
   defp get_update_cmd(coll, updates, opts) do
-
-    [ update: coll,
-      updates: Enum.map(updates, fn update -> get_update_doc(update) end),
-      ordered: Keyword.get(opts, :ordered),
-      writeConcern: write_concern(opts),
-      bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
-    ] |> filter_nils()
-
+    [update: coll, updates: Enum.map(updates, fn update -> get_update_doc(update) end), ordered: Keyword.get(opts, :ordered), writeConcern: write_concern(opts), bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)]
+    |> filter_nils()
   end
 
   defp get_update_doc({filter, update, update_opts}) do
-
-    [ q: filter,
-      u: update,
-      upsert: Keyword.get(update_opts, :upsert),
-      multi: Keyword.get(update_opts, :multi) || false,
-      collation: Keyword.get(update_opts, :collation),
-      arrayFilters: Keyword.get(update_opts, :array_filters)
-    ] |> filter_nils()
-
+    [q: filter, u: update, upsert: Keyword.get(update_opts, :upsert), multi: Keyword.get(update_opts, :multi) || false, collation: Keyword.get(update_opts, :collation), arrayFilters: Keyword.get(update_opts, :array_filters)] |> filter_nils()
   end
-
 end

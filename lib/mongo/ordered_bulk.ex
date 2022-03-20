@@ -55,9 +55,9 @@ defmodule Mongo.OrderedBulk do
   import Mongo.BulkOps
 
   @type t :: %__MODULE__{
-               coll: String.t,
-               ops: [BulkOps.bulk_op]
-             }
+          coll: String.t(),
+          ops: [BulkOps.bulk_op()]
+        }
 
   defstruct coll: nil, ops: []
 
@@ -71,7 +71,7 @@ defmodule Mongo.OrderedBulk do
   %Mongo.OrderedBulk{coll: "bulk", ops: []}
   ```
   """
-  @spec new(String.t) :: OrderedBulk.t
+  @spec new(String.t()) :: OrderedBulk.t()
   def new(coll) do
     %OrderedBulk{coll: coll}
   end
@@ -82,6 +82,7 @@ defmodule Mongo.OrderedBulk do
   def empty?(%OrderedBulk{ops: []}) do
     true
   end
+
   def empty?(_other) do
     false
   end
@@ -89,9 +90,9 @@ defmodule Mongo.OrderedBulk do
   @doc """
   Appends a bulk operation to the ordered bulk.
   """
-  @spec push(BulkOps.bulk_op, OrderedBulk.t) :: OrderedBulk.t
+  @spec push(BulkOps.bulk_op(), OrderedBulk.t()) :: OrderedBulk.t()
   def push(op, %OrderedBulk{ops: rest} = bulk) do
-    %OrderedBulk{bulk | ops: [op | rest] }
+    %OrderedBulk{bulk | ops: [op | rest]}
   end
 
   @doc """
@@ -104,7 +105,7 @@ defmodule Mongo.OrderedBulk do
   %Mongo.OrderedBulk{coll: "bulk", ops: [insert: %{name: "Waldo"}]}
   ```
   """
-  @spec insert_one(OrderedBulk.t, BulkOps.bulk_op) :: OrderedBulk.t
+  @spec insert_one(OrderedBulk.t(), BulkOps.bulk_op()) :: OrderedBulk.t()
   def insert_one(%OrderedBulk{} = bulk, doc) do
     get_insert_one(doc) |> push(bulk)
   end
@@ -119,7 +120,7 @@ defmodule Mongo.OrderedBulk do
   %Mongo.OrderedBulk{coll: "bulk", ops: [delete: {%{name: "Waldo"}, [limit: 1]}]}
   ```
   """
-  @spec delete_one(OrderedBulk.t, BulkOps.bulk_op) :: OrderedBulk.t
+  @spec delete_one(OrderedBulk.t(), BulkOps.bulk_op()) :: OrderedBulk.t()
   def delete_one(%OrderedBulk{} = bulk, doc) do
     get_delete_one(doc) |> push(bulk)
   end
@@ -134,7 +135,7 @@ defmodule Mongo.OrderedBulk do
   %Mongo.OrderedBulk{coll: "bulk", ops: [delete: {%{name: "Waldo"}, [limit: 0]}]}
   ```
   """
-  @spec delete_many(OrderedBulk.t, BulkOps.bulk_op) :: OrderedBulk.t
+  @spec delete_many(OrderedBulk.t(), BulkOps.bulk_op()) :: OrderedBulk.t()
   def delete_many(%OrderedBulk{} = bulk, doc) do
     get_delete_many(doc) |> push(bulk)
   end
@@ -154,7 +155,7 @@ defmodule Mongo.OrderedBulk do
   }
   ```
   """
-  @spec replace_one(OrderedBulk.t, BSON.document, BSON.document, Keyword.t) :: OrderedBulk.t
+  @spec replace_one(OrderedBulk.t(), BSON.document(), BSON.document(), Keyword.t()) :: OrderedBulk.t()
   def replace_one(%OrderedBulk{} = bulk, filter, replacement, opts \\ []) do
     get_replace_one(filter, replacement, opts) |> push(bulk)
   end
@@ -175,7 +176,7 @@ defmodule Mongo.OrderedBulk do
   }
   ```
   """
-  @spec update_one(OrderedBulk.t, BSON.document, BSON.document, Keyword.t) :: OrderedBulk.t
+  @spec update_one(OrderedBulk.t(), BSON.document(), BSON.document(), Keyword.t()) :: OrderedBulk.t()
   def update_one(%OrderedBulk{} = bulk, filter, update, opts \\ []) do
     get_update_one(filter, update, opts) |> push(bulk)
   end
@@ -196,7 +197,7 @@ defmodule Mongo.OrderedBulk do
   }
   ```
   """
-  @spec update_many(OrderedBulk.t, BSON.document, BSON.document, Keyword.t) :: OrderedBulk.t
+  @spec update_many(OrderedBulk.t(), BSON.document(), BSON.document(), Keyword.t()) :: OrderedBulk.t()
   def update_many(%OrderedBulk{} = bulk, filter, update, opts \\ []) do
     get_update_many(filter, update, opts) |> push(bulk)
   end
@@ -207,10 +208,12 @@ defmodule Mongo.OrderedBulk do
 
   The inputs of the stream should be `Mongo.BulkOps.bulk_op`. See `Mongo.BulkOps`
   """
-  @spec write(Enumerable.t(), GenServer.server, String.t, non_neg_integer, Keyword.t ) :: Enumerable.t()
+  @spec write(Enumerable.t(), GenServer.server(), String.t(), non_neg_integer, Keyword.t()) :: Enumerable.t()
   def write(enum, top, coll, limit \\ 1000, opts \\ [])
+
   def write(enum, top, coll, limit, opts) when limit > 1 do
-    Stream.chunk_while(enum,
+    Stream.chunk_while(
+      enum,
       {new(coll), limit - 1},
       fn
         op, {bulk, 0} -> {:cont, BulkWrite.write(top, push(op, bulk), opts), {new(coll), limit - 1}}
@@ -225,10 +228,11 @@ defmodule Mongo.OrderedBulk do
             false ->
               {:cont, BulkWrite.write(top, bulk, opts), {new(coll), limit - 1}}
           end
-      end)
+      end
+    )
   end
+
   def write(_enum, _top, _coll, limit, _opts) when limit < 1 do
     raise(ArgumentError, "limit must be greater then 1, got: #{limit}")
   end
-
 end

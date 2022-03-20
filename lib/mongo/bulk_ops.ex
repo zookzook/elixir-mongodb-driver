@@ -25,9 +25,10 @@ defmodule Mongo.BulkOps do
 
   """
 
-  @type bulk_op :: {atom, BSON.document} |
-                   {atom, {BSON.document, Keyword.t}} |
-                   {atom, {BSON.document, BSON.document, Keyword.t}}
+  @type bulk_op ::
+          {atom, BSON.document()}
+          | {atom, {BSON.document(), Keyword.t()}}
+          | {atom, {BSON.document(), BSON.document(), Keyword.t()}}
 
   import Mongo.Utils
 
@@ -41,7 +42,7 @@ defmodule Mongo.BulkOps do
   {:insert, %{name: "Waldo"}}
   ```
   """
-  @spec get_insert_one(BSON.document) :: bulk_op
+  @spec get_insert_one(BSON.document()) :: bulk_op
   def get_insert_one(doc), do: {:insert, doc}
 
   @doc """
@@ -55,9 +56,8 @@ defmodule Mongo.BulkOps do
   {:delete, {%{name: "Waldo"}, [limit: 1]}}
   ```
   """
-  @spec get_delete_one(BSON.document) :: bulk_op
+  @spec get_delete_one(BSON.document()) :: bulk_op
   def get_delete_one(doc), do: {:delete, {doc, [limit: 1]}}
-
 
   @doc """
   Returns an `delete_many` operation for appending to a bulk. Used to perform stream bulk writes.
@@ -70,7 +70,7 @@ defmodule Mongo.BulkOps do
   {:delete, {%{name: "Waldo"}, [limit: 0]}}
   ```
   """
-  @spec get_delete_many(BSON.document) :: bulk_op
+  @spec get_delete_many(BSON.document()) :: bulk_op
   def get_delete_many(doc), do: {:delete, {doc, [limit: 0]}}
 
   @doc """
@@ -85,7 +85,7 @@ defmodule Mongo.BulkOps do
     {%{name: "Waldo"}, %{"$set": %{kind: "dog", name: "Greta"}}, [multi: false]}}
   ```
   """
-  @spec get_update_one(BSON.document, BSON.document, Keyword.t) :: bulk_op
+  @spec get_update_one(BSON.document(), BSON.document(), Keyword.t()) :: bulk_op
   def get_update_one(filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
     {:update, {filter, update, Keyword.put(opts, :multi, false)}}
@@ -103,7 +103,7 @@ defmodule Mongo.BulkOps do
     {%{name: "Waldo"}, %{"$set": %{kind: "dog", name: "Greta"}}, [multi: true]}}
   ```
   """
-  @spec get_update_many(BSON.document, BSON.document, Keyword.t) :: bulk_op
+  @spec get_update_many(BSON.document(), BSON.document(), Keyword.t()) :: bulk_op
   def get_update_many(filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
     {:update, {filter, update, Keyword.put(opts, :multi, true)}}
@@ -120,10 +120,9 @@ defmodule Mongo.BulkOps do
   {:update, {%{name: "Waldo"}, %{kind: "dog", name: "Greta"}, [multi: false]}}
   ```
   """
-  @spec get_replace_one(BSON.document, BSON.document, Keyword.t) :: bulk_op
+  @spec get_replace_one(BSON.document(), BSON.document(), Keyword.t()) :: bulk_op
   def get_replace_one(filter, replacement, opts \\ []) do
     _ = modifier_docs(replacement, :replace)
     {:update, {filter, replacement, Keyword.put(opts, :multi, false)}}
   end
-
 end

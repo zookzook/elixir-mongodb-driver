@@ -1,9 +1,7 @@
 defmodule Mongo.FindOneTest do
-
   use CollectionCase
 
   test "find_one, using :sort options", %{pid: top} do
-
     coll = unique_collection()
 
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})

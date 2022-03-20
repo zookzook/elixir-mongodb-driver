@@ -3,7 +3,7 @@ defmodule Mongo.EncoderTest do
   alias Mongo
 
   setup_all do
-    assert {:ok, pid} = Mongo.TestConnection.connect
+    assert {:ok, pid} = Mongo.TestConnection.connect()
     Mongo.drop_database(pid)
     {:ok, [pid: pid]}
   end
@@ -55,13 +55,13 @@ defmodule Mongo.EncoderTest do
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, struct_to_insert, [])
 
     assert [
-      %{
-                  "a" => 10,
-                  "b" => 20,
-                  "custom_encoded" => true,
-                  "_id" => "5ef27e73d2a57d358f812001"
-                }
-              ] = Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
+             %{
+               "a" => 10,
+               "b" => 20,
+               "custom_encoded" => true,
+               "_id" => "5ef27e73d2a57d358f812001"
+             }
+           ] = Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
   end
 
   test "insert encoded struct without protocol", c do
@@ -84,8 +84,8 @@ defmodule Mongo.EncoderTest do
 
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, fun_to_insert, [])
 
-    assert [%{"fun" => true, "_id" => "5ef27e73d2a57d358f812002"}]
-        = Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
+    assert [%{"fun" => true, "_id" => "5ef27e73d2a57d358f812002"}] =
+             Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
   end
 
   test "update with encoded struct in db with protocol", c do
@@ -103,13 +103,13 @@ defmodule Mongo.EncoderTest do
              })
 
     assert [
-                %{
-                  "a" => 100,
-                  "b" => 200,
-                  "custom_encoded" => true,
-                  "_id" => "5ef27e73d2a57d358f812001"
-                }
-              ] = Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
+             %{
+               "a" => 100,
+               "b" => 200,
+               "custom_encoded" => true,
+               "_id" => "5ef27e73d2a57d358f812001"
+             }
+           ] = Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
   end
 
   test "upsert with encoded struct in db with protocol", c do
@@ -126,13 +126,13 @@ defmodule Mongo.EncoderTest do
                upsert: true
              )
 
-    assert  [
-                %{
-                  "a" => 100,
-                  "b" => 200,
-                  "custom_encoded" => true,
-                  "_id" => "5ef27e73d2a57d358f812001"
-                }
-              ] = Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
+    assert [
+             %{
+               "a" => 100,
+               "b" => 200,
+               "custom_encoded" => true,
+               "_id" => "5ef27e73d2a57d358f812001"
+             }
+           ] = Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
   end
 end

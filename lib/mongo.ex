@@ -742,8 +742,7 @@ defmodule Mongo do
 
     cmd = filter_nils(cmd)
 
-    drop =
-      ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data projection comment skip sort)a
+    drop = ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data projection comment skip sort)a
 
     opts = Keyword.drop(opts, drop)
 
@@ -1071,8 +1070,7 @@ defmodule Mongo do
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} ->
-          {:error,
-           %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+          {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
 
         _ ->
           case acknowledged?(write_concern) do
@@ -1147,8 +1145,7 @@ defmodule Mongo do
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} ->
-          {:error,
-           %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+          {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
 
         %{"ok" => _ok, "n" => n} ->
           case acknowledged?(write_concern) do
@@ -1281,8 +1278,7 @@ defmodule Mongo do
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       case doc do
         %{"writeErrors" => _} ->
-          {:error,
-           %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+          {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
 
         %{"n" => n, "nModified" => n_modified, "upserted" => upserted} ->
           case acknowledged?(write_concern) do

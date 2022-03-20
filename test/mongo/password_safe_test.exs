@@ -6,14 +6,12 @@ defmodule Mongo.PasswordSafeTest do
   alias Mongo.PasswordSafe
 
   test "encrypted password" do
-
     pw = "my-secret-password"
     {:ok, pid} = PasswordSafe.new()
     PasswordSafe.set_password(pid, pw)
     %{key: _key, pw: enc_pw} = :sys.get_state(pid)
     assert enc_pw != pw
     assert pw == PasswordSafe.get_pasword(pid)
-
   end
 
   #
@@ -21,10 +19,9 @@ defmodule Mongo.PasswordSafeTest do
   # used in the options
   #
   test "encoded password" do
-      url = "mongodb://myDBReader:D1fficultP%40ssw0rd@mongodb0.example.com:27017/admin"
-      opts = UrlParser.parse_url([url: url])
-      assert "*****" == Keyword.get(opts, :password)
-      assert "D1fficultP@ssw0rd" == PasswordSafe.get_pasword(Keyword.get(opts, :pw_safe))
-    end
-
+    url = "mongodb://myDBReader:D1fficultP%40ssw0rd@mongodb0.example.com:27017/admin"
+    opts = UrlParser.parse_url(url: url)
+    assert "*****" == Keyword.get(opts, :password)
+    assert "D1fficultP@ssw0rd" == PasswordSafe.get_pasword(Keyword.get(opts, :pw_safe))
+  end
 end

@@ -7,7 +7,7 @@ defmodule Mongo.GridFs.DownloadTest do
   alias BSON.ObjectId
 
   setup_all do
-    assert {:ok, pid} = Mongo.TestConnection.connect
+    assert {:ok, pid} = Mongo.TestConnection.connect()
     bucket = Bucket.new(pid)
 
     upload_stream = Upload.open_upload_stream(bucket, "test.jpg", nil)
@@ -20,37 +20,32 @@ defmodule Mongo.GridFs.DownloadTest do
   end
 
   test "open_download_stream - binary", c do
-
     dest_filename = "/tmp/my-test-file.jps"
     File.rm(dest_filename)
 
     with {:ok, stream} <- Download.open_download_stream(c.bucket, ObjectId.encode!(c.id)) do
       stream
       |> Stream.into(File.stream!(dest_filename))
-      |> Stream.run
+      |> Stream.run()
     end
 
     assert true == File.exists?(dest_filename)
-
   end
 
   test "open_download_stream - object id", c do
-
     dest_filename = "/tmp/my-test-file.jps"
     File.rm(dest_filename)
 
     with {:ok, stream} <- Download.open_download_stream(c.bucket, c.id) do
       stream
       |> Stream.into(File.stream!(dest_filename))
-      |> Stream.run
+      |> Stream.run()
     end
 
     assert true == File.exists?(dest_filename)
-
   end
 
   test "open_download_stream - map ", c do
-
     assert c.id != nil
     file = Download.find_one_file(c.bucket, c.id)
 
@@ -60,22 +55,21 @@ defmodule Mongo.GridFs.DownloadTest do
     with {:ok, stream} <- Download.open_download_stream(c.bucket, file) do
       stream
       |> Stream.into(File.stream!(dest_filename))
-      |> Stream.run
+      |> Stream.run()
     end
 
     assert true == File.exists?(dest_filename)
-
   end
 
   test "find_and_stream", c do
-
     dest_filename = "/tmp/my-test-file.jps"
     File.rm(dest_filename)
 
     with {{:ok, stream}, file_info} <- Download.find_and_stream(c.bucket, c.id) do
       stream
       |> Stream.into(File.stream!(dest_filename))
-      |> Stream.run
+      |> Stream.run()
+
       assert file_info["filename"] == "test.jpg"
     end
 
@@ -86,16 +80,15 @@ defmodule Mongo.GridFs.DownloadTest do
     with {{:ok, stream}, file_info} <- Download.find_and_stream(c.bucket, ObjectId.encode!(c.id)) do
       stream
       |> Stream.into(File.stream!(dest_filename))
-      |> Stream.run
+      |> Stream.run()
+
       assert file_info["filename"] == "test.jpg"
     end
 
     assert true == File.exists?(dest_filename)
-
   end
 
   test "find_one_file - filename ", c do
-
     assert c.id != nil
     file = Download.find_one_file(c.bucket, "test.jpg")
 
@@ -105,11 +98,9 @@ defmodule Mongo.GridFs.DownloadTest do
     with {:ok, stream} <- Download.open_download_stream(c.bucket, file) do
       stream
       |> Stream.into(File.stream!(dest_filename))
-      |> Stream.run
+      |> Stream.run()
     end
 
     assert true == File.exists?(dest_filename)
-
   end
-
 end

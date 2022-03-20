@@ -8,7 +8,7 @@ defmodule Mongo.UrlParser do
 
   @mongo_url_regex ~r/^mongodb(?<srv>\+srv)?:\/\/((?<username>[^:]+):(?<password>[^@]+)@)?(?<seeds>[^\/]+)(\/(?<database>[^?]+))?(\?(?<options>.*))?$/
 
-  #https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options
+  # https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options
   @mongo_options %{
     # Path options
     "username" => :string,
@@ -96,9 +96,10 @@ defmodule Mongo.UrlParser do
         opts
 
       value ->
-        key = key
-              |> Macro.underscore()
-              |> String.to_atom()
+        key =
+          key
+          |> Macro.underscore()
+          |> String.to_atom()
 
         value = decode_percent(key, value)
 
@@ -108,10 +109,9 @@ defmodule Mongo.UrlParser do
 
   defp add_option(_other, acc), do: acc
 
-  defp decode_percent(:username, value), do:  URI.decode_www_form(value)
-  defp decode_percent(:password, value), do:  URI.decode_www_form(value)
+  defp decode_percent(:username, value), do: URI.decode_www_form(value)
+  defp decode_percent(:password, value), do: URI.decode_www_form(value)
   defp decode_percent(_other, value), do: value
-
 
   defp parse_query_options(opts, %{"options" => options}) when is_binary(options) do
     options
@@ -163,12 +163,13 @@ defmodule Mongo.UrlParser do
 
   defp hide_password(opts) do
     case Keyword.get(opts, :password) do
-      nil -> opts
-      value ->
+      nil ->
+        opts
 
-      ## start GenServer and put id
+      value ->
+        ## start GenServer and put id
         with {:ok, pid} <- Mongo.PasswordSafe.new(),
-          :ok <- Mongo.PasswordSafe.set_password(pid, value) do
+             :ok <- Mongo.PasswordSafe.set_password(pid, value) do
           opts
           |> Keyword.put(:password, "*****")
           |> Keyword.put(:pw_safe, pid)

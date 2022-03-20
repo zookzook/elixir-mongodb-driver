@@ -5,7 +5,7 @@ defmodule CollectionCase do
 
   setup_all do
     assert {:ok, pid} = Mongo.start_link(database: "mongodb_test", seeds: @seeds, show_sensitive_data_on_connection_error: true)
-    Mongo.admin_command(pid, [configureFailPoint: "failCommand", mode: "off"])
+    Mongo.admin_command(pid, configureFailPoint: "failCommand", mode: "off")
     Mongo.drop_database(pid)
     {:ok, [pid: pid]}
   end
@@ -24,6 +24,7 @@ defmodule CollectionCase do
 
   defmacro unique_collection do
     {function, _arity} = __CALLER__.function
+
     "#{__CALLER__.module}.#{function}"
     |> String.replace(" ", "_")
     |> String.replace(".", "_")

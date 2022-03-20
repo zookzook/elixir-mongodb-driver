@@ -1,9 +1,7 @@
 defmodule Mongo.ReadPreferencesTest do
-
   use CollectionCase, async: false
 
   test "find_one, using read_preferences options", %{pid: top} do
-
     coll = unique_collection()
 
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})
@@ -19,25 +17,28 @@ defmodule Mongo.ReadPreferencesTest do
       mode: :secondary_preferred,
       max_staleness_ms: 120_000
     }
+
     assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
 
     prefs = %{
       mode: :secondary,
       max_staleness_ms: 120_000
     }
+
     assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
 
     prefs = %{
       mode: :primary
     }
+
     assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
 
     prefs = %{
       mode: :primary_preferred,
       max_staleness_ms: 120_000
     }
-    assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
 
+    assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
   end
 
   @doc """
@@ -54,7 +55,6 @@ defmodule Mongo.ReadPreferencesTest do
   @tag timeout: 70_0000
   @tag :tag_set
   test "find_one, using read_preferences options, tag_set", %{pid: top, catcher: catcher} do
-
     coll = unique_collection()
 
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})
@@ -71,6 +71,7 @@ defmodule Mongo.ReadPreferencesTest do
       max_staleness_ms: 120_000,
       tag_sets: [dc: "west", usage: "production"]
     }
+
     assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
 
     prefs = %{
@@ -78,6 +79,7 @@ defmodule Mongo.ReadPreferencesTest do
       max_staleness_ms: 120_000,
       tag_sets: [dc: "east", usage: "production"]
     }
+
     assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
 
     ## this configuration results in an empty selection
@@ -86,8 +88,8 @@ defmodule Mongo.ReadPreferencesTest do
       max_staleness_ms: 120_000,
       tag_sets: [dc: "east", usage: "production"]
     }
-    assert catch_exit(Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs))
-    assert [:checkout_session|_xs] = EventCatcher.empty_selection_events(catcher) |> Enum.map(fn event -> event.action end)
 
+    assert catch_exit(Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs))
+    assert [:checkout_session | _xs] = EventCatcher.empty_selection_events(catcher) |> Enum.map(fn event -> event.action end)
   end
 end

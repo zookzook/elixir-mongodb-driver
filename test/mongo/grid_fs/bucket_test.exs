@@ -7,7 +7,7 @@ defmodule Mongo.GridFs.BucketTest do
   alias Mongo.Session
 
   setup_all do
-    assert {:ok, pid} = Mongo.TestConnection.connect
+    assert {:ok, pid} = Mongo.TestConnection.connect()
     {:ok, [pid: pid]}
   end
 
@@ -24,9 +24,9 @@ defmodule Mongo.GridFs.BucketTest do
   end
 
   test "delete a file", c do
-    bucket        = Bucket.new(c.pid)
+    bucket = Bucket.new(c.pid)
     upload_stream = Upload.open_upload_stream(bucket, "my-file-to-delete.txt")
-    src_filename  = "./test/data/test.txt"
+    src_filename = "./test/data/test.txt"
 
     File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
 
@@ -45,9 +45,9 @@ defmodule Mongo.GridFs.BucketTest do
   end
 
   test "delete a file with ID a string", c do
-    bucket        = Bucket.new(c.pid)
+    bucket = Bucket.new(c.pid)
     upload_stream = Upload.open_upload_stream(bucket, "my-file-to-delete.txt")
-    src_filename  = "./test/data/test.txt"
+    src_filename = "./test/data/test.txt"
 
     File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
 
@@ -66,11 +66,10 @@ defmodule Mongo.GridFs.BucketTest do
   end
 
   test "rename a file", c do
-
-    bucket        = Bucket.new(c.pid)
-    new_filename  = "my-new-filename.txt"
+    bucket = Bucket.new(c.pid)
+    new_filename = "my-new-filename.txt"
     upload_stream = Upload.open_upload_stream(bucket, "my-example-file.txt")
-    src_filename  = "./test/data/test.txt"
+    src_filename = "./test/data/test.txt"
 
     File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
 
@@ -87,10 +86,9 @@ defmodule Mongo.GridFs.BucketTest do
   end
 
   test "drop bucket", c do
-
-    bucket        = Bucket.new(c.pid, name: "killme")
+    bucket = Bucket.new(c.pid, name: "killme")
     upload_stream = Upload.open_upload_stream(bucket, "my-example-file.txt")
-    src_filename  = "./test/data/test.txt"
+    src_filename = "./test/data/test.txt"
 
     File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
 
@@ -105,19 +103,17 @@ defmodule Mongo.GridFs.BucketTest do
 
     file = Mongo.find_one(c.pid, Bucket.chunks_collection_name(bucket), %{file_id: file_id})
     assert file == nil
-
   end
 
   test "check find and find_one", c do
-
-    bucket        = Bucket.new(c.pid, name: "killme")
+    bucket = Bucket.new(c.pid, name: "killme")
     upload_stream = Upload.open_upload_stream(bucket, "my-example-file.txt")
-    src_filename  = "./test/data/test.txt"
+    src_filename = "./test/data/test.txt"
 
     File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
 
     file_id = upload_stream.id
-    [file] = Bucket.find(bucket, [_id: file_id]) |> Enum.to_list()
+    [file] = Bucket.find(bucket, _id: file_id) |> Enum.to_list()
     assert file != nil
     file = Bucket.find_one(bucket, ObjectId.encode!(file_id))
     assert file != nil
@@ -127,7 +123,6 @@ defmodule Mongo.GridFs.BucketTest do
 
   @tag :mongo_4_2
   test "explicit sessions", c do
-
     top = c.pid
     {:ok, session} = Session.start_session(top, :write, [])
     assert :ok = Session.start_transaction(session)
@@ -135,7 +130,7 @@ defmodule Mongo.GridFs.BucketTest do
     bucket = Bucket.new(top, name: "sessions") |> Bucket.add_session(session: session)
 
     upload_stream = Upload.open_upload_stream(bucket, "my-example-file.txt")
-    src_filename  = "./test/data/test.txt"
+    src_filename = "./test/data/test.txt"
 
     File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
 
@@ -149,11 +144,9 @@ defmodule Mongo.GridFs.BucketTest do
     bucket = Bucket.new(top, name: "sessions")
     file = Bucket.find_one(bucket, file_id)
     assert file == nil
-
   end
 
   test "check if indices are created", c do
-
     top = c.pid
     _bucket = Bucket.new(top, name: "index_test")
 
@@ -171,5 +164,4 @@ defmodule Mongo.GridFs.BucketTest do
     assert Mongo.list_index_names(top, "index_test.files") |> Enum.any?(fn name -> name == "filename_1_uploadDate_1" end)
     assert Mongo.list_index_names(top, "index_test.chunks") |> Enum.any?(fn name -> name == "files_id_1_n_1" end)
   end
-
 end

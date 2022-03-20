@@ -10,8 +10,10 @@ end
 
 defimpl DBConnection.Query, for: Mongo.Query do
   # coveralls-ignore-start
-  def parse(query, _opts), do: query      # gets never called
-  def describe(query, _opts), do: query   # gets never called
+  # gets never called
+  def parse(query, _opts), do: query
+  # gets never called
+  def describe(query, _opts), do: query
   # coveralls-ignore-stop
   def encode(_query, params, _opts), do: params
   def decode(_query, reply, _opts), do: reply

@@ -4,7 +4,6 @@ defmodule Mongo.App do
   use Application
 
   def start(_type, _args) do
-
     children = [
       {Mongo.IdServer, []},
       {Mongo.PBKDF2Cache, []},

@@ -26,16 +26,19 @@ defmodule BSON.Decimal128Test do
     assert_decimal(@binaries_neg_0_0, %Decimal{sign: -1, coef: 0, exp: -1})
     assert_decimal(@binaries_1_e_3, %Decimal{coef: 1, exp: 3})
     assert_decimal(@binaries_0_001234, %Decimal{coef: 1234, exp: -6})
-    assert_decimal(@binaries_0_00123400000, %Decimal{coef: 123400000, exp: -11})
+    assert_decimal(@binaries_0_00123400000, %Decimal{coef: 123_400_000, exp: -11})
+
     assert_decimal(@binaries_0_1234567890123456789012345678901234, %Decimal{
-      coef: 1234567890123456789012345678901234,
+      coef: 1_234_567_890_123_456_789_012_345_678_901_234,
       exp: -34
     })
+
     assert_decimal(@binaries_regular_largest, %Decimal{
-      coef: 1234567890123456789012345678901234,
+      coef: 1_234_567_890_123_456_789_012_345_678_901_234,
       exp: 0
     })
-    assert_decimal(@binaries_scientific_tiniest, %Decimal{coef: 9999999999999999999999999999999999, exp: -6176})
+
+    assert_decimal(@binaries_scientific_tiniest, %Decimal{coef: 9_999_999_999_999_999_999_999_999_999_999_999, exp: -6176})
     assert_decimal(@binaries_scientific_tiny, %Decimal{coef: 1, exp: -6176})
     assert_decimal(@binaries_neg_tiny, %Decimal{sign: -1, coef: 1, exp: -6176})
   end
@@ -50,19 +53,19 @@ defmodule BSON.Decimal128Test do
     assert_decimal(%Decimal{sign: -1, coef: 0, exp: -1})
     assert_decimal(%Decimal{coef: 1, exp: 3})
     assert_decimal(%Decimal{coef: 1234, exp: -6})
-    assert_decimal(%Decimal{coef: 123400000, exp: -11})
-    assert_decimal(%Decimal{coef: 1234567890123456789012345678901234, exp: -34})
-    assert_decimal(%Decimal{coef: 1234567890123456789012345678901234, exp: 0})
-    assert_decimal(%Decimal{coef: 9999999999999999999999999999999999, exp: -6176})
+    assert_decimal(%Decimal{coef: 123_400_000, exp: -11})
+    assert_decimal(%Decimal{coef: 1_234_567_890_123_456_789_012_345_678_901_234, exp: -34})
+    assert_decimal(%Decimal{coef: 1_234_567_890_123_456_789_012_345_678_901_234, exp: 0})
+    assert_decimal(%Decimal{coef: 9_999_999_999_999_999_999_999_999_999_999_999, exp: -6176})
     assert_decimal(%Decimal{coef: 1, exp: -6176})
     assert_decimal(%Decimal{sign: -1, coef: 1, exp: -6176})
   end
 
   defp assert_decimal(expected_decimal) do
-
-    value = expected_decimal
-    |> BSON.Decimal128.encode()
-    |> BSON.Decimal128.decode()
+    value =
+      expected_decimal
+      |> BSON.Decimal128.encode()
+      |> BSON.Decimal128.decode()
 
     assert value == expected_decimal
   end

@@ -13,6 +13,7 @@ defmodule Mongo.Session.SessionPool do
 
   def new(logical_session_timeout, opts \\ []) do
     pool_size = Keyword.get(opts, :session_pool, 1000)
+
     %{
       timeout: logical_session_timeout * 60 - 60,
       queue: Enum.map(1..pool_size, fn _ -> ServerSession.new() end),
@@ -24,7 +25,7 @@ defmodule Mongo.Session.SessionPool do
   Return a server session. If the session timeout is not reached, then a cached server session is return for reuse.
   Otherwise a newly created server session is returned.
   """
-  @spec checkout(GenServer.server) :: ServerSession.t
+  @spec checkout(GenServer.server()) :: ServerSession.t()
   @compile {:inline, checkout: 1}
   def checkout(%{queue: queue, timeout: timeout, pool_size: size} = pool) do
     {session, queue} = find_session(queue, timeout, size)
@@ -35,11 +36,11 @@ defmodule Mongo.Session.SessionPool do
   Checkin a used server session. It if is already expired, the server session is dropped. Otherwise the server session
   is cache for reuse, until it expires due of being cached all the time.
   """
-  @spec checkin(GenServer.server, ServerSession.t) :: none()
+  @spec checkin(GenServer.server(), ServerSession.t()) :: none()
   @compile {:inline, checkin: 2}
   def checkin(%{queue: queue, timeout: timeout} = pool, session) do
     case ServerSession.about_to_expire?(session, timeout) do
-      true  -> %{pool | queue: queue}
+      true -> %{pool | queue: queue}
       false -> %{pool | queue: [session | queue]}
     end
   end
@@ -47,10 +48,10 @@ defmodule Mongo.Session.SessionPool do
   ##
   # remove all old sessions, dead code
   #
-  #def prune(%{queue: queue, timeout: timeout} = pool) do
+  # def prune(%{queue: queue, timeout: timeout} = pool) do
   #  queue = Enum.reject(queue, fn session -> ServerSession.about_to_expire?(session, timeout) end)
   #  %{pool | queue: queue}
-  #end
+  # end
 
   ##
   # find the next valid sessions and removes all sessions that timed out
@@ -59,11 +60,11 @@ defmodule Mongo.Session.SessionPool do
   defp find_session([], _timeout, size) do
     {ServerSession.new(), Enum.map(1..size, fn _ -> ServerSession.new() end)}
   end
+
   defp find_session([session | rest], timeout, size) do
     case ServerSession.about_to_expire?(session, timeout) do
-      true  -> find_session(rest, timeout, size)
+      true -> find_session(rest, timeout, size)
       false -> {session, rest}
     end
   end
-
 end

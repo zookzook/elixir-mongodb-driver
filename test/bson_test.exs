@@ -3,31 +3,22 @@ defmodule TestUser do
 end
 
 defmodule BSONTest do
-
   use ExUnit.Case, async: true
 
   import BSON, only: [decode: 1]
 
   @map1 %{"hello" => "world"}
-  @bin1 <<22, 0, 0, 0, 2, 104, 101, 108, 108, 111, 0, 6, 0, 0, 0, 119,
-          111, 114, 108, 100, 0, 0>>
+  @bin1 <<22, 0, 0, 0, 2, 104, 101, 108, 108, 111, 0, 6, 0, 0, 0, 119, 111, 114, 108, 100, 0, 0>>
 
   @map2 %{"BSON" => ["awesome", 5.05, 1986]}
-  @bin2 <<49, 0, 0, 0, 4, 66, 83, 79, 78, 0, 38, 0, 0, 0, 2, 48,
-          0, 8, 0, 0, 0, 97, 119, 101, 115, 111, 109, 101, 0, 1, 49, 0,
-          51, 51, 51, 51, 51, 51, 20, 64, 16, 50, 0, 194, 7, 0, 0, 0,
-          0>>
+  @bin2 <<49, 0, 0, 0, 4, 66, 83, 79, 78, 0, 38, 0, 0, 0, 2, 48, 0, 8, 0, 0, 0, 97, 119, 101, 115, 111, 109, 101, 0, 1, 49, 0, 51, 51, 51, 51, 51, 51, 20, 64, 16, 50, 0, 194, 7, 0, 0, 0, 0>>
 
   @map3 %{"a" => %{"b" => %{}, "c" => %{"d" => nil}}}
-  @bin3 <<32, 0, 0, 0, 3, 97, 0, 24, 0, 0, 0, 3, 98, 0, 5, 0,
-          0, 0, 0, 3, 99, 0, 8, 0, 0, 0, 10, 100, 0, 0, 0, 0>>
+  @bin3 <<32, 0, 0, 0, 3, 97, 0, 24, 0, 0, 0, 3, 98, 0, 5, 0, 0, 0, 0, 3, 99, 0, 8, 0, 0, 0, 10, 100, 0, 0, 0, 0>>
 
   @map4 %{"a" => [], "b" => [1, 2, 3], "c" => [1.1, "2", true]}
-  @bin4 <<74, 0, 0, 0, 4, 97, 0, 5, 0, 0, 0, 0, 4, 98, 0, 26,
-          0, 0, 0, 16, 48, 0, 1, 0, 0, 0, 16, 49, 0, 2, 0, 0,
-          0, 16, 50, 0, 3, 0, 0, 0, 0, 4, 99, 0, 29, 0, 0, 0,
-          1, 48, 0, 154, 153, 153, 153, 153, 153, 241, 63, 2, 49, 0, 2, 0,
-          0, 0, 50, 0, 8, 50, 0, 1, 0, 0>>
+  @bin4 <<74, 0, 0, 0, 4, 97, 0, 5, 0, 0, 0, 0, 4, 98, 0, 26, 0, 0, 0, 16, 48, 0, 1, 0, 0, 0, 16, 49, 0, 2, 0, 0, 0, 16, 50, 0, 3, 0, 0, 0, 0, 4, 99, 0, 29, 0, 0, 0, 1, 48, 0, 154, 153, 153, 153, 153, 153, 241, 63, 2, 49, 0, 2, 0, 0, 0, 50, 0, 8, 50,
+          0, 1, 0, 0>>
 
   @map5 %{"a" => 123.0}
   @bin5 <<16, 0, 0, 0, 1, 97, 0, 0, 0, 0, 0, 0, 192, 94, 64, 0>>
@@ -41,10 +32,10 @@ defmodule BSONTest do
   @map8 %{"d" => []}
   @bin8 <<13, 0, 0, 0, 4, 100, 0, 5, 0, 0, 0, 0, 0>>
 
-  @map9 %{"e" => %BSON.Binary{binary: <<1,2,3>>, subtype: :generic}}
+  @map9 %{"e" => %BSON.Binary{binary: <<1, 2, 3>>, subtype: :generic}}
   @bin9 <<16, 0, 0, 0, 5, 101, 0, 3, 0, 0, 0, 0, 1, 2, 3, 0>>
 
-  @map10 %{"f" => %BSON.ObjectId{value: <<0,1,2,3,4,5,6,7,8,9,10,11>>}}
+  @map10 %{"f" => %BSON.ObjectId{value: <<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11>>}}
   @bin10 <<20, 0, 0, 0, 7, 102, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0>>
 
   @map11 %{"g" => true}
@@ -65,10 +56,10 @@ defmodule BSONTest do
   @map16 %{"l" => 12345}
   @bin16 <<12, 0, 0, 0, 16, 108, 0, 57, 48, 0, 0, 0>>
 
-  @map17 %{"m" => %BSON.Timestamp{value: 1423458185, ordinal: 9}}
+  @map17 %{"m" => %BSON.Timestamp{value: 1_423_458_185, ordinal: 9}}
   @bin17 <<16, 0, 0, 0, 17, 109, 0, 9, 0, 0, 0, 137, 63, 216, 84, 0>>
 
-  @map18 %{"n" => 123456789123456}
+  @map18 %{"n" => 123_456_789_123_456}
   @bin18 <<16, 0, 0, 0, 18, 110, 0, 128, 145, 15, 134, 72, 112, 0, 0, 0>>
 
   @map19 %{"o" => :BSON_min}
@@ -77,7 +68,7 @@ defmodule BSONTest do
   @map20 %{"p" => :BSON_max}
   @bin20 <<8, 0, 0, 0, 127, 112, 0, 0>>
 
-  @map21 %{"q" => %BSON.Binary{binary: <<1,2,3>>, subtype: :binary_old}}
+  @map21 %{"q" => %BSON.Binary{binary: <<1, 2, 3>>, subtype: :binary_old}}
   @bin21 <<20, 0, 0, 0, 5, 113, 0, 7, 0, 0, 0, 2, 3, 0, 0, 0, 1, 2, 3, 0>>
 
   @map22 %{"regex" => %BSON.Regex{pattern: "acme.*corp", options: "i"}}
@@ -95,17 +86,16 @@ defmodule BSONTest do
   @map26 %TestUser{}
   @bin26 <<29, 0, 0, 0, 16, 97, 103, 101, 0, 27, 0, 0, 0, 2, 110, 97, 109, 101, 0, 5, 0, 0, 0, 74, 111, 104, 110, 0, 0>>
 
-
   test "encode" do
-    assert encode(@map1)  == @bin1
-    assert encode(@map2)  == @bin2
-    assert encode(@map3)  == @bin3
-    assert encode(@map4)  == @bin4
-    assert encode(@map5)  == @bin5
-    assert encode(@map6)  == @bin6
-    assert encode(@map7)  == @bin7
-    assert encode(@map8)  == @bin8
-    assert encode(@map9)  == @bin9
+    assert encode(@map1) == @bin1
+    assert encode(@map2) == @bin2
+    assert encode(@map3) == @bin3
+    assert encode(@map4) == @bin4
+    assert encode(@map5) == @bin5
+    assert encode(@map6) == @bin6
+    assert encode(@map7) == @bin7
+    assert encode(@map8) == @bin8
+    assert encode(@map9) == @bin9
     assert encode(@map10) == @bin10
     assert encode(@map11) == @bin11
     assert encode(@map12) == @bin12
@@ -126,15 +116,15 @@ defmodule BSONTest do
   end
 
   test "decode" do
-    assert decode(@bin1)  == @map1
-    assert decode(@bin2)  == @map2
-    assert decode(@bin3)  == @map3
-    assert decode(@bin4)  == @map4
-    assert decode(@bin5)  == @map5
-    assert decode(@bin6)  == @map6
-    assert decode(@bin7)  == @map7
-    assert decode(@bin8)  == @map8
-    assert decode(@bin9)  == @map9
+    assert decode(@bin1) == @map1
+    assert decode(@bin2) == @map2
+    assert decode(@bin3) == @map3
+    assert decode(@bin4) == @map4
+    assert decode(@bin5) == @map5
+    assert decode(@bin6) == @map6
+    assert decode(@bin7) == @map7
+    assert decode(@bin8) == @map8
+    assert decode(@bin9) == @map9
     assert decode(@bin10) == @map10
     assert decode(@bin11) == @map11
     assert decode(@bin12) == @map12
@@ -156,11 +146,11 @@ defmodule BSONTest do
 
   test "keywords" do
     keyword = [set: [title: "x"]]
-    map     = %{"set" => %{"title" => "x"}}
+    map = %{"set" => %{"title" => "x"}}
     encoded = <<28, 0, 0, 0, 3, 115, 101, 116, 0, 18, 0, 0, 0, 2, 116, 105, 116, 108, 101, 0, 2, 0, 0, 0, 120, 0, 0, 0>>
 
     assert encode(keyword) == encoded
-    assert encode(map)     == encoded
+    assert encode(map) == encoded
     assert decode(encoded) == map
   end
 
@@ -213,16 +203,15 @@ defmodule BSONTest do
   end
 
   test "mixing atoms with binaries" do
-    document =  1..33 |> Enum.reduce(%{}, fn(x, acc) -> Map.put(acc,to_string(x),x) end ) |> Map.put(:a, 10)
+    document = 1..33 |> Enum.reduce(%{}, fn x, acc -> Map.put(acc, to_string(x), x) end) |> Map.put(:a, 10)
     assert_raise ArgumentError, fn -> encode(document) end
     document = %{:key => "value", "id" => 10}
     assert_raise ArgumentError, fn -> encode(document) end
-    document =  1..33 |> Enum.reduce(%{}, fn(x, acc) -> Map.put(acc,to_string(x),x) end ) |> Map.put(:__struct__, TestUser)
+    document = 1..33 |> Enum.reduce(%{}, fn x, acc -> Map.put(acc, to_string(x), x) end) |> Map.put(:__struct__, TestUser)
     assert_raise ArgumentError, fn -> encode(document) end
-
   end
 
   defp encode(value) do
-    value |> BSON.encode |> IO.iodata_to_binary
+    value |> BSON.encode() |> IO.iodata_to_binary()
   end
 end

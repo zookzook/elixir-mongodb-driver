@@ -63,46 +63,58 @@ defmodule EventCatcher do
   end
 
   def handle_call(:succeeded_events, _from, state) do
-    {:reply, state |> Enum.filter(fn
-      %CommandSucceededEvent{} -> true
-      _other                   -> false
-    end), state}
+    {:reply,
+     state
+     |> Enum.filter(fn
+       %CommandSucceededEvent{} -> true
+       _other -> false
+     end), state}
   end
 
   def handle_call(:failed_events, _from, state) do
-    {:reply, state |> Enum.filter(fn
-      %CommandFailedEvent{} -> true
-      _other                -> false
-    end), state}
+    {:reply,
+     state
+     |> Enum.filter(fn
+       %CommandFailedEvent{} -> true
+       _other -> false
+     end), state}
   end
 
   def handle_call(:retryable_read_events, _from, state) do
-    {:reply, state |> Enum.filter(fn
-      %RetryReadEvent{} -> true
-      _other            -> false
-    end), state}
+    {:reply,
+     state
+     |> Enum.filter(fn
+       %RetryReadEvent{} -> true
+       _other -> false
+     end), state}
   end
 
   def handle_call(:retry_write_events, _from, state) do
-    {:reply, state |> Enum.filter(fn
-      %RetryWriteEvent{} -> true
-      _other             -> false
-    end), state}
+    {:reply,
+     state
+     |> Enum.filter(fn
+       %RetryWriteEvent{} -> true
+       _other -> false
+     end), state}
   end
 
   def handle_call(:empty_selection_events, _from, state) do
-    {:reply, state |> Enum.filter(fn
-      %ServerSelectionEmptyEvent{} -> true
-      _other                       -> false
-    end), state}
+    {:reply,
+     state
+     |> Enum.filter(fn
+       %ServerSelectionEmptyEvent{} -> true
+       _other -> false
+     end), state}
   end
 
   def handle_info({:broadcast, :commands, msg}, state) do
-    {:noreply, [msg|state]}
+    {:noreply, [msg | state]}
   end
+
   def handle_info({:broadcast, :topology, %ServerSelectionEmptyEvent{} = msg}, state) do
-    {:noreply, [msg|state]}
+    {:noreply, [msg | state]}
   end
+
   def handle_info(_ignored, state) do
     {:noreply, state}
   end

@@ -19,6 +19,7 @@ defmodule Mongo.PasswordSafe do
   end
 
   def get_pasword(nil), do: nil
+
   def get_pasword(pid) do
     GenServer.call(pid, :get)
   end
@@ -28,7 +29,7 @@ defmodule Mongo.PasswordSafe do
   end
 
   def handle_cast({:set, password}, %{key: key} = data) do
-    {:noreply, %{data | pw: (password |> encrypt(key))}}
+    {:noreply, %{data | pw: password |> encrypt(key)}}
   end
 
   def handle_call(:get, _from, %{key: key, pw: password} = data) do
@@ -36,32 +37,33 @@ defmodule Mongo.PasswordSafe do
   end
 
   if String.to_integer(System.otp_release()) < 22 do
-
     @aad "AES256GCM"
 
     defp encrypt(plaintext, key) do
-      iv = :crypto.strong_rand_bytes(16) # create random Initialisation Vector
+      # create random Initialisation Vector
+      iv = :crypto.strong_rand_bytes(16)
       {ciphertext, tag} = :crypto.block_encrypt(:aes_gcm, key, iv, {@aad, to_string(plaintext), 16})
-      iv <> tag <> ciphertext # "return" iv with the cipher tag & ciphertext
+      # "return" iv with the cipher tag & ciphertext
+      iv <> tag <> ciphertext
     end
 
     defp decrypt(ciphertext, key) do
       <<iv::binary-16, tag::binary-16, ciphertext::binary>> = ciphertext
       :crypto.block_decrypt(:aes_gcm, key, iv, {@aad, ciphertext, tag})
     end
-
   else
     defp encrypt(plaintext, key) do
-      iv         = :crypto.strong_rand_bytes(16) # create random Initialisation Vector
+      # create random Initialisation Vector
+      iv = :crypto.strong_rand_bytes(16)
       ciphertext = :crypto.crypto_one_time(:aes_256_ctr, key, iv, plaintext, true)
-      iv <> ciphertext # "return" iv & ciphertext
+      # "return" iv & ciphertext
+      iv <> ciphertext
     end
 
     defp decrypt(ciphertext, key) do
       <<iv::binary-16, ciphertext::binary>> = ciphertext
       :crypto.crypto_one_time(:aes_256_ctr, key, iv, ciphertext, false)
     end
-
   end
 
   defp generate_key() do

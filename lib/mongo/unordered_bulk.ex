@@ -1,5 +1,5 @@
 defmodule Mongo.UnorderedBulk do
-  @moduledoc"""
+  @moduledoc """
 
   An **unordered** bulk is filled in the memory with the bulk operations. These are divided into three lists (inserts, updates, deletes)
   added. If the unordered bulk is written to the database, the groups are written in the following order:
@@ -54,11 +54,11 @@ defmodule Mongo.UnorderedBulk do
   import Mongo.BulkOps
 
   @type t :: %__MODULE__{
-               coll: String.t,
-               inserts: [BulkOps.bulk_op],
-               updates: [BulkOps.bulk_op],
-               deletes: [BulkOps.bulk_op]
-             }
+          coll: String.t(),
+          inserts: [BulkOps.bulk_op()],
+          updates: [BulkOps.bulk_op()],
+          deletes: [BulkOps.bulk_op()]
+        }
 
   defstruct coll: nil, inserts: [], updates: [], deletes: []
 
@@ -72,7 +72,7 @@ defmodule Mongo.UnorderedBulk do
   %Mongo.UnorderedBulk{coll: "bulk", deletes: [], inserts: [], updates: []}
   ```
   """
-  @spec new(String.t) :: UnorderedBulk.t
+  @spec new(String.t()) :: UnorderedBulk.t()
   def new(coll) do
     %UnorderedBulk{coll: coll}
   end
@@ -83,6 +83,7 @@ defmodule Mongo.UnorderedBulk do
   def empty?(%UnorderedBulk{inserts: [], updates: [], deletes: []}) do
     true
   end
+
   def empty?(_other) do
     false
   end
@@ -90,28 +91,26 @@ defmodule Mongo.UnorderedBulk do
   @doc """
   Adds the two unordered bulks together.
   """
-  def add(%UnorderedBulk{coll: coll_a} = a,  %UnorderedBulk{coll: coll_b} = b) when coll_a == coll_b do
-    %UnorderedBulk{coll: coll_a,
-      inserts: a.inserts ++ b.inserts,
-      updates: a.updates ++ b.updates,
-      deletes: a.deletes ++ b.deletes}
+  def add(%UnorderedBulk{coll: coll_a} = a, %UnorderedBulk{coll: coll_b} = b) when coll_a == coll_b do
+    %UnorderedBulk{coll: coll_a, inserts: a.inserts ++ b.inserts, updates: a.updates ++ b.updates, deletes: a.deletes ++ b.deletes}
   end
 
   @doc """
   Appends a bulk operation to the unordered bulk. One of the field (inserts, updates or deletes)
   will be updated.
   """
-  @spec push(BulkOps.bulk_op, UnorderedBulk.t) :: UnorderedBulk.t
+  @spec push(BulkOps.bulk_op(), UnorderedBulk.t()) :: UnorderedBulk.t()
   def push({:insert, doc}, %UnorderedBulk{inserts: rest} = bulk) do
-    %UnorderedBulk{bulk | inserts: [doc | rest] }
-  end
-  def push({:update, doc}, %UnorderedBulk{updates: rest} = bulk) do
-    %UnorderedBulk{bulk | updates: [doc | rest] }
-  end
-  def push({:delete, doc}, %UnorderedBulk{deletes: rest} = bulk) do
-    %UnorderedBulk{bulk | deletes: [doc | rest] }
+    %UnorderedBulk{bulk | inserts: [doc | rest]}
   end
 
+  def push({:update, doc}, %UnorderedBulk{updates: rest} = bulk) do
+    %UnorderedBulk{bulk | updates: [doc | rest]}
+  end
+
+  def push({:delete, doc}, %UnorderedBulk{deletes: rest} = bulk) do
+    %UnorderedBulk{bulk | deletes: [doc | rest]}
+  end
 
   @doc """
   Appends an insert operation.
@@ -128,7 +127,7 @@ defmodule Mongo.UnorderedBulk do
   }
   ```
   """
-  @spec insert_one(UnorderedBulk.t, BulkOps.bulk_op) :: UnorderedBulk.t
+  @spec insert_one(UnorderedBulk.t(), BulkOps.bulk_op()) :: UnorderedBulk.t()
   def insert_one(%UnorderedBulk{} = bulk, doc) do
     get_insert_one(doc) |> push(bulk)
   end
@@ -148,7 +147,7 @@ defmodule Mongo.UnorderedBulk do
   }
   ```
   """
-  @spec delete_one(UnorderedBulk.t, BulkOps.bulk_op) :: UnorderedBulk.t
+  @spec delete_one(UnorderedBulk.t(), BulkOps.bulk_op()) :: UnorderedBulk.t()
   def delete_one(%UnorderedBulk{} = bulk, doc) do
     get_delete_one(doc) |> push(bulk)
   end
@@ -168,7 +167,7 @@ defmodule Mongo.UnorderedBulk do
   }
   ```
   """
-  @spec delete_many(UnorderedBulk.t, BulkOps.bulk_op) :: UnorderedBulk.t
+  @spec delete_many(UnorderedBulk.t(), BulkOps.bulk_op()) :: UnorderedBulk.t()
   def delete_many(%UnorderedBulk{} = bulk, doc) do
     get_delete_many(doc) |> push(bulk)
   end
@@ -188,7 +187,7 @@ defmodule Mongo.UnorderedBulk do
   }
   ```
   """
-  @spec replace_one(UnorderedBulk.t, BSON.document, BSON.document, Keyword.t) :: UnorderedBulk.t
+  @spec replace_one(UnorderedBulk.t(), BSON.document(), BSON.document(), Keyword.t()) :: UnorderedBulk.t()
   def replace_one(%UnorderedBulk{} = bulk, filter, replacement, opts \\ []) do
     get_replace_one(filter, replacement, opts) |> push(bulk)
   end
@@ -210,7 +209,7 @@ defmodule Mongo.UnorderedBulk do
   }
   ```
   """
-  @spec update_one(UnorderedBulk.t, BSON.document, BSON.document, Keyword.t) :: UnorderedBulk.t
+  @spec update_one(UnorderedBulk.t(), BSON.document(), BSON.document(), Keyword.t()) :: UnorderedBulk.t()
   def update_one(%UnorderedBulk{} = bulk, filter, update, opts \\ []) do
     get_update_one(filter, update, opts) |> push(bulk)
   end
@@ -232,7 +231,7 @@ defmodule Mongo.UnorderedBulk do
   }
   ```
   """
-  @spec update_many(UnorderedBulk.t, BSON.document, BSON.document, Keyword.t) :: UnorderedBulk.t
+  @spec update_many(UnorderedBulk.t(), BSON.document(), BSON.document(), Keyword.t()) :: UnorderedBulk.t()
   def update_many(%UnorderedBulk{} = bulk, filter, update, opts \\ []) do
     get_update_many(filter, update, opts) |> push(bulk)
   end
@@ -243,10 +242,12 @@ defmodule Mongo.UnorderedBulk do
 
   The inputs of the stream should be `Mongo.BulkOps.bulk_op`. See `Mongo.BulkOps`
   """
-  @spec write(Enumerable.t(), GenServer.server, String.t, non_neg_integer, Keyword.t ) :: Enumerable.t()
+  @spec write(Enumerable.t(), GenServer.server(), String.t(), non_neg_integer, Keyword.t()) :: Enumerable.t()
   def write(enum, top, coll, limit \\ 1000, opts \\ [])
+
   def write(enum, top, coll, limit, opts) when limit > 1 do
-    Stream.chunk_while(enum,
+    Stream.chunk_while(
+      enum,
       {new(coll), limit - 1},
       fn
         op, {bulk, 0} -> {:cont, BulkWrite.write(top, push(op, bulk), opts), {new(coll), limit - 1}}
@@ -261,10 +262,11 @@ defmodule Mongo.UnorderedBulk do
             false ->
               {:cont, BulkWrite.write(top, bulk, opts), {new(coll), limit - 1}}
           end
-    end)
+      end
+    )
   end
+
   def write(_enum, _top, _coll, limit, _opts) when limit < 1 do
     raise(ArgumentError, "limit must be greater then 1, got: #{limit}")
   end
-
 end

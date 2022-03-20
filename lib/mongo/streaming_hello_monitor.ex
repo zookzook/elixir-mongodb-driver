@@ -31,29 +31,35 @@ defmodule Mongo.StreamingHelloMonitor do
   Initialize the monitor process
   """
   def init([topology_pid, address, opts]) do
-
     heartbeat_frequency_ms = 10_000
 
-    opts = opts
-           |> Keyword.drop([:after_connect])
-           |> Keyword.put(:after_connect, {StreamingHelloMonitor, :connected, [self()]})
-           |> Keyword.put(:connection_type, :stream_monitor)
+    opts =
+      opts
+      |> Keyword.drop([:after_connect])
+      |> Keyword.put(:after_connect, {StreamingHelloMonitor, :connected, [self()]})
+      |> Keyword.put(:connection_type, :stream_monitor)
 
     ## debug info("Starting stream hello monitor with options #{inspect(opts, pretty: true)}")
 
     with {:ok, pid} <- DBConnection.start_link(Mongo.MongoDBConnection, opts) do
-      {:ok, %{
-        connection_pid: pid,                            ## our connection pid to the mongodb server
-        topology_pid: topology_pid,                     ## the topology_pid to which we report
-        address: address,                               ## the address of the server, needed to make updates
-        heartbeat_frequency_ms: heartbeat_frequency_ms, ## current heartbeat_frequency_ms
-        max_await_time_ms: heartbeat_frequency_ms,
-        more_to_come: false,
-        topology_version: nil, # {processId: <ObjectId>, counter: <int64>},
-        opts: opts ## options
-      }}
+      {:ok,
+       %{
+         ## our connection pid to the mongodb server
+         connection_pid: pid,
+         ## the topology_pid to which we report
+         topology_pid: topology_pid,
+         ## the address of the server, needed to make updates
+         address: address,
+         ## current heartbeat_frequency_ms
+         heartbeat_frequency_ms: heartbeat_frequency_ms,
+         max_await_time_ms: heartbeat_frequency_ms,
+         more_to_come: false,
+         # {processId: <ObjectId>, counter: <int64>},
+         topology_version: nil,
+         ## options
+         opts: opts
+       }}
     end
-
   end
 
   @doc """
@@ -95,8 +101,9 @@ defmodule Mongo.StreamingHelloMonitor do
         @more_to_come_mask ->
           state = %{state | more_to_come: true}
           update_server_description(state)
+
         _other ->
-          Process.send_after(self(), :update, state. heartbeat_frequency_ms)
+          Process.send_after(self(), :update, state.heartbeat_frequency_ms)
           %{state | more_to_come: false}
       end
     end
@@ -107,26 +114,26 @@ defmodule Mongo.StreamingHelloMonitor do
   # Calls hello command and parses the result to update the server description
   #
   defp get_server_description(%{connection_pid: conn_pid, address: address, topology_version: topology_version, max_await_time_ms: max_await_time_ms, opts: opts} = state) do
+    Mongo.Events.notify(%ServerHeartbeatStartedEvent{connection_pid: conn_pid})
 
-    Mongo.Events.notify(%ServerHeartbeatStartedEvent{ connection_pid: conn_pid})
+    {duration, result} =
+      case state do
+        %{more_to_come: true} ->
+          :timer.tc(fn -> Mongo.exec_more_to_come(conn_pid, opts) end)
 
-    {duration, result} = case state do
-      %{more_to_come: true} ->
-        :timer.tc(fn -> Mongo.exec_more_to_come(conn_pid, opts) end)
-
-      _other ->
-        opts = Keyword.put(opts, :max_await_time_ms, max_await_time_ms)
-        :timer.tc(fn -> hello_command(conn_pid, topology_version, opts) end)
-    end
+        _other ->
+          opts = Keyword.put(opts, :max_await_time_ms, max_await_time_ms)
+          :timer.tc(fn -> hello_command(conn_pid, topology_version, opts) end)
+      end
 
     case result do
       {:ok, {flags, hello_doc}} ->
-
-        server_description = hello_doc
-                             |> ServerDescription.parse_hello_response()
-                             |> Map.put(:address, address)
-                             |> Map.put(:last_update_time, DateTime.utc_now())
-                             |> Map.put(:error, nil)
+        server_description =
+          hello_doc
+          |> ServerDescription.parse_hello_response()
+          |> Map.put(:address, address)
+          |> Map.put(:last_update_time, DateTime.utc_now())
+          |> Map.put(:error, nil)
 
         notify_success(duration, hello_doc, conn_pid)
 
@@ -135,23 +142,27 @@ defmodule Mongo.StreamingHelloMonitor do
       {:error, error} ->
         notify_error(duration, error, conn_pid)
 
-        server_description = ServerDescription.new()
-                             |> Map.put(:address, address)
-                             |> Map.put(:error, error)
+        server_description =
+          ServerDescription.new()
+          |> Map.put(:address, address)
+          |> Map.put(:error, error)
 
         {nil, 0x0, server_description}
-
     end
   end
 
   defp hello_command(conn_pid, %{"counter" => counter, "processId" => process_id}, opts) do
-    opts = Keyword.merge(opts, [flags: [:exhaust_allowed]])
-    cmd = [isMaster: 1,
+    opts = Keyword.merge(opts, flags: [:exhaust_allowed])
+
+    cmd = [
+      isMaster: 1,
       maxAwaitTimeMS: Keyword.get(opts, :max_await_time_ms, 10_000),
       topologyVersion: %{
         counter: %BSON.LongNumber{value: counter},
-        processId: process_id}
+        processId: process_id
+      }
     ]
+
     Mongo.exec_command(conn_pid, cmd, opts)
   end
 
@@ -170,5 +181,4 @@ defmodule Mongo.StreamingHelloMonitor do
   def info(message) do
     Logger.info(IO.ANSI.format([:blue, :bright, message]))
   end
-
 end

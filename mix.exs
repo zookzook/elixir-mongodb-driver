@@ -38,7 +38,7 @@ defmodule Mongodb.Mixfile do
       {:db_connection, "~> 2.4.1"},
       {:decimal, "~> 2.0"},
       {:jason, "~> 1.3", only: :test},
-      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
 

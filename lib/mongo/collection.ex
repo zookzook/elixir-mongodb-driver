@@ -366,7 +366,6 @@ defmodule Mongo.Collection do
   @doc false
   defmacro __using__(_) do
     quote do
-
       @before_dump_fun &Function.identity/1
       @after_load_fun &Function.identity/1
       @id_generator nil
@@ -388,7 +387,7 @@ defmodule Mongo.Collection do
 
   Inside a collection block, each attribute is defined through the `attribute/3` macro.
   """
-  defmacro collection(name, [do: block]) do
+  defmacro collection(name, do: block) do
     make_collection(name, block)
   end
 
@@ -398,19 +397,17 @@ defmodule Mongo.Collection do
 
   Inside a document block, each attribute is defined through the `attribute/3` macro.
   """
-  defmacro document([do: block]) do
+  defmacro document(do: block) do
     make_collection(nil, block)
   end
 
   defp make_collection(name, block) do
-
     prelude =
       quote do
-
         @collection unquote(name)
 
         @id_generator (case @id_generator do
-                         nil   -> {:_id, quote(do: BSON.ObjectId.t()), &Mongo.object_id/0}
+                         nil -> {:_id, quote(do: BSON.ObjectId.t()), &Mongo.object_id/0}
                          false -> {nil, nil, nil}
                          other -> other
                        end)
@@ -429,11 +426,12 @@ defmodule Mongo.Collection do
 
     postlude =
       quote unquote: false do
+        attribute_names = @attributes |> Enum.reverse() |> Enum.map(&elem(&1, 0))
 
-        attribute_names = @attributes |> Enum.reverse |> Enum.map(&elem(&1, 0))
-        struct_attrs    = (@attributes |> Enum.reverse |> Enum.map(fn {name, opts} -> {name, opts[:default]} end)) ++
-                          (@embed_ones |> Enum.map(fn {name, _mod, opts} -> {name, opts[:default]} end)) ++
-                          (@embed_manys |> Enum.map(fn {name, _mod, opts} -> {name, opts[:default]} end))
+        struct_attrs =
+          (@attributes |> Enum.reverse() |> Enum.map(fn {name, opts} -> {name, opts[:default]} end)) ++
+            (@embed_ones |> Enum.map(fn {name, _mod, opts} -> {name, opts[:default]} end)) ++
+            (@embed_manys |> Enum.map(fn {name, _mod, opts} -> {name, opts[:default]} end))
 
         defstruct struct_attrs
 
@@ -447,12 +445,13 @@ defmodule Mongo.Collection do
 
     new_function =
       quote unquote: false do
+        embed_ones = @embed_ones |> Enum.map(fn {name, _mod, opts} -> {name, opts} end)
+        embed_manys = @embed_manys |> Enum.map(fn {name, _mod, opts} -> {name, opts} end)
 
-        embed_ones  = (@embed_ones |> Enum.map(fn {name, _mod, opts} -> {name, opts} end))
-        embed_manys = (@embed_manys |> Enum.map(fn {name, _mod, opts} -> {name, opts} end))
-        args        = (@attributes ++ embed_ones ++ embed_manys)
-                      |> Enum.map(fn {name, opts} -> {name, opts[:default]} end)
-                      |> Enum.filter(fn {_name, fun} -> is_function(fun) end)
+        args =
+          (@attributes ++ embed_ones ++ embed_manys)
+          |> Enum.map(fn {name, opts} -> {name, opts[:default]} end)
+          |> Enum.filter(fn {_name, fun} -> is_function(fun) end)
 
         def new() do
           %__MODULE__{unquote_splicing(Collection.struct_args(args))}
@@ -461,17 +460,20 @@ defmodule Mongo.Collection do
 
     load_function =
       quote unquote: false do
-
         attribute_names = @attributes |> Enum.map(&elem(&1, 0))
-        embed_ones      = @embed_ones
-                          |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
-                          |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
 
-        embed_manys     = @embed_manys
-                          |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
-                          |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
+        embed_ones =
+          @embed_ones
+          |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
+          |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
+
+        embed_manys =
+          @embed_manys
+          |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
+          |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
 
         def load(map, use_atoms \\ false)
+
         def load(nil, _use_atoms) do
           nil
         end
@@ -481,69 +483,78 @@ defmodule Mongo.Collection do
         end
 
         def load(map, false) when is_map(map) do
+          struct =
+            Enum.reduce(
+              unquote(attribute_names),
+              %__MODULE__{},
+              fn name, result ->
+                Map.put(result, name, map[Atom.to_string(name)])
+              end
+            )
 
-          struct = Enum.reduce(unquote(attribute_names),
-            %__MODULE__{},
-            fn name, result ->
-              Map.put(result, name, map[Atom.to_string(name)])
-            end)
-
-          struct = unquote(embed_ones)
-                   |> Enum.map(fn {name, mod} -> {name, mod.load(map[Atom.to_string(name)])} end)
-                   |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc)  end)
+          struct =
+            unquote(embed_ones)
+            |> Enum.map(fn {name, mod} -> {name, mod.load(map[Atom.to_string(name)])} end)
+            |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
           |> Enum.map(fn {name, mod} -> {name, mod.load(map[Atom.to_string(name)])} end)
-          |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc)  end)
+          |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
+
         def load(map, true) when is_map(map) do
+          struct =
+            Enum.reduce(
+              unquote(attribute_names),
+              %__MODULE__{},
+              fn name, result ->
+                Map.put(result, name, map[name])
+              end
+            )
 
-          struct = Enum.reduce(unquote(attribute_names),
-            %__MODULE__{},
-            fn name, result ->
-              Map.put(result, name, map[name])
-            end)
-
-          struct = unquote(embed_ones)
-                   |> Enum.map(fn {name, mod} -> {name, mod.load(map[name], true)} end)
-                   |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc)  end)
+          struct =
+            unquote(embed_ones)
+            |> Enum.map(fn {name, mod} -> {name, mod.load(map[name], true)} end)
+            |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
           |> Enum.map(fn {name, mod} -> {name, mod.load(map[name], true)} end)
-          |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc)  end)
+          |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
-
       end
 
     dump_function =
       quote unquote: false do
+        embed_ones =
+          @embed_ones
+          |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_dump_function?(mod) end)
+          |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
 
-        embed_ones  = @embed_ones
-                      |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_dump_function?(mod) end)
-                      |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
-
-        embed_manys = @embed_manys
-                      |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_dump_function?(mod) end)
-                      |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
+        embed_manys =
+          @embed_manys
+          |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_dump_function?(mod) end)
+          |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
 
         def dump(nil) do
           nil
         end
+
         def dump(xs) when is_list(xs) do
           Enum.map(xs, fn struct -> dump(struct) end)
         end
 
         def dump(%__MODULE__{} = struct) do
+          struct =
+            unquote(embed_ones)
+            |> Enum.map(fn {name, mod} -> {name, mod.dump(Map.get(struct, name))} end)
+            |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
-          struct = unquote(embed_ones)
-                   |> Enum.map(fn {name, mod} -> {name, mod.dump(Map.get(struct, name))} end)
-                   |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc)  end)
-
-          struct = unquote(embed_manys)
-                   |> Enum.map(fn {name, mod} -> {name, mod.dump(Map.get(struct, name))} end)
-                   |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc)  end)
+          struct =
+            unquote(embed_manys)
+            |> Enum.map(fn {name, mod} -> {name, mod.dump(Map.get(struct, name))} end)
+            |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           struct
           |> Map.drop(unquote(@derived))
@@ -559,7 +570,6 @@ defmodule Mongo.Collection do
       unquote(load_function)
       unquote(dump_function)
     end
-
   end
 
   @doc """
@@ -576,8 +586,10 @@ defmodule Mongo.Collection do
   """
   def add_id(_mod, _id_generator, nil) do
   end
+
   def add_id(_mod, {nil, _type, _fun}, _name) do
   end
+
   def add_id(mod, {id, type, fun}, _name) do
     Module.put_attribute(mod, :types, {id, type})
     Module.put_attribute(mod, :attributes, {id, default: fun})
@@ -598,6 +610,7 @@ defmodule Mongo.Collection do
   def has_dump_function?(mod) do
     Keyword.has_key?(mod.__info__(:functions), :dump)
   end
+
   @doc """
   Returns true, if the Module has the `load/1` function.
   """
@@ -684,10 +697,9 @@ defmodule Mongo.Collection do
   Adds the attribute to the attributes list.
   """
   def __attribute__(mod, name, type, opts) do
-
     case opts[:derived] do
-      true  -> Module.put_attribute(mod, :derived, name)
-      _     -> []
+      true -> Module.put_attribute(mod, :derived, name)
+      _ -> []
     end
 
     Module.put_attribute(mod, :types, {name, type})
@@ -698,12 +710,13 @@ defmodule Mongo.Collection do
     map = Map.from_struct(struct)
     :maps.map(&dump/2, map) |> filter_nils()
   end
+
   def dump(map), do: :maps.map(&dump/2, map)
   def dump(_key, value), do: ensure_nested_map(value)
 
   defp ensure_nested_map(%{__struct__: Date} = data), do: data
   defp ensure_nested_map(%{__struct__: DateTime} = data), do: data
-  defp ensure_nested_map(%{__struct__: NaiveDateTime} = data) , do: data
+  defp ensure_nested_map(%{__struct__: NaiveDateTime} = data), do: data
   defp ensure_nested_map(%{__struct__: Time} = data), do: data
   defp ensure_nested_map(%{__struct__: BSON.ObjectId} = data), do: data
   defp ensure_nested_map(%{__struct__: BSON.Binary} = data), do: data
@@ -716,6 +729,7 @@ defmodule Mongo.Collection do
     map = Map.from_struct(struct)
     :maps.map(&dump/2, map) |> filter_nils()
   end
+
   defp ensure_nested_map(list) when is_list(list), do: Enum.map(list, &ensure_nested_map/1)
 
   defp ensure_nested_map(data), do: data
@@ -724,8 +738,8 @@ defmodule Mongo.Collection do
     Enum.reject(map, fn {_key, value} -> is_nil(value) end)
     |> Enum.into(%{})
   end
+
   def filter_nils(keyword) when is_list(keyword) do
     Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
   end
-
 end

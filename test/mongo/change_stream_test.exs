@@ -1,8 +1,9 @@
 defmodule Mongo.ChangeStreamTest do
-  use ExUnit.Case, async: false # DO NOT MAKE ASYNCHRONOUS
+  # DO NOT MAKE ASYNCHRONOUS
+  use ExUnit.Case, async: false
 
   setup_all do
-    assert {:ok, top} = Mongo.TestConnection.connect
+    assert {:ok, top} = Mongo.TestConnection.connect()
     Mongo.drop_database(top)
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Waldo"})
     %{pid: top}
@@ -15,31 +16,31 @@ defmodule Mongo.ChangeStreamTest do
   end
 
   def consumer(top, monitor) do
-    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, max_time: 1_000 )
+    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, max_time: 1_000)
     send(monitor, :go)
     result = cursor |> Enum.take(1) |> Enum.at(0)
     send(monitor, {:insert, result})
   end
+
   def consumer_1(top, monitor) do
     Process.sleep(1000)
-    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, max_time: 1_000 )
+    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, max_time: 1_000)
     result = cursor |> Enum.take(1) |> Enum.at(0)
     send(monitor, {:insert, result})
   end
 
   def consumer_2(top, monitor, token) do
     Process.sleep(1000)
-    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, resume_after: token, max_time: 1_000 )
+    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, resume_after: token, max_time: 1_000)
     result = cursor |> Enum.take(1) |> Enum.at(0)
     send(monitor, {:insert, result})
   end
 
   def consumer_3(top, monitor, token) do
     Process.sleep(1000)
-    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, resume_after: token, max_time: 1_000 )
+    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end, resume_after: token, max_time: 1_000)
     result = cursor |> Enum.take(4) |> Enum.map(fn %{"fullDocument" => %{"name" => name}} -> name end)
     send(monitor, {:insert, result})
-
   end
 
   def producer(top) do
@@ -51,8 +52,7 @@ defmodule Mongo.ChangeStreamTest do
 
   @tag :mongo_3_6
   test "change stream resumes after HostUnreachable", c do
-
-    top     = c.pid
+    top = c.pid
     catcher = c.catcher
 
     cmd = [
@@ -72,13 +72,11 @@ defmodule Mongo.ChangeStreamTest do
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Greta"}}}, 5_000
 
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
-
   end
 
   @tag :mongo_3_6
   test "change stream resumes after HostNotFound", c do
-
-    top     = c.pid
+    top = c.pid
     catcher = c.catcher
 
     cmd = [
@@ -98,13 +96,11 @@ defmodule Mongo.ChangeStreamTest do
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Greta"}}}, 5_000
 
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
-
   end
 
   @tag :mongo_3_6
   test "change stream resumes after NetworkTimeout", c do
-
-    top     = c.pid
+    top = c.pid
     catcher = c.catcher
 
     cmd = [
@@ -125,13 +121,11 @@ defmodule Mongo.ChangeStreamTest do
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Greta"}}}, 5_000
 
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
-
   end
 
   @tag :mongo_3_6
   test "change stream resumes after ShutdownInProgress", c do
-
-    top     = c.pid
+    top = c.pid
     catcher = c.catcher
 
     cmd = [
@@ -152,13 +146,11 @@ defmodule Mongo.ChangeStreamTest do
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Greta"}}}, 5_000
 
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
-
   end
 
   @tag :mongo_4_3
   test "change stream resumes if error contains ResumableChangeStreamError", c do
-
-    top     = c.pid
+    top = c.pid
     catcher = c.catcher
 
     cmd = [
@@ -179,14 +171,12 @@ defmodule Mongo.ChangeStreamTest do
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Greta"}}}, 5_000
 
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
-
   end
 
   @tag :mongo_3_6
   test "change stream: watch and resume_after", c do
-
     top = c.pid
-    me  = self()
+    me = self()
     spawn(fn -> consumer_1(top, me) end)
     spawn(fn -> producer(top) end)
 
@@ -204,13 +194,12 @@ defmodule Mongo.ChangeStreamTest do
     assert_receive {:token, _}, 5_000
     assert_receive {:insert, %{"fullDocument" => %{"name" => "Gustav"}}}, 5_000
 
-    #Process.sleep(500)
+    # Process.sleep(500)
 
     spawn(fn -> consumer_3(top, me, token) end)
     spawn(fn -> producer(top) end)
 
     assert_receive {:token, _}, 5_000
     assert_receive {:insert, ["Gustav", "Tom", "Liese", "Greta"]}, 5_000
-
   end
 end

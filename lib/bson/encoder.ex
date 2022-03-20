@@ -115,7 +115,9 @@ defmodule BSON.Encoder do
 
           {value, type} =
             case Mongo.Encoder.impl_for(value) do
-              nil -> {encode(value), type(value)}
+              nil ->
+                {encode(value), type(value)}
+
               _ ->
                 new_value = value |> Mongo.Encoder.encode()
                 {encode(new_value), type(new_value)}

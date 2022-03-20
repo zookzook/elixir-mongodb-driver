@@ -10,8 +10,7 @@ defmodule Mongo.UrlParserTest do
     end
 
     test "cluster url with ssl" do
-      url =
-        "mongodb://user:password@seed1.domain.com:27017,seed2.domain.com:27017,seed3.domain.com:27017/db_name?ssl=true&replicaSet=set-name&authSource=admin&maxPoolSize=5"
+      url = "mongodb://user:password@seed1.domain.com:27017,seed2.domain.com:27017,seed3.domain.com:27017/db_name?ssl=true&replicaSet=set-name&authSource=admin&maxPoolSize=5"
 
       assert UrlParser.parse_url(url: url) |> Keyword.drop([:pw_safe]) == [
                password: "*****",
@@ -30,8 +29,7 @@ defmodule Mongo.UrlParserTest do
     end
 
     test "cluster url with tls" do
-      url =
-        "mongodb://user:password@seed1.domain.com:27017,seed2.domain.com:27017,seed3.domain.com:27017/db_name?tls=true&replicaSet=set-name&authSource=admin&maxPoolSize=5"
+      url = "mongodb://user:password@seed1.domain.com:27017,seed2.domain.com:27017,seed3.domain.com:27017/db_name?tls=true&replicaSet=set-name&authSource=admin&maxPoolSize=5"
 
       assert UrlParser.parse_url(url: url) |> Keyword.drop([:pw_safe]) == [
                password: "*****",
@@ -97,13 +95,13 @@ defmodule Mongo.UrlParserTest do
     test "write concern" do
       for w <- [2, "majority"] do
         assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?w=#{w}") == [
-          database: "db_name",
-          w: w,
-          seeds: [
-            "seed1.domain.com:27017",
-            "seed2.domain.com:27017",
-          ]
-        ]
+                 database: "db_name",
+                 w: w,
+                 seeds: [
+                   "seed1.domain.com:27017",
+                   "seed2.domain.com:27017"
+                 ]
+               ]
       end
     end
 
@@ -118,6 +116,5 @@ defmodule Mongo.UrlParserTest do
       username = Keyword.get(opts, :username)
       assert username == real_username
     end
-
   end
 end
