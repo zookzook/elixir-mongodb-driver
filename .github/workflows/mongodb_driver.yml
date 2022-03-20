@@ -49,7 +49,7 @@ jobs:
         run: mix deps.get
 
       - name: Run tests
-        run: mix test --exclude ssl --exclude socket test/mongo_test.exs
+        run: mix test --exclude ssl --exclude socket
 
       - name: Run Credo
         run: mix credo
