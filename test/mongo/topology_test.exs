@@ -8,6 +8,8 @@ defmodule Mongo.TopologyTest do
   end
 
   @modes [:secondary, :secondary_preferred, :primary, :primary_preferred]
+
+  @tag :rs_required
   test "replica set selection", %{pid: mongo_pid} do
     for mode <- @modes do
       assert {:ok, %Mongo.InsertOneResult{inserted_id: new_id}} = Mongo.insert_one(mongo_pid, "test", %{topology_test: 1}, w: 3)

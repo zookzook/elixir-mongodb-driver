@@ -3,6 +3,7 @@ defmodule Mongo.TransactionRetriesTest do
 
   alias Mongo.Session
 
+  @tag :rs_required
   test "transaction returns an error", %{pid: top} do
     coll = unique_collection()
 
@@ -27,7 +28,7 @@ defmodule Mongo.TransactionRetriesTest do
     assert :ok == Session.end_session(top, session)
   end
 
-  @tag :mongo_4_3
+  @tag :rs_required
   test "transaction retry", %{pid: top, catcher: catcher} do
     coll = unique_collection()
 
@@ -53,6 +54,7 @@ defmodule Mongo.TransactionRetriesTest do
     assert [:commitTransaction, :configureFailPoint, :insert, :create] = get_succeeded_events(catcher)
   end
 
+  @tag :rs_required
   test "with_transaction, return an error", %{pid: top} do
     coll = unique_collection()
 
@@ -76,6 +78,7 @@ defmodule Mongo.TransactionRetriesTest do
              end)
   end
 
+  @tag :rs_required
   test "with_transaction, retry commit", %{pid: top} do
     coll = unique_collection()
 
@@ -99,6 +102,7 @@ defmodule Mongo.TransactionRetriesTest do
              end)
   end
 
+  @tag :rs_required
   test "with_transaction, retry commit timeout", %{pid: top, catcher: catcher} do
     coll = unique_collection()
 
@@ -128,6 +132,7 @@ defmodule Mongo.TransactionRetriesTest do
     assert [:configureFailPoint, :abortTransaction, :configureFailPoint, :insert, :create] = get_succeeded_events(catcher)
   end
 
+  @tag :rs_required
   test "with_transaction, retry transaction timeout", %{pid: top, catcher: catcher} do
     coll = unique_collection()
 

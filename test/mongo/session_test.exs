@@ -340,7 +340,7 @@ defmodule Mongo.SessionTest do
     assert {:ok, 0} == Mongo.count(top, coll, %{})
   end
 
-  @tag :mongo_4_2
+  @tag :rs_required
   test "check invalid unordered bulk with transaction", %{top: top} do
     coll = unique_collection()
 
