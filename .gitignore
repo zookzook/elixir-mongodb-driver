@@ -26,7 +26,6 @@ mongodb_driver-*.tar
 /tmp/
 
 # Misc.
-.tool-versions
 .idea/
 *.iml
 *.code-workspace
