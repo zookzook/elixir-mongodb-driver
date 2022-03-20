@@ -306,30 +306,32 @@ defmodule Mongo.Topology do
     update_in(state, [:topology], fn topology -> TopologyDescription.update_rrt(topology, address, round_trip_time) end)
   end
 
-  defp update_heartbeat_frequency(%{:topology => %{heartbeat_frequency_ms: current} = topology, monitors: monitors} = state) do
-    case TopologyDescription.select_servers(topology, :write, []) do
-      :empty ->
-        case current == @min_heartbeat_frequency_ms do
-          true ->
-            state
+  defp update_heartbeat_frequency(%{:topology => topology} = state) do
+    update_heartbeat_frequency(state, TopologyDescription.select_servers(topology, :write, []))
+  end
 
-          false ->
-            Enum.each(monitors, fn {_address, pid} -> Monitor.set_heartbeat_frequency_ms(pid, @min_heartbeat_frequency_ms) end)
-            put_in(state[:topology][:heartbeat_frequency_ms], @min_heartbeat_frequency_ms)
-        end
+  defp update_heartbeat_frequency(%{:topology => %{heartbeat_frequency_ms: current}, monitors: monitors} = state, :empty) do
+    case current == @min_heartbeat_frequency_ms do
+      true ->
+        state
 
-      _host ->
-        case current == @max_heartbeat_frequency_ms do
-          true ->
-            state
+      false ->
+        Enum.each(monitors, fn {_address, pid} -> Monitor.set_heartbeat_frequency_ms(pid, @min_heartbeat_frequency_ms) end)
+        put_in(state[:topology][:heartbeat_frequency_ms], @min_heartbeat_frequency_ms)
+    end
+  end
 
-          false ->
-            ## filter own pid
-            Enum.each(monitors, fn {_address, pid} -> Monitor.set_heartbeat_frequency_ms(pid, @max_heartbeat_frequency_ms) end)
-            Process.send_after(self(), {:new_connection, state.waiting_pids}, 10)
-            state = put_in(state[:topology][:heartbeat_frequency_ms], @max_heartbeat_frequency_ms)
-            %{state | waiting_pids: []}
-        end
+  defp update_heartbeat_frequency(%{:topology => %{heartbeat_frequency_ms: current}, monitors: monitors} = state, _host) do
+    case current == @max_heartbeat_frequency_ms do
+      true ->
+        state
+
+      false ->
+        ## filter own pid
+        Enum.each(monitors, fn {_address, pid} -> Monitor.set_heartbeat_frequency_ms(pid, @max_heartbeat_frequency_ms) end)
+        Process.send_after(self(), {:new_connection, state.waiting_pids}, 10)
+        state = put_in(state[:topology][:heartbeat_frequency_ms], @max_heartbeat_frequency_ms)
+        %{state | waiting_pids: []}
     end
   end
 
@@ -403,9 +405,9 @@ defmodule Mongo.Topology do
         {:noreply, %{state | waiting_pids: [from | waiting]}}
 
       {:ok, {address, _opts}} ->
-        with {:ok, connection} <- get_connection(address, state) do
+        case get_connection(address, state) do
+          {:ok, connection} ->
           {:reply, {:ok, connection}, state}
-        else
           ## in case of an error, just return the error
           error -> {:reply, error, state}
         end
@@ -478,9 +480,8 @@ defmodule Mongo.Topology do
   defp wire_version(nil, _topology), do: nil
 
   defp wire_version(address, topology) do
-    with {:ok, server} <- Map.fetch(topology.servers, address) do
-      server.max_wire_version
-    else
+    case Map.fetch(topology.servers, address) do
+      {:ok, server} -> server.max_wire_version
       _other -> 0
     end
   end

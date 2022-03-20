@@ -498,11 +498,13 @@ defmodule Mongo.TopologyDescription do
 
     topology =
       Enum.reduce(all_hosts, topology, fn host, topology ->
-        if host not in Map.keys(topology.servers) do
-          # this is kinda like an "upsert"
-          put_in(topology.servers[host], ServerDescription.defaults(%{address: host}))
-        else
-          topology
+        case Map.has_key?(topology.servers, host) do
+          true ->
+            topology
+
+          false ->
+            # this is kinda like an "upsert"
+            put_in(topology.servers[host], ServerDescription.defaults(%{address: host}))
         end
       end)
 

@@ -108,7 +108,7 @@ defmodule Mongo.BulkWriteResult do
     %BulkWriteResult{inserted_count: count, inserted_ids: ids, errors: errors}
   end
 
-  defp filter_ids(ids, %{"code" => 11000, "index" => index}) do
+  defp filter_ids(ids, %{"code" => 11_000, "index" => index}) do
     Enum.take(ids, index)
   end
 

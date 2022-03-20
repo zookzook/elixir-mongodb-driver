@@ -161,21 +161,22 @@ defmodule Mongo.Monitor do
   # and send it to the topology process. If possible start the streaming mode.
   ##
   defp update_server_description(%{connection_pid: conn_pid, topology_pid: topology_pid, mode: :polling_mode} = state) do
-    with %{round_trip_time: round_trip_time, max_wire_version: max_wire_version} = server_description <- get_server_description(state) do
-      ## debug info("Updating server description: #{inspect(server_description, pretty: true)}")
+    case get_server_description(state) do
+      %{round_trip_time: round_trip_time, max_wire_version: max_wire_version} = server_description ->
+        ## debug info("Updating server description: #{inspect(server_description, pretty: true)}")
 
-      Mongo.Events.notify(%ServerHeartbeatStartedEvent{connection_pid: conn_pid})
-      Topology.update_server_description(topology_pid, server_description)
-      state = %{state | round_trip_time: round_trip_time}
+        Mongo.Events.notify(%ServerHeartbeatStartedEvent{connection_pid: conn_pid})
+        Topology.update_server_description(topology_pid, server_description)
+        state = %{state | round_trip_time: round_trip_time}
 
-      case max_wire_version >= @min_wire_version_streaming_protocol do
-        true ->
-          start_streaming_mode(state, server_description)
+        case max_wire_version >= @min_wire_version_streaming_protocol do
+          true ->
+            start_streaming_mode(state, server_description)
 
-        false ->
-          state
-      end
-    else
+          false ->
+            state
+        end
+
       error ->
         Logger.warn("Unable to update server description because of #{inspect(error)}")
         state
@@ -186,12 +187,13 @@ defmodule Mongo.Monitor do
   # Get a new server description from the server and send it to the Topology process.
   ##
   defp update_server_description(%{topology_pid: topology_pid, address: address, mode: :streaming_mode} = state) do
-    with %{round_trip_time: round_trip_time} <- get_server_description(state) do
-      ## debug info("Updating round_trip_time: #{inspect round_trip_time}")
-      Topology.update_rrt(topology_pid, address, round_trip_time)
+    case get_server_description(state) do
+      %{round_trip_time: round_trip_time} ->
+        ## debug info("Updating round_trip_time: #{inspect round_trip_time}")
+        Topology.update_rrt(topology_pid, address, round_trip_time)
 
-      %{state | round_trip_time: round_trip_time}
-    else
+        %{state | round_trip_time: round_trip_time}
+
       error ->
         Logger.warn("Unable to round trip time because of #{inspect(error)}")
         state
@@ -204,10 +206,11 @@ defmodule Mongo.Monitor do
   defp start_streaming_mode(%{address: address, topology_pid: topology_pid, opts: opts} = state, _server_description) do
     args = [topology_pid, address, opts]
 
-    with {:ok, pid} <- StreamingHelloMonitor.start_link(args) do
-      ## debug info("Starting streaming mode")
-      %{state | mode: :streaming_mode, streaming_pid: pid, heartbeat_frequency_ms: 10_000}
-    else
+    case StreamingHelloMonitor.start_link(args) do
+      {:ok, pid} ->
+        ## debug info("Starting streaming mode")
+        %{state | mode: :streaming_mode, streaming_pid: pid, heartbeat_frequency_ms: 10_000}
+
       error ->
         Logger.warn("Unable to start the streaming hello monitor, because of #{inspect(error)}")
         state

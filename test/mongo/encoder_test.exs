@@ -84,8 +84,7 @@ defmodule Mongo.EncoderTest do
 
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, fun_to_insert, [])
 
-    assert [%{"fun" => true, "_id" => "5ef27e73d2a57d358f812002"}] =
-             Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
+    assert [%{"fun" => true, "_id" => "5ef27e73d2a57d358f812002"}] = Mongo.find(c.pid, coll, %{}) |> Enum.to_list()
   end
 
   test "update with encoded struct in db with protocol", c do

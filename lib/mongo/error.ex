@@ -7,17 +7,17 @@ defmodule Mongo.Error do
   @failed_to_satisfy_read_preference 133
   @host_not_found 7
   @host_unreachable 6
-  @interrupted_at_shutdown 11600
-  @interrupted_due_to_repl_state_change 11602
+  @interrupted_at_shutdown 11_600
+  @interrupted_due_to_repl_state_change 11_602
   @network_timeout 89
-  @not_primary_no_secondary_ok 13435
-  @not_primary_or_secondary 13436
-  @not_writable_primary 10107
+  @not_primary_no_secondary_ok 13_435
+  @not_primary_or_secondary 13_436
+  @not_writable_primary 10_107
   @primary_stepped_down 189
   @retry_change_stream 234
   @shutdown_in_progress 91
   @socket_exception 9001
-  @stale_config 13388
+  @stale_config 13_388
   @stale_epoch 150
   @stale_shard_version 63
 
@@ -109,17 +109,17 @@ defmodule Mongo.Error do
   end
 
   def exception(%{"code" => code, "errmsg" => msg} = doc) do
-    errorLabels = doc["errorLabels"] || []
-    resumable = Enum.any?(@resumable, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "ResumableChangeStreamError"))
-    retryable_reads = Enum.any?(@retryable_reads, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "RetryableReadError"))
-    retryable_writes = Enum.any?(@retryable_writes, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "RetryableWriteError"))
+    error_labels = doc["errorLabels"] || []
+    resumable = Enum.any?(@resumable, &(&1 == code)) || Enum.any?(error_labels, &(&1 == "ResumableChangeStreamError"))
+    retryable_reads = Enum.any?(@retryable_reads, &(&1 == code)) || Enum.any?(error_labels, &(&1 == "RetryableReadError"))
+    retryable_writes = Enum.any?(@retryable_writes, &(&1 == code)) || Enum.any?(error_labels, &(&1 == "RetryableWriteError"))
     not_writable_primary_or_recovering = Enum.any?(@not_writable_primary_or_recovering, &(&1 == code))
 
     %Mongo.Error{
       message: msg,
       code: code,
       fail_command: String.contains?(msg, "failCommand") || String.contains?(msg, "failpoint"),
-      error_labels: errorLabels,
+      error_labels: error_labels,
       resumable: resumable,
       retryable_reads: retryable_reads,
       retryable_writes: retryable_writes,

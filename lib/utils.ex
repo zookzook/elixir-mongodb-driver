@@ -1,4 +1,6 @@
 defmodule Mongo.Utils do
+  @moduledoc false
+
   def assign_ids(list) when is_list(list) do
     list
     |> Enum.map(fn item ->

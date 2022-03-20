@@ -13,7 +13,7 @@ defmodule Mongo.NotWritablePrimaryTest do
     cmd = [
       configureFailPoint: "failCommand",
       mode: [times: 1],
-      data: [errorCode: 10107, failCommands: ["insert"], closeConnection: false]
+      data: [errorCode: 10_107, failCommands: ["insert"], closeConnection: false]
     ]
 
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Greta1"})

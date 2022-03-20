@@ -148,9 +148,10 @@ defmodule Mongo.Session do
   """
   @spec start_session(GenServer.server(), atom, keyword()) :: {:ok, Session.t()} | {:error, term()}
   def start_session(topology_pid, type, opts \\ []) do
-    with {:ok, session} <- Topology.checkout_session(topology_pid, type, :explicit, opts) do
-      {:ok, session}
-    else
+    case Topology.checkout_session(topology_pid, type, :explicit, opts) do
+      {:ok, session} ->
+        {:ok, session}
+
       :new_connection ->
         start_session(topology_pid, type, opts)
     end
@@ -164,9 +165,10 @@ defmodule Mongo.Session do
   def start_implicit_session(topology_pid, type, opts) do
     case Keyword.get(opts, :session, nil) do
       nil ->
-        with {:ok, session} <- Topology.checkout_session(topology_pid, type, :implicit, opts) do
-          {:ok, session}
-        else
+        case Topology.checkout_session(topology_pid, type, :implicit, opts) do
+          {:ok, session} ->
+            {:ok, session}
+
           :new_connection ->
             start_implicit_session(topology_pid, type, opts)
 
@@ -275,11 +277,15 @@ defmodule Mongo.Session do
   """
   @spec end_implict_session(GenServer.server(), Session.t()) :: :ok | :error
   def end_implict_session(topology_pid, session) do
-    with {:ok, session_server} <- call(session, :end_implicit_session) do
-      Topology.checkin_session(topology_pid, session_server)
-    else
-      :noop -> :ok
-      _ -> :error
+    case call(session, :end_implicit_session) do
+      {:ok, session_server} ->
+        Topology.checkin_session(topology_pid, session_server)
+
+      :noop ->
+        :ok
+
+      _ ->
+        :error
     end
   end
 
@@ -549,9 +555,8 @@ defmodule Mongo.Session do
   end
 
   def handle_call_event({:commit_transaction, start_time}, :transaction_in_progress, data) do
-    with :ok <- run_commit_command(data, start_time) do
-      {:next_state, :transaction_committed, :ok}
-    else
+    case run_commit_command(data, start_time) do
+      :ok -> {:next_state, :transaction_committed, :ok}
       error -> {:keep_state_and_data, error}
     end
   end
@@ -655,9 +660,8 @@ defmodule Mongo.Session do
       ]
       |> filter_nils()
 
-    with {:ok, _doc} <- Mongo.exec_command(conn, cmd, database: "admin") do
-      :ok
-    else
+    case Mongo.exec_command(conn, cmd, database: "admin") do
+      {:ok, _doc} -> :ok
       {:error, error} ->
         timeout = opts[:transaction_retry_timeout_s] || @retry_timeout_seconds
         try_again = Error.has_label(error, "UnknownTransactionCommitResult") && DateTime.diff(DateTime.utc_now(), time, :second) < timeout
