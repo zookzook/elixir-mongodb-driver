@@ -109,7 +109,7 @@ defmodule Mongo.Error do
   end
 
   def exception(%{"code" => code, "errmsg" => msg} = doc) do
-    errorLabels = doc["errorLabels"] || []
+    error_labels = doc["errorLabels"] || []
     resumable = Enum.any?(@resumable, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "ResumableChangeStreamError"))
     retryable_reads = Enum.any?(@retryable_reads, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "RetryableReadError"))
     retryable_writes = Enum.any?(@retryable_writes, &(&1 == code)) || Enum.any?(errorLabels, &(&1 == "RetryableWriteError"))
@@ -119,7 +119,7 @@ defmodule Mongo.Error do
       message: msg,
       code: code,
       fail_command: String.contains?(msg, "failCommand") || String.contains?(msg, "failpoint"),
-      error_labels: errorLabels,
+      error_labels: error_labels,
       resumable: resumable,
       retryable_reads: retryable_reads,
       retryable_writes: retryable_writes,
