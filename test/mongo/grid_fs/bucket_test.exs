@@ -1,9 +1,9 @@
 defmodule Mongo.GridFs.BucketTest do
   use ExUnit.Case, async: false
 
+  alias BSON.ObjectId
   alias Mongo.GridFs.Bucket
   alias Mongo.GridFs.Upload
-  alias BSON.ObjectId
   alias Mongo.Session
 
   setup_all do

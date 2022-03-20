@@ -3,11 +3,11 @@ defmodule Mongo.BulkWritesTest do
 
   require Logger
 
-  alias Mongo.UnorderedBulk
-  alias Mongo.OrderedBulk
-  alias Mongo.BulkWrite
   alias Mongo.BulkOps
+  alias Mongo.BulkWrite
   alias Mongo.BulkWriteResult
+  alias Mongo.OrderedBulk
+  alias Mongo.UnorderedBulk
 
   test "check unordered bulk", top do
     coll = unique_collection()
