@@ -50,7 +50,7 @@ defmodule Mongo.ChangeStreamTest do
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Tom"})
   end
 
-  @tag :mongo_3_6
+  @tag :rs_required
   test "change stream resumes after HostUnreachable", c do
     top = c.pid
     catcher = c.catcher
@@ -74,7 +74,7 @@ defmodule Mongo.ChangeStreamTest do
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
   end
 
-  @tag :mongo_3_6
+  @tag :rs_required
   test "change stream resumes after HostNotFound", c do
     top = c.pid
     catcher = c.catcher
@@ -98,7 +98,7 @@ defmodule Mongo.ChangeStreamTest do
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
   end
 
-  @tag :mongo_3_6
+  @tag :rs_required
   test "change stream resumes after NetworkTimeout", c do
     top = c.pid
     catcher = c.catcher
@@ -123,7 +123,7 @@ defmodule Mongo.ChangeStreamTest do
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
   end
 
-  @tag :mongo_3_6
+  @tag :rs_required
   test "change stream resumes after ShutdownInProgress", c do
     top = c.pid
     catcher = c.catcher
@@ -148,7 +148,7 @@ defmodule Mongo.ChangeStreamTest do
     assert [{:getMore, ["ResumableChangeStreamError"]}] == EventCatcher.failed_events(catcher) |> Enum.map(fn event -> {event.command_name, event.failure.error_labels} end)
   end
 
-  @tag :mongo_4_3
+  @tag :rs_required
   test "change stream resumes if error contains ResumableChangeStreamError", c do
     top = c.pid
     catcher = c.catcher

@@ -3,6 +3,7 @@ defmodule Mongo.RetryableWritesTest do
 
   alias Mongo.Error
 
+  @tag :rs_required
   test "retryable writes: insert one", %{pid: top, catcher: catcher} do
     coll = unique_collection()
 
@@ -21,6 +22,7 @@ defmodule Mongo.RetryableWritesTest do
     assert [:insert | _] = EventCatcher.retry_write_events(catcher) |> Enum.map(fn event -> event.command_name end)
   end
 
+  @tag :rs_required
   test "retryable writes: delete one", %{pid: top, catcher: catcher} do
     coll = unique_collection()
 
