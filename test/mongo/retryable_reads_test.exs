@@ -4,6 +4,7 @@ defmodule Mongo.RetryableReadsTest do
   alias Mongo.Error
   alias Mongo.Session
 
+  @tag :rs_required
   test "find_one", %{pid: top, catcher: catcher} do
     coll = unique_collection()
 
@@ -29,6 +30,7 @@ defmodule Mongo.RetryableReadsTest do
     assert [:find | _] = EventCatcher.retryable_read_events(catcher) |> Enum.map(fn event -> event.command_name end)
   end
 
+  @tag :rs_required
   test "find_one in transaction", %{pid: top, catcher: catcher} do
     coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})
@@ -54,6 +56,7 @@ defmodule Mongo.RetryableReadsTest do
     assert [] = EventCatcher.retryable_read_events(catcher) |> Enum.map(fn event -> event.command_name end)
   end
 
+  @tag :rs_required
   test "count", %{pid: top, catcher: catcher} do
     coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Greta", age: 10})

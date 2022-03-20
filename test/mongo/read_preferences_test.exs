@@ -1,6 +1,7 @@
 defmodule Mongo.ReadPreferencesTest do
   use CollectionCase, async: false
 
+  @tag :rs_required
   test "find_one, using read_preferences options", %{pid: top} do
     coll = unique_collection()
 
@@ -54,6 +55,7 @@ defmodule Mongo.ReadPreferencesTest do
   """
   @tag timeout: 700_000
   @tag :tag_set
+  @tag :rs_required
   test "find_one, using read_preferences options, tag_set", %{pid: top, catcher: catcher} do
     coll = unique_collection()
 

@@ -47,6 +47,7 @@ defmodule Mongo.ErrorsTest do
     {:ok, [pid: pid]}
   end
 
+  @tag :rs_required
   test "resumable errors", %{pid: top} do
     @resumable
     |> Enum.map(fn code ->
