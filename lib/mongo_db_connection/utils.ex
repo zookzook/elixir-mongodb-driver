@@ -157,7 +157,7 @@ defmodule Mongo.MongoDBConnection.Utils do
   end
 
   def hostname_port(opts) do
-    port = opts[:port] || 27017
+    port = opts[:port] || 27_017
 
     case Keyword.fetch(opts, :socket) do
       {:ok, socket} ->
