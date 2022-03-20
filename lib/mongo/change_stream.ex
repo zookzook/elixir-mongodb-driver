@@ -1,4 +1,6 @@
 defmodule Mongo.ChangeStream do
+  @moduledoc false
+
   alias Mongo.Session
   alias Mongo.Error
 
@@ -132,18 +134,19 @@ defmodule Mongo.ChangeStream do
         ]
         |> filter_nils()
 
-      with {:ok, %{"operationTime" => op_time, "cursor" => %{"id" => new_cursor_id, "nextBatch" => docs} = cursor, "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, get_more, opts) do
-        old_token = change_stream(change_stream, :resume_token)
-        change_stream = update_change_stream(change_stream, cursor["postBatchResumeToken"], op_time, List.last(docs))
-        new_token = change_stream(change_stream, :resume_token)
+      case Mongo.exec_command_session(session, get_more, opts) do
+        {:ok, %{"operationTime" => op_time, "cursor" => %{"id" => new_cursor_id, "nextBatch" => docs} = cursor, "ok" => ok}} when ok == 1 ->
+          old_token = change_stream(change_stream, :resume_token)
+          change_stream = update_change_stream(change_stream, cursor["postBatchResumeToken"], op_time, List.last(docs))
+          new_token = change_stream(change_stream, :resume_token)
 
-        case token_changes(old_token, new_token) do
-          true -> fun.(new_token)
-          false -> :noop
-        end
+          case token_changes(old_token, new_token) do
+            true -> fun.(new_token)
+            false -> :noop
+          end
 
-        {:ok, %{cursor_id: new_cursor_id, docs: docs, change_stream: change_stream}}
-      else
+          {:ok, %{cursor_id: new_cursor_id, docs: docs, change_stream: change_stream}}
+
         {:error, %Mongo.Error{resumable: false} = not_resumable} ->
           {:error, not_resumable}
 

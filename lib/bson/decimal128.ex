@@ -69,11 +69,11 @@ defmodule BSON.Decimal128 do
   end
 
   def encode(%Decimal{sign: sign, coef: significand, exp: exponent}) when exponent >= @min_exponent and exponent <= @max_exponent do
-    biasedExponent = exponent + @exponent_bias
+    biased_exponent = exponent + @exponent_bias
     low = significand &&& @low_mask
     ## mask max significand
     high = significand >>> 64 &&& @significand_mask
-    high = bor(high, biasedExponent <<< 49)
+    high = bor(high, biased_exponent <<< 49)
 
     high =
       case sign do
@@ -89,7 +89,7 @@ defmodule BSON.Decimal128 do
     raise ArgumentError, message
   end
 
-  defp exponent(high, _two_highest_bits_set = true) do
+  defp exponent(high, true) do
     biased_exponent = high >>> 47 &&& @exponent_mask
     biased_exponent - @exponent_bias
   end

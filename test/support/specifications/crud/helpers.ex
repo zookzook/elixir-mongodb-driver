@@ -1,4 +1,6 @@
 defmodule Mongo.Specification.CRUD.Helpers do
+  @moduledoc false
+
   defp atomize_keys(map) do
     Enum.map(map, fn {key, value} ->
       {String.to_existing_atom(key), value}

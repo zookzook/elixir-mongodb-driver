@@ -604,8 +604,9 @@ run the test cases against other MongoDB deployments or older versions, you can 
 ```bash
 pyenv global 3.6
 pip3 install --upgrade pip
-pip3 install mtools[all]
+pip3 install 'mtools[all]'
 export PATH=to-your-mongodb/bin/:$PATH
+ulimit -S -n 2048 ## in case of Mac OS X
 mlaunch init --setParameter enableTestCommands=1 --replicaset --name "rs_1"
 mix test --exclude ssl --exclude socket
 ```
@@ -640,7 +641,7 @@ Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-dri
 ## Copyright and License
 
 Copyright 2015 Eric Meadows-Jönsson and Justin Wood \
-Copyright 2019 - 2021 Michael Maier
+Copyright 2019 - 2022 Michael Maier
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

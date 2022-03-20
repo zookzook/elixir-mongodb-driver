@@ -83,12 +83,12 @@ defmodule Mongo.GridFs.Bucket do
   Given a `id`, delete this stored file’s files collection document and
   associated chunks from a GridFS bucket.
   """
-  @spec delete(Bucket.t(), String.t()) :: {:ok, %Mongo.DeleteResult{}}
+  @spec delete(Bucket.t(), String.t()) :: {:ok, Mongo.DeleteResult.t()}
   def delete(%Bucket{} = bucket, file_id) when is_binary(file_id) do
     delete(bucket, ObjectId.decode!(file_id))
   end
 
-  @spec delete(Bucket.t(), BSON.ObjectId.t()) :: {:ok, %Mongo.DeleteResult{}}
+  @spec delete(Bucket.t(), BSON.ObjectId.t()) :: {:ok, Mongo.DeleteResult.t()}
   def delete(%Bucket{topology_pid: topology_pid, opts: opts} = bucket, %BSON.ObjectId{} = oid) do
     # first delete files document
     collection = files_collection_name(bucket)
@@ -105,9 +105,8 @@ defmodule Mongo.GridFs.Bucket do
   """
   @spec drop(Bucket.t()) :: :ok | {:error, Mongo.Error.t()}
   def drop(%Bucket{topology_pid: topology_pid, opts: opts} = bucket) do
-    with :ok <- Mongo.drop_collection(topology_pid, files_collection_name(bucket), opts),
-         :ok <- Mongo.drop_collection(topology_pid, chunks_collection_name(bucket), opts) do
-      :ok
+    with :ok <- Mongo.drop_collection(topology_pid, files_collection_name(bucket), opts) do
+      Mongo.drop_collection(topology_pid, chunks_collection_name(bucket), opts)
     end
   end
 

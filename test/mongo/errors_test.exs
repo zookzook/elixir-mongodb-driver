@@ -10,11 +10,11 @@ defmodule Mongo.ErrorsTest do
   @primary_stepped_down 189
   @exceeded_time_limit 262
   @socket_exception 9001
-  @not_master 10107
-  @interrupted_at_shutdown 11600
-  @interrupted_due_to_repl_state_change 11602
-  @not_master_no_slaveok 13435
-  @not_master_or_secondary 13436
+  @not_master 10_107
+  @interrupted_at_shutdown 11_600
+  @interrupted_due_to_repl_state_change 11_602
+  @not_master_no_slaveok 13_435
+  @not_master_or_secondary 13_436
   @stale_shard_version 63
   @stale_epoch 150
   # @stale_config                         13388

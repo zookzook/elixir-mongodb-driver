@@ -44,9 +44,8 @@ defmodule Mongo.MongoDBConnection do
     result =
       with {:ok, state} <- tcp_connect(opts, state),
            {:ok, state} <- maybe_ssl(opts, state),
-           {:ok, state} <- hand_shake(opts, state),
-           {:ok, state} <- maybe_auth(opts, state) do
-        {:ok, state}
+           {:ok, state} <- hand_shake(opts, state) do
+        maybe_auth(opts, state)
       end
 
     case result do
@@ -272,9 +271,10 @@ defmodule Mongo.MongoDBConnection do
 
     Events.notify(event, :commands)
 
-    with {duration, {:ok, flags, doc}} <- :timer.tc(fn -> Utils.get_response(state.request_id, %{state | timeout: timeout}) end) do
-      {:ok, {doc, event, flags, duration}, state}
-    else
+    case :timer.tc(fn -> Utils.get_response(state.request_id, %{state | timeout: timeout}) end) do
+      {duration, {:ok, flags, doc}} ->
+        {:ok, {doc, event, flags, duration}, state}
+
       {_duration, error} ->
         error
     end
@@ -307,10 +307,11 @@ defmodule Mongo.MongoDBConnection do
 
     Events.notify(event, :commands)
 
-    with {duration, {:ok, flags, doc}} <- :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end),
-         state = %{state | request_id: state.request_id + 1} do
-      {:ok, {doc, event, flags, duration}, state}
-    else
+    case :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end) do
+      {duration, {:ok, flags, doc}} ->
+        state = %{state | request_id: state.request_id + 1}
+        {:ok, {doc, event, flags, duration}, state}
+
       {_duration, error} ->
         error
     end
@@ -332,10 +333,11 @@ defmodule Mongo.MongoDBConnection do
     op = op_query(coll: Utils.namespace("$cmd", state, opts[:database]), query: cmd, select: "", num_skip: 0, num_return: 1, flags: flags(flags))
     timeout = Keyword.get(opts, :timeout, state.timeout)
 
-    with {duration, {:ok, flags, doc}} <- :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end),
-         state = %{state | request_id: state.request_id + 1} do
-      {:ok, {doc, event, flags, duration}, state}
-    else
+    case :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end) do
+      {duration, {:ok, flags, doc}} ->
+        state = %{state | request_id: state.request_id + 1}
+        {:ok, {doc, event, flags, duration}, state}
+
       {_duration, error} ->
         error
     end

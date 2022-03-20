@@ -66,8 +66,7 @@ defmodule Mongo do
   alias Mongo.Events.CommandFailedEvent
   alias Mongo.Error
 
-  # 5000
-  @timeout 15000
+  @timeout 15_000
 
   @type conn :: DbConnection.Conn
   @type collection :: String.t()
@@ -179,7 +178,7 @@ defmodule Mongo do
       iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66-c6b328242")
       {:error, %ArgumentError{message: "non-alphabet digit found: \"-\" (byte 45)"}}
   """
-  @spec uuid(String.t()) :: {:ok, BSON.Binary.t()} | {:error, %ArgumentError{}}
+  @spec uuid(String.t()) :: {:ok, BSON.Binary.t()} | {:error, ArgumentError.t()}
   def uuid(string) when is_binary(string) and byte_size(string) == 36 do
     try do
       p1 = binary_part(string, 0, 8) |> Base.decode16!(case: :lower)
@@ -213,9 +212,8 @@ defmodule Mongo do
       (mongodb_driver 0.6.4) lib/mongo.ex:205: Mongo.uuid!/1
   """
   def uuid!(string) do
-    with {:ok, result} <- uuid(string) do
-      result
-    else
+    case uuid(string) do
+      {:ok, result} -> result
       {:error, reason} -> raise reason
     end
   end
@@ -791,9 +789,7 @@ defmodule Mongo do
   """
   @spec command(GenServer.server(), BSON.document(), Keyword.t()) :: result(BSON.document())
   def command(topology_pid, cmd, opts \\ []) do
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
-      {:ok, doc}
-    end
+    issue_command(topology_pid, cmd, :write, opts)
   end
 
   @doc false
@@ -902,9 +898,7 @@ defmodule Mongo do
   """
   @spec wire_version(GenServer.server()) :: {:ok, integer} | {:error, Mongo.Error.t()}
   def wire_version(topology_pid) do
-    with {:ok, wire_version} <- Topology.wire_version(topology_pid) do
-      {:ok, wire_version}
-    end
+    Topology.wire_version(topology_pid)
   end
 
   @doc """
@@ -927,9 +921,7 @@ defmodule Mongo do
   """
   @spec limits(GenServer.server()) :: {:ok, BSON.document()} | {:error, Mongo.Error.t()}
   def limits(topology_pid) do
-    with {:ok, limits} <- Topology.limits(topology_pid) do
-      {:ok, limits}
-    end
+    Topology.limits(topology_pid)
   end
 
   @doc """
@@ -1335,7 +1327,7 @@ defmodule Mongo do
   @doc """
   Convenient function that returns a cursor with the names of the indexes.
   """
-  @spec list_index_names(GenServer.server(), String.t(), Keyword.t()) :: %Stream{}
+  @spec list_index_names(GenServer.server(), String.t(), Keyword.t()) :: Stream.t()
   def list_index_names(topology_pid, coll, opts \\ []) do
     list_indexes(topology_pid, coll, opts)
     |> Stream.map(fn %{"name" => name} -> name end)

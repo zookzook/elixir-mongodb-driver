@@ -1,4 +1,6 @@
 defmodule Mongo.TopologyTestData do
+  @moduledoc false
+
   def single,
     do: %{
       set_name: nil,

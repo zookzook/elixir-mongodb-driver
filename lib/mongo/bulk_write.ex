@@ -252,12 +252,9 @@ defmodule Mongo.BulkWrite do
   # Executes the command `cmd` and collects the result.
   #
   defp one_bulk_write_operation(session, cmd, coll, docs, max_batch_size, opts) do
-    with result <-
-           session
-           |> run_commands(get_cmds(cmd, coll, docs, max_batch_size, opts), opts)
-           |> collect(cmd) do
-      result
-    end
+    session
+    |> run_commands(get_cmds(cmd, coll, docs, max_batch_size, opts), opts)
+    |> collect(cmd)
   end
 
   ##

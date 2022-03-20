@@ -17,9 +17,9 @@ defmodule Mongo.MongoDBConnection.Utils do
   """
   def post_request(op, id, state) do
     with :ok <- send_data(encode(id, op), state),
-         {:ok, ^id, response} <- recv_data(nil, "", state),
-         {:ok, flags, doc} <- get_doc(response),
-         do: {:ok, flags, doc}
+         {:ok, ^id, response} <- recv_data(nil, "", state) do
+      get_doc(response)
+    end
   end
 
   @doc """

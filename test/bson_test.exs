@@ -41,7 +41,7 @@ defmodule BSONTest do
   @map11 %{"g" => true}
   @bin11 <<9, 0, 0, 0, 8, 103, 0, 1, 0>>
 
-  @map12 %{"h" => DateTime.from_unix!(12345, :millisecond)}
+  @map12 %{"h" => DateTime.from_unix!(12_345, :millisecond)}
   @bin12 <<16, 0, 0, 0, 9, 104, 0, 57, 48, 0, 0, 0, 0, 0, 0, 0>>
 
   @map13 %{"i" => nil}
@@ -53,7 +53,7 @@ defmodule BSONTest do
   @map15 %{"k" => %BSON.JavaScript{code: "a + b", scope: %{"a" => 2, "b" => 2}}}
   @bin15 <<41, 0, 0, 0, 15, 107, 0, 33, 0, 0, 0, 6, 0, 0, 0, 97, 32, 43, 32, 98, 0, 19, 0, 0, 0, 16, 97, 0, 2, 0, 0, 0, 16, 98, 0, 2, 0, 0, 0, 0, 0>>
 
-  @map16 %{"l" => 12345}
+  @map16 %{"l" => 12_345}
   @bin16 <<12, 0, 0, 0, 16, 108, 0, 57, 48, 0, 0, 0>>
 
   @map17 %{"m" => %BSON.Timestamp{value: 1_423_458_185, ordinal: 9}}

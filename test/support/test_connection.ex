@@ -1,4 +1,6 @@
 defmodule Mongo.TestConnection do
+  @moduledoc false
+
   @seeds ["127.0.0.1:27017", "127.0.0.1:27018", "127.0.0.1:27019"]
 
   def connect() do

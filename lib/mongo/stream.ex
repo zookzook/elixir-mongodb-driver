@@ -1,4 +1,6 @@
 defmodule Mongo.Stream do
+  @moduledoc false
+
   alias Mongo.Session
   alias Mongo.Error
 
