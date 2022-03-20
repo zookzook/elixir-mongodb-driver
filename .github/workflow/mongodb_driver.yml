@@ -1,0 +1,59 @@
+name: Elixir CI
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    name: Compile and Test
+
+    strategy:
+      matrix:
+        mongodb-version: ["4.4"]
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.6.0
+        with:
+          mongodb-version: ${{ matrix.mongodb-version }}
+          mongodb-replica-set: rs_1
+
+      - name: Read .tool-versions
+        uses: marocchino/tool-versions-action@v1
+        id: versions
+
+      - name: Set up Elixir
+        uses: erlef/setup-elixir@v1
+        with:
+          elixir-version: ${{steps.versions.outputs.elixir}}
+          otp-version: ${{ steps.versions.outputs.erlang}}
+
+      - name: Restore dependencies cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            deps
+            _build
+            priv/plts
+          key: ${{ runner.os }}-mix-v1-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-v1-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Run tests
+        run: mix test --exclude ssl --exclude socket
+
+      - name: Run Credo
+        run: mix credo
+
+      - name: Check Formatting
+        run: mix format --check-formatted
+        if: always()
