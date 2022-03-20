@@ -407,9 +407,11 @@ defmodule Mongo.Topology do
       {:ok, {address, _opts}} ->
         case get_connection(address, state) do
           {:ok, connection} ->
-          {:reply, {:ok, connection}, state}
+            {:reply, {:ok, connection}, state}
+
           ## in case of an error, just return the error
-          error -> {:reply, error, state}
+          error ->
+            {:reply, error, state}
         end
 
       ## in case of an error, just return the error

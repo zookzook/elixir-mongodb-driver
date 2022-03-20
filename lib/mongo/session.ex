@@ -661,7 +661,9 @@ defmodule Mongo.Session do
       |> filter_nils()
 
     case Mongo.exec_command(conn, cmd, database: "admin") do
-      {:ok, _doc} -> :ok
+      {:ok, _doc} ->
+        :ok
+
       {:error, error} ->
         timeout = opts[:transaction_retry_timeout_s] || @retry_timeout_seconds
         try_again = Error.has_label(error, "UnknownTransactionCommitResult") && DateTime.diff(DateTime.utc_now(), time, :second) < timeout
