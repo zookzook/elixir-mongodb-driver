@@ -1547,7 +1547,14 @@ defmodule Mongo do
           |> Enum.at(0)
 
         {_, params} = Keyword.pop_first(cmd, command)
-        collection = Keyword.get(cmd, command)
+
+        {collection, params} = case command do
+          :getMore ->
+            Keyword.pop_first(params, :collection)
+
+          _other ->
+            {Keyword.get(cmd, command), params}
+        end
 
         collection =
           case is_binary(collection) do
