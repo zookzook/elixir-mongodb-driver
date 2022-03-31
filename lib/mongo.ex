@@ -1548,6 +1548,13 @@ defmodule Mongo do
 
         {_, params} = Keyword.pop_first(cmd, command)
         collection = Keyword.get(cmd, command)
+
+        collection =
+          case is_binary(collection) do
+            true -> collection
+            false -> collection |> to_iodata() |> IO.iodata_to_binary()
+          end
+
         do_log(command, collection, params, duration, opts)
     end
   end
