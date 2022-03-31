@@ -14,6 +14,9 @@ config :logger, :console,
   format: "$time [$level] $message ($metadata)\n\n",
   metadata: [:module, :function, :line]
 
+config :mongodb_driver,
+  log: true
+
 # Sample configuration:
 #
 #     config :logger, :console,

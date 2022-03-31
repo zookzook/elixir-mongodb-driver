@@ -799,7 +799,7 @@ defmodule Mongo do
     with {:ok, conn, new_cmd} <- Session.bind_session(session, cmd),
          {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
          :ok <- Session.update_session(session, response, opts),
-         {:ok, {_flags, doc}} <- check_for_error(response) do
+         {:ok, {_flags, doc}} <- check_for_error(response, cmd, opts) do
       {:ok, doc}
     else
       {:error, error} ->
@@ -812,20 +812,20 @@ defmodule Mongo do
           {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
   def exec_command(conn, cmd, opts) do
     with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)) do
-      check_for_error(response)
+      check_for_error(response, cmd, opts)
     end
   end
 
   def exec_more_to_come(conn, opts) do
     with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [:more_to_come], defaults(opts)) do
-      check_for_error(response)
+      check_for_error(response, [:more_to_come], opts)
     end
   end
 
   ##
   # Checks for an error and broadcast the event.
   ##
-  defp check_for_error({%{"ok" => ok} = response, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, flags, duration}) when ok == 1 do
+  defp check_for_error({%{"ok" => ok} = response, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, flags, duration}, cmd, opts) when ok == 1 do
     Events.notify(
       %CommandSucceededEvent{
         reply: response,
@@ -838,10 +838,12 @@ defmodule Mongo do
       :commands
     )
 
+    do_log(cmd, duration, opts)
+
     {:ok, {flags, response}}
   end
 
-  defp check_for_error({%{"ok" => ok} = response, event, flags, duration}) when ok == 1 do
+  defp check_for_error({%{"ok" => ok} = response, event, flags, duration}, cmd, opts) when ok == 1 do
     Events.notify(
       %CommandSucceededEvent{
         reply: response,
@@ -851,10 +853,12 @@ defmodule Mongo do
       :commands
     )
 
+    do_log(cmd, duration, opts)
+
     {:ok, {flags, response}}
   end
 
-  defp check_for_error({doc, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, _flags, duration}) do
+  defp check_for_error({doc, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, _flags, duration}, cmd, opts) do
     error = Mongo.Error.exception(doc)
 
     Events.notify(
@@ -868,11 +872,13 @@ defmodule Mongo do
       },
       :commands
     )
+
+    do_log(cmd, duration, opts)
 
     {:error, error}
   end
 
-  defp check_for_error({doc, event, _flags, duration}) do
+  defp check_for_error({doc, event, _flags, duration}, cmd, opts) do
     error = Mongo.Error.exception(doc)
 
     Events.notify(
@@ -883,6 +889,8 @@ defmodule Mongo do
       },
       :commands
     )
+
+    do_log(cmd, duration, opts)
 
     {:error, error}
   end
@@ -1521,4 +1529,103 @@ defmodule Mongo do
   defp defaults(opts) do
     Keyword.put_new(opts, :timeout, @timeout)
   end
+
+  ## support for logging like Ecto
+  defp do_log([:more_to_come], _duration, _opts) do
+    :ok
+  end
+
+  defp do_log(cmd, duration, opts) do
+    case Keyword.has_key?(cmd, :isMaster) || Keyword.has_key?(cmd, :more_to_come) do
+      true ->
+        :ok
+
+      false ->
+        command =
+          cmd
+          |> Keyword.keys()
+          |> Enum.at(0)
+
+        {_, params} = Keyword.pop_first(cmd, command)
+        collection = Keyword.get(cmd, command)
+        do_log(command, collection, params, duration, opts)
+    end
+  end
+
+  defp do_log(command, collection, params, duration, opts) do
+    metadata = %{
+      type: :mongodb_driver,
+      command: command,
+      params: params,
+      collection: collection,
+      options: Keyword.get(opts, :telemetry_options, [])
+    }
+
+    :telemetry.execute([:mongodb_driver, :execution], %{duration: duration}, metadata)
+
+    log = Application.get_env(:mongodb_driver, :log, false)
+
+    case Keyword.get(opts, :log, log) do
+      true ->
+        Logger.log(:info, fn -> log_iodata(command, collection, params, duration) end, ansi_color: command_color(command))
+
+      false ->
+        :ok
+
+      level ->
+        Logger.log(level, fn -> log_iodata(command, collection, params, duration) end, ansi_color: command_color(command))
+    end
+  end
+
+  defp log_iodata(command, collection, params, duration) do
+    us = duration
+    ms = div(us, 100) / 10
+
+    [
+      "CMD",
+      ?\s,
+      Atom.to_string(command),
+      ?\s,
+      to_iodata(collection),
+      ?\s,
+      to_iodata(params),
+      [?\s, "db", ?=, :io_lib_format.fwrite_g(ms), ?m, ?s]
+    ]
+  end
+
+  defp to_iodata(doc) do
+    opts = Inspect.Opts.new([])
+
+    doc =
+      doc
+      |> Inspect.Algebra.to_doc(opts)
+      |> Inspect.Algebra.group()
+
+    Inspect.Algebra.format(doc, opts.width)
+  end
+
+  defp command_color(:getMore), do: :cyan
+  defp command_color(:ping), do: :cyan
+  defp command_color(:aggregate), do: :cyan
+  defp command_color(:find), do: :cyan
+  defp command_color(:count), do: :cyan
+  defp command_color(:distinct), do: :cyan
+  defp command_color(:listIndexes), do: :cyan
+  defp command_color(:listCollections), do: :cyan
+  defp command_color(:insert), do: :green
+  defp command_color(:delete), do: :red
+  defp command_color(:dropIndexes), do: :red
+  defp command_color(:drop), do: :red
+  defp command_color(:dropDatabase), do: :red
+  defp command_color(:dropUser), do: :red
+  defp command_color(:abortTransaction), do: :red
+  defp command_color(:update), do: :yellow
+  defp command_color(:findAndModify), do: :yellow
+  defp command_color(:createUser), do: :magenta
+  defp command_color(:createIndexes), do: :magenta
+  defp command_color(:create), do: :magenta
+  defp command_color(:killCursors), do: :magenta
+  defp command_color(:commitTransaction), do: :magenta
+  defp command_color(:configureFailPoint), do: :blue
+  defp command_color(_), do: nil
 end

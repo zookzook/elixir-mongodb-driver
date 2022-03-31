@@ -67,7 +67,13 @@ defmodule Mongo.TopologyDescription do
   Updates the current measured round trip time for the specified server (address)
   """
   def update_rrt(topology, address, round_trip_time) do
-    put_in(topology.servers[address][:round_trip_time], round_trip_time)
+    case topology.servers[address] do
+      nil ->
+        topology
+
+      _other ->
+        put_in(topology.servers[address][:round_trip_time], round_trip_time)
+    end
   end
 
   @doc """

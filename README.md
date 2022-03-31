@@ -274,6 +274,49 @@ Failing operations return a `{:error, error}` tuple where `error` is a
  }}
 ```
 
+### Logging
+
+You config the logging output by adding in your config file this line  
+
+```elixir
+config :mongodb_driver, log: true
+```
+
+The attribute `log` supports `true`, `false` or a log level like `:info`. The default value is `false`. If you turn 
+logging on, then you will see log output (command, collection, parameters):
+
+```
+[info] CMD find "my-collection" [filter: [name: "Helga"]] db=2.1ms
+```
+
+### Telemetry
+
+The driver uses the [:telemetry](https://github.com/beam-telemetry/telemetry) package to emit the execution duration
+for each command. The event name is `[:mongodb_driver, :execution]` and the driver uses the following meta data:
+
+```elixir
+metadata = %{
+type: :mongodb_driver,
+command: command,
+params: parameters,
+collection: collection,
+options: Keyword.get(opts, :telemetry_options, [])
+}
+
+:telemetry.execute([:mongodb_driver, :execution], %{duration: duration}, metadata)
+```
+
+In a Phoenix application with installed Phoenix Dashboard the metrics can be used by defining a metric in the Telemetry module:
+
+```elixr
+      summary("mongodb_driver.execution.duration",
+        tags: [:collection, :command],
+        unit: {:microsecond, :millisecond}
+      ),
+```
+
+Then you see for each collection the execution time for each different command in the Dashboard metric page.
+
 ### Connection Pooling
 
 The driver supports pooling by DBConnection (2.x). By default `mongodb_driver` will start a single
