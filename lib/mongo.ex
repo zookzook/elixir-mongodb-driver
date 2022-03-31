@@ -1548,13 +1548,14 @@ defmodule Mongo do
 
         {_, params} = Keyword.pop_first(cmd, command)
 
-        {collection, params} = case command do
-          :getMore ->
-            Keyword.pop_first(params, :collection)
+        {collection, params} =
+          case command do
+            :getMore ->
+              Keyword.pop_first(params, :collection)
 
-          _other ->
-            {Keyword.get(cmd, command), params}
-        end
+            _other ->
+              {Keyword.get(cmd, command), params}
+          end
 
         collection =
           case is_binary(collection) do
