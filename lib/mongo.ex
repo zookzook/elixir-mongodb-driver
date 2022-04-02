@@ -1554,10 +1554,10 @@ defmodule Mongo do
               Keyword.pop_first(params, :collection)
 
             :commitTransaction ->
-              "-"
+              {"-", params}
 
             :abortTransaction ->
-              "-"
+              {"-", params}
 
             _other ->
               {Keyword.get(cmd, command), params}
