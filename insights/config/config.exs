@@ -7,6 +7,20 @@
 # General application configuration
 import Config
 
+config :mongodb_driver,
+       log: true
+
+config :insights, Insights.PromEx,
+       disabled: false,
+       manual_metrics_start_delay: :no_delay,
+       drop_metrics_groups: [],
+       grafana: [
+          host: "http://localhost:3000",
+          username: "admin",  # Or authenticate via Basic Auth
+          password: "admin",
+         upload_dashboards_on_start: true # This is an optional setting and will default to `true`
+         ],
+       metrics_server: :disabled
 
 # Configures the endpoint
 config :insights, InsightsWeb.Endpoint,

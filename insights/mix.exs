@@ -46,7 +46,8 @@ defmodule Insights.MixProject do
       {:gettext, "~> 0.18"},
       {:jason, "~> 1.2"},
       {:plug_cowboy, "~> 2.5"},
-      {:mongodb_driver, path: "..", override: true}
+      {:mongodb_driver, path: "..", override: true},
+      {:prom_ex, "~> 1.7.1"}
     ]
   end
 

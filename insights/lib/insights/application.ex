@@ -8,6 +8,7 @@ defmodule Insights.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      Insights.PromEx,
       {Mongo, [name: :mongo, url: "mongodb://localhost:27017/insights", timeout: 60_000, pool_size: 1, idle_interval: 10_000]},
       # Start the Telemetry supervisor
       InsightsWeb.Telemetry,
