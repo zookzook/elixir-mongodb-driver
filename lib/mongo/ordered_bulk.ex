@@ -56,7 +56,7 @@ defmodule Mongo.OrderedBulk do
 
   @type t :: %__MODULE__{
           coll: String.t(),
-          ops: [BulkOps.bulk_op()]
+          ops: [Mongo.BulkOps.bulk_op()]
         }
 
   defstruct coll: nil, ops: []
@@ -90,7 +90,7 @@ defmodule Mongo.OrderedBulk do
   @doc """
   Appends a bulk operation to the ordered bulk.
   """
-  @spec push(BulkOps.bulk_op(), OrderedBulk.t()) :: OrderedBulk.t()
+  @spec push(Mongo.BulkOps.bulk_op(), OrderedBulk.t()) :: OrderedBulk.t()
   def push(op, %OrderedBulk{ops: rest} = bulk) do
     %OrderedBulk{bulk | ops: [op | rest]}
   end
@@ -105,7 +105,7 @@ defmodule Mongo.OrderedBulk do
   %Mongo.OrderedBulk{coll: "bulk", ops: [insert: %{name: "Waldo"}]}
   ```
   """
-  @spec insert_one(OrderedBulk.t(), BulkOps.bulk_op()) :: OrderedBulk.t()
+  @spec insert_one(OrderedBulk.t(), BSON.document()) :: OrderedBulk.t()
   def insert_one(%OrderedBulk{} = bulk, doc) do
     get_insert_one(doc) |> push(bulk)
   end
@@ -120,7 +120,7 @@ defmodule Mongo.OrderedBulk do
   %Mongo.OrderedBulk{coll: "bulk", ops: [delete: {%{name: "Waldo"}, [limit: 1]}]}
   ```
   """
-  @spec delete_one(OrderedBulk.t(), BulkOps.bulk_op()) :: OrderedBulk.t()
+  @spec delete_one(OrderedBulk.t(), BSON.document()) :: OrderedBulk.t()
   def delete_one(%OrderedBulk{} = bulk, doc) do
     get_delete_one(doc) |> push(bulk)
   end
@@ -135,7 +135,7 @@ defmodule Mongo.OrderedBulk do
   %Mongo.OrderedBulk{coll: "bulk", ops: [delete: {%{name: "Waldo"}, [limit: 0]}]}
   ```
   """
-  @spec delete_many(OrderedBulk.t(), BulkOps.bulk_op()) :: OrderedBulk.t()
+  @spec delete_many(OrderedBulk.t(), BSON.document()) :: OrderedBulk.t()
   def delete_many(%OrderedBulk{} = bulk, doc) do
     get_delete_many(doc) |> push(bulk)
   end

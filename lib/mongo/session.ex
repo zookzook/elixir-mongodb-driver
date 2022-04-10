@@ -223,9 +223,9 @@ defmodule Mongo.Session do
   @doc """
   Merge the session / transaction data into the cmd. There is no need to call this function directly. It is called automatically.
   """
-  @spec bind_session(Session.t(), BSON.document()) :: :ok | {:error, term()}
-  def bind_session(nil, cmd) do
-    cmd
+  @spec bind_session(Session.t(), BSON.document()) :: {:ok, pid, BSON.document()} | {:error, term()}
+  def bind_session(nil, _cmd) do
+    {:error, Mongo.Error.exception("No session")}
   end
 
   def bind_session(pid, cmd) do
@@ -253,7 +253,7 @@ defmodule Mongo.Session do
   @doc """
   Advance the `operationTime` for causally consistent read commands
   """
-  @spec advance_operation_time(Session.t(), BSON.Timestamp.t()) :: none()
+  @spec advance_operation_time(Session.t(), BSON.Timestamp.t()) :: any()
   def advance_operation_time(_pid, nil) do
   end
 
@@ -264,7 +264,7 @@ defmodule Mongo.Session do
   @doc """
   Update the `recoveryToken` after each response from mongos
   """
-  @spec update_recovery_token(Session.t(), BSON.document()) :: none()
+  @spec update_recovery_token(Session.t(), BSON.document()) :: any()
   def update_recovery_token(_pid, nil) do
   end
 
@@ -384,7 +384,7 @@ defmodule Mongo.Session do
   @doc """
   Return the wire_version used in the session.
   """
-  @spec connection(Session.t()) :: pid
+  @spec wire_version(Session.t()) :: integer
   def wire_version(pid) do
     call(pid, :wire_version)
   end
@@ -408,7 +408,7 @@ defmodule Mongo.Session do
   @doc """
   Check if the session is alive.
   """
-  @spec server_session(Session.t()) :: boolean()
+  @spec alive?(Session.t()) :: boolean()
   def alive?(nil), do: false
   def alive?(pid), do: Process.alive?(pid)
 

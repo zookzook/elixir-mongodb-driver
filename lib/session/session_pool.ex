@@ -11,6 +11,8 @@ defmodule Mongo.Session.SessionPool do
 
   alias Mongo.Session.ServerSession
 
+  @type session_pool() :: %{:pool_size => any, :queue => [ServerSession.t()], :timeout => any, optional(any) => any}
+
   def new(logical_session_timeout, opts \\ []) do
     pool_size = Keyword.get(opts, :session_pool, 1000)
 
@@ -25,7 +27,7 @@ defmodule Mongo.Session.SessionPool do
   Return a server session. If the session timeout is not reached, then a cached server session is return for reuse.
   Otherwise a newly created server session is returned.
   """
-  @spec checkout(GenServer.server()) :: ServerSession.t()
+  @spec checkout(session_pool()) :: {ServerSession.t(), session_pool()}
   @compile {:inline, checkout: 1}
   def checkout(%{queue: queue, timeout: timeout, pool_size: size} = pool) do
     {session, queue} = find_session(queue, timeout, size)
@@ -36,7 +38,7 @@ defmodule Mongo.Session.SessionPool do
   Checkin a used server session. It if is already expired, the server session is dropped. Otherwise the server session
   is cache for reuse, until it expires due of being cached all the time.
   """
-  @spec checkin(GenServer.server(), ServerSession.t()) :: none()
+  @spec checkin(session_pool(), ServerSession.t()) :: session_pool()
   @compile {:inline, checkin: 2}
   def checkin(%{queue: queue, timeout: timeout} = pool, session) do
     case ServerSession.about_to_expire?(session, timeout) do

@@ -117,10 +117,6 @@ defmodule Mongo.ReadPreference do
     transform(config)
   end
 
-  defp transform(%{:mode => :primary}) do
-    %{:mode => :primary}
-  end
-
   defp transform(config) do
     mode =
       case config[:mode] do

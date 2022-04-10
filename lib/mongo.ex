@@ -72,14 +72,13 @@ defmodule Mongo do
   @type collection :: String.t()
   @opaque cursor :: Mongo.Cursor.t()
   @type result(t) :: :ok | {:ok, t} | {:error, Mongo.Error.t()}
-  @type result!(t) :: nil | t | no_return
+  @type result!(t) :: t
 
   defmacrop bangify(result) do
     quote do
       case unquote(result) do
         {:ok, value} -> value
         {:error, error} -> raise error
-        :ok -> nil
       end
     end
   end
@@ -178,7 +177,7 @@ defmodule Mongo do
       iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66-c6b328242")
       {:error, %ArgumentError{message: "non-alphabet digit found: \"-\" (byte 45)"}}
   """
-  @spec uuid(String.t()) :: {:ok, BSON.Binary.t()} | {:error, ArgumentError.t()}
+  @spec uuid(any) :: {:ok, BSON.Binary.t()} | {:error, %ArgumentError{}}
   def uuid(string) when is_binary(string) and byte_size(string) == 36 do
     try do
       p1 = binary_part(string, 0, 8) |> Base.decode16!(case: :lower)
@@ -221,7 +220,7 @@ defmodule Mongo do
   @doc """
   Creates a new UUID.
   """
-  @spec uuid(String.t()) :: BSON.Binary.t()
+  @spec uuid() :: BSON.Binary.t()
   def uuid() do
     %BSON.Binary{binary: uuid4(), subtype: :uuid}
   end
@@ -257,7 +256,7 @@ defmodule Mongo do
         returning the first notification after the token. This will allow users to watch collections that have been dropped and recreated
         or newly renamed collections without missing any notifications. (since 4.0.7)
   """
-  @spec watch_collection(GenServer.server(), collection | 1, [BSON.document()], fun, Keyword.it()) ::
+  @spec watch_collection(GenServer.server(), collection | 1, [BSON.document()], fun | nil, Keyword.t()) ::
           cursor
   def watch_collection(topology_pid, coll, pipeline, on_resume_token \\ nil, opts \\ []) do
     stream_opts =
@@ -312,7 +311,7 @@ defmodule Mongo do
         returning the first notification after the token. This will allow users to watch collections that have been dropped and recreated
         or newly renamed collections without missing any notifications. (since 4.0.7)
   """
-  @spec watch_db(GenServer.server(), [BSON.document()], fun, Keyword.it()) :: cursor
+  @spec watch_db(GenServer.server(), [BSON.document()], fun | nil, Keyword.t()) :: cursor
   def watch_db(topology_pid, pipeline, on_resume_token \\ nil, opts \\ []) do
     watch_collection(topology_pid, 1, pipeline, on_resume_token, opts)
   end
@@ -448,6 +447,8 @@ defmodule Mongo do
         _other ->
           result
       end
+    else
+      _ -> {:error, Mongo.Error.exception("Command processing error")}
     end
   end
 
@@ -587,8 +588,11 @@ defmodule Mongo do
 
     opts = Keyword.drop(opts, ~w(limit skip hint collation)a)
 
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :read, opts),
-         do: {:ok, trunc(doc["n"])}
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :read, opts) do
+      {:ok, trunc(doc["n"])}
+    else
+      _ -> {:error, Mongo.Error.exception("Failed to count")}
+    end
   end
 
   @doc false
@@ -618,15 +622,14 @@ defmodule Mongo do
       |> filter_nils()
       |> Enum.map(&List.wrap/1)
 
-    documents =
-      topology_pid
-      |> Mongo.aggregate(coll, pipeline, opts)
-      |> Enum.to_list()
-
-    case documents do
-      [%{"n" => count}] -> {:ok, count}
-      [] -> {:ok, 0}
-      _ -> :error
+    with %Mongo.Stream{} = cursor <- Mongo.aggregate(topology_pid, coll, pipeline, opts),
+      documents <- Enum.to_list(cursor) do
+        case documents do
+          [%{"n" => count}] -> {:ok, count}
+          [] -> {:ok, 0}
+        end
+    else
+      _ -> {:error, Mongo.Error.exception("Failed to count")}
     end
   end
 
@@ -809,7 +812,7 @@ defmodule Mongo do
 
   @doc false
   @spec exec_command(GenServer.server(), BSON.document(), Keyword.t()) ::
-          {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
+          {:ok, {any(), BSON.document()} | nil} | {:error, Mongo.Error.t()}
   def exec_command(conn, cmd, opts) do
     with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)) do
       check_for_error(response, cmd, opts)
@@ -1078,6 +1081,8 @@ defmodule Mongo do
             true -> {:ok, %Mongo.InsertManyResult{inserted_ids: ids}}
           end
       end
+    else
+      _ -> {:error, Mongo.Error.exception("Failed to insert many")}
     end
   end
 
@@ -1306,8 +1311,10 @@ defmodule Mongo do
     end
   end
 
-  defp filter_upsert_ids(nil), do: []
-  defp filter_upsert_ids(upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
+
+  @spec filter_upsert_ids(any) :: list
+  defp filter_upsert_ids([_|_] = upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
+  defp filter_upsert_ids(_), do: []
 
   @doc """
   Similar to `update_many/5` but unwraps the result and raises on error.
@@ -1335,7 +1342,7 @@ defmodule Mongo do
   @doc """
   Convenient function that returns a cursor with the names of the indexes.
   """
-  @spec list_index_names(GenServer.server(), String.t(), Keyword.t()) :: Stream.t()
+  @spec list_index_names(GenServer.server(), String.t(), Keyword.t()) :: cursor
   def list_index_names(topology_pid, coll, opts \\ []) do
     list_indexes(topology_pid, coll, opts)
     |> Stream.map(fn %{"name" => name} -> name end)
@@ -1386,7 +1393,7 @@ defmodule Mongo do
   @doc """
   Convenient function that drops the database `name`.
   """
-  @spec drop_database(GenServer.server(), String.t()) :: :ok | {:error, Mongo.Error.t()}
+  @spec drop_database(GenServer.server(), String.t() | nil) :: :ok | {:error, Mongo.Error.t()}
   def drop_database(topology_pid, name \\ nil)
 
   def drop_database(topology_pid, nil) do
