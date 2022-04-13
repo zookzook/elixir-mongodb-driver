@@ -91,7 +91,12 @@ defmodule Mongo.Repo do
 
         def delete(%{__struct__: module, _id: id} = doc, opts \\ []) do
           collection = module.__collection__(:collection)
-          Mongo.delete_one(@topology, collection, %{_id: id}, opts)
+
+          case Mongo.delete_one(@topology, collection, %{_id: id}, opts) do
+            {:ok, %{deleted_count: 1}} -> {:ok, doc}
+            {:ok, %{deleted_count: 0}} -> {:error, :not_found}
+            {:error, reason} -> {:error, reason}
+          end
         end
 
         def insert!(%{__struct__: module} = doc, opts \\ []) do
@@ -118,7 +123,12 @@ defmodule Mongo.Repo do
 
         def delete!(%{__struct__: module, _id: id} = doc, opts \\ []) do
           collection = module.__collection__(:collection)
-          Mongo.delete_one!(@topology, collection, %{_id: id}, opts)
+          delete_result = Mongo.delete_one!(@topology, collection, %{_id: id}, opts)
+
+          case delete_result do
+            %{deleted_count: 1} -> doc
+            %{deleted_count: 0} -> raise Mongo.Error.exception("Document not found")
+          end
         end
 
         def insert_all(module, entries, opts \\ []) do
@@ -383,11 +393,11 @@ defmodule Mongo.Repo do
   @callback fetch_by(module :: module(), query :: BSON.document(), opts :: Keyword.t()) ::
               {:ok, Mongo.Collection.t()} | {:error, :not_found} | {:error, any()}
 
-  @optional_callbacks insert: 2, insert!: 2, update: 1, update!: 1, insert_or_update: 1, insert_or_update!: 1
-  # @optional_callbacks delete: 2, delete!: 2, insert_all: 3
+  @optional_callbacks insert: 2, insert!: 2, update: 1, update!: 1, insert_or_update: 1, insert_or_update!: 1, delete: 2, delete!: 2
+  # @optional_callbacks insert_all: 3
 
   @doc """
-  Inserts a new document struct into the database and retunrs a `{:ok, doc}` tuple.
+  Inserts a new document struct into the database and returns a `{:ok, doc}` tuple.
 
   For all options see [Options](https://www.mongodb.com/docs/manual/reference/method/db.collection.insertOne/#mongodb-method-db.collection.insertOne)
 
@@ -430,4 +440,20 @@ defmodule Mongo.Repo do
   Same as `Mongo.Repo.insert_or_update/1` but raises an error.
   """
   @callback insert_or_update!(doc :: Mongo.Collection.t()) :: Mongo.Collection.t()
+
+  @doc """
+  Deletes a document struct from the database and returns a `{:ok, doc}` tuple.
+
+  For all options see [Options](https://www.mongodb.com/docs/manual/reference/method/db.collection.deleteOne/)
+
+  ## Example
+
+      MyApp.Repo.delete(post)
+  """
+  @callback delete(doc :: Mongo.Collection.t(), opts :: Keyword.t()) :: {:ok, Mongo.Collection.t()} | {:error, any()}
+
+  @doc """
+  Same as `Mongo.Repo.delete/2` but raises an error.
+  """
+  @callback delete!(doc :: Mongo.Collection.t(), opts :: Keyword.t()) :: Mongo.Collection.t()
 end

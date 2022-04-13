@@ -367,4 +367,38 @@ defmodule Mongo.RepoTest do
       assert updated.title == "updated"
     end
   end
+
+  describe "delete/2" do
+    test "deletes an existing document" do
+      {:ok, post} =
+        Post.new()
+        |> Map.put(:title, "test")
+        |> MyRepo.insert()
+
+      assert {:ok, ^post} = MyRepo.delete(post)
+      assert {:ok, 0} = MyRepo.count(Post)
+    end
+
+    test "returns {:error, :not_found} if the document does not exist" do
+      assert {:error, :not_found} = MyRepo.delete(Post.new())
+    end
+  end
+
+  describe "delete!/2" do
+    test "deletes an existing document" do
+      {:ok, post} =
+        Post.new()
+        |> Map.put(:title, "test")
+        |> MyRepo.insert()
+
+      assert ^post = MyRepo.delete!(post)
+      assert {:ok, 0} = MyRepo.count(Post)
+    end
+
+    test "returns {:error, :not_found} if the document does not exist" do
+      assert_raise Mongo.Error, fn ->
+        MyRepo.delete!(Post.new())
+      end
+    end
+  end
 end
