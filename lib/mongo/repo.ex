@@ -310,22 +310,22 @@ defmodule Mongo.Repo do
 
   ## Example
 
-      MyApp.Repo.update_all(Post, %{title: title})
-      MyApp.Repo.update_all(Post, %{title: title}, batch_size: 2)
+      MyApp.Repo.update_all(Post, %{}, %{"$set" => %{title: "updated"}})
+      MyApp.Repo.update_all(Post, %{title: "old"}, %{"$set" => %{title: "updated"}})
   """
   @callback update_all(module :: module(), filter :: BSON.document(), update :: BSON.document(), opts :: Keyword.t()) ::
-              list(Mongo.Collection.t())
+              {:ok, Mongo.UpdateResult.t()}
 
   @doc """
   Deletes all documents for the given collection module and filter.
 
-  For all options see [Options](https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find)
+  For all options see [Options](https://www.mongodb.com/docs/manual/reference/command/delete/#dbcmd.delete)
 
   ## Example
 
-      MyApp.Repo.delete_all(Post, %{title: title})
-      MyApp.Repo.delete_all(Post, %{title: title}, batch_size: 2)
+      MyApp.Repo.delete_all(Post, %{})
+      MyApp.Repo.delete_all(Post, %{title: "todelete"})
   """
   @callback delete_all(module :: module(), filter :: BSON.document(), opts :: Keyword.t()) ::
-              list(Mongo.Collection.t())
+              {:ok, Mongo.DeleteResult.t()}
 end
