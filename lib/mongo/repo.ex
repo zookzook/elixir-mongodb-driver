@@ -73,7 +73,7 @@ defmodule Mongo.Repo do
         def update(%{__struct__: module, _id: id} = doc) do
           collection = module.__collection__(:collection)
 
-          case Mongo.update_one(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, opts) do
+          case Mongo.update_one(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, []) do
             {:error, reason} -> {:error, reason}
             {:ok, %{modified_count: 1}} -> {:ok, doc}
           end
@@ -98,7 +98,7 @@ defmodule Mongo.Repo do
 
         def update!(%{__struct__: module, _id: id} = doc) do
           collection = module.__collection__(:collection)
-          Mongo.update_one!(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, opts)
+          Mongo.update_one!(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, [])
           doc
         end
 
