@@ -79,10 +79,14 @@ defmodule Mongo.Repo do
           end
         end
 
-        def insert_or_update(%{__struct__: module, _id: id} = doc, opts \\ []) do
-          opts = Keyword.merge(opts, upsert: true)
+        def insert_or_update(%{__struct__: module, _id: id} = doc) do
           collection = module.__collection__(:collection)
-          Mongo.update_one(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, opts)
+
+          case Mongo.update_one(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, upsert: true) do
+            {:error, reason} -> {:error, reason}
+            {:ok, %{upserted_ids: [id]}} -> {:ok, %{doc | _id: id}}
+            {:ok, %{modified_count: 1}} -> {:ok, doc}
+          end
         end
 
         def delete(%{__struct__: module, _id: id} = doc, opts \\ []) do
@@ -102,10 +106,14 @@ defmodule Mongo.Repo do
           doc
         end
 
-        def insert_or_update!(%{__struct__: module, _id: id} = doc, opts \\ []) do
-          opts = Keyword.merge(opts, upsert: true)
+        def insert_or_update!(%{__struct__: module, _id: id} = doc) do
           collection = module.__collection__(:collection)
-          Mongo.update_one!(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, opts)
+          update_one_result = Mongo.update_one!(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, upsert: true)
+
+          case update_one_result do
+            %{upserted_ids: [id]} -> %{doc | _id: id}
+            %{modified_count: 1} -> doc
+          end
         end
 
         def delete!(%{__struct__: module, _id: id} = doc, opts \\ []) do
@@ -375,8 +383,8 @@ defmodule Mongo.Repo do
   @callback fetch_by(module :: module(), query :: BSON.document(), opts :: Keyword.t()) ::
               {:ok, Mongo.Collection.t()} | {:error, :not_found} | {:error, any()}
 
-  @optional_callbacks insert: 2, insert!: 2, update: 1, update!: 1
-  # @optional_callbacks  insert_or_update: 2, insert_or_update!: 2, delete: 2, delete!: 2, insert_all: 3
+  @optional_callbacks insert: 2, insert!: 2, update: 1, update!: 1, insert_or_update: 1, insert_or_update!: 1
+  # @optional_callbacks delete: 2, delete!: 2, insert_all: 3
 
   @doc """
   Inserts a new document struct into the database and retunrs a `{:ok, doc}` tuple.
@@ -395,11 +403,11 @@ defmodule Mongo.Repo do
   @callback insert!(doc :: Mongo.Collection.t(), opts :: Keyword.t()) :: Mongo.Collection.t()
 
   @doc """
-  Updates a document struct and retunrs a `{:ok, doc}` tuple.
+  Updates a document struct and returns a `{:ok, doc}` tuple.
 
   ## Example
 
-      post = MyApp.Repo.insert(Post.new())
+      post = MyApp.Repo.insert!(Post.new())
       MyApp.Repo.update(%{post | title: "new"})
   """
   @callback update(doc :: Mongo.Collection.t()) :: {:ok, Mongo.Collection.t()} | {:error, any()}
@@ -408,4 +416,18 @@ defmodule Mongo.Repo do
   Same as `Mongo.Repo.update/1` but raises an error.
   """
   @callback update!(doc :: Mongo.Collection.t()) :: Mongo.Collection.t()
+
+  @doc """
+  Upserts a document struct and returns a `{:ok, doc}` tuple.
+
+  ## Example
+
+      MyApp.Repo.insert_or_update(Post.new())
+  """
+  @callback insert_or_update(doc :: Mongo.Collection.t()) :: {:ok, Mongo.Collection.t()} | {:error, any()}
+
+  @doc """
+  Same as `Mongo.Repo.insert_or_update/1` but raises an error.
+  """
+  @callback insert_or_update!(doc :: Mongo.Collection.t()) :: Mongo.Collection.t()
 end
