@@ -361,6 +361,8 @@ defmodule Mongo.Collection do
 
   """
 
+  @type t() :: struct()
+
   alias Mongo.Collection
 
   @doc false
