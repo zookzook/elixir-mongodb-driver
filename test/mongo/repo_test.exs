@@ -269,4 +269,50 @@ defmodule Mongo.RepoTest do
       assert {:error, :not_found} = MyRepo.fetch_by(Post, %{title: "doesnotexist"})
     end
   end
+
+  describe "insert/2" do
+    test "inserts a new document" do
+      {:ok, %Post{title: "test"}} =
+        Post.new()
+        |> Map.put(:title, "test")
+        |> MyRepo.insert()
+    end
+  end
+
+  describe "insert!/2" do
+    test "inserts a new document" do
+      %Post{title: "test"} =
+        Post.new()
+        |> Map.put(:title, "test")
+        |> MyRepo.insert!()
+    end
+  end
+
+  describe "update/1" do
+    test "updates a document" do
+      {:ok, post} =
+        Post.new()
+        |> Map.put(:title, "test")
+        |> MyRepo.insert()
+
+      {:ok, %Post{title: "updated"}} =
+        post
+        |> Map.put(:title, "updated")
+        |> MyRepo.update()
+    end
+  end
+
+  describe "update!/1" do
+    test "updates a document" do
+      {:ok, post} =
+        Post.new()
+        |> Map.put(:title, "test")
+        |> MyRepo.insert()
+
+      %Post{title: "updated"} =
+        post
+        |> Map.put(:title, "updated")
+        |> MyRepo.update!()
+    end
+  end
 end
