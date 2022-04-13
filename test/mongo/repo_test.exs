@@ -401,4 +401,13 @@ defmodule Mongo.RepoTest do
       end
     end
   end
+
+  describe "insert_all/3" do
+    test "inserts multiple documents into the database" do
+      post_1 = %{title: "a"}
+      post_2 = %{title: "b"}
+
+      assert {:ok, 2, _ids} = MyRepo.insert_all(Post, [post_1, post_2])
+    end
+  end
 end

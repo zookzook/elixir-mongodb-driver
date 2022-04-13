@@ -133,7 +133,11 @@ defmodule Mongo.Repo do
 
         def insert_all(module, entries, opts \\ []) do
           collection = module.__collection__(:collection)
-          Mongo.insert_many(@topology, collection, entries, opts)
+
+          case Mongo.insert_many(@topology, collection, entries, opts) do
+            {:ok, %{inserted_ids: ids}} -> {:ok, length(ids), ids}
+            error -> error
+          end
         end
 
         def update_all(module, filter, update, opts \\ []) do
@@ -393,8 +397,7 @@ defmodule Mongo.Repo do
   @callback fetch_by(module :: module(), query :: BSON.document(), opts :: Keyword.t()) ::
               {:ok, Mongo.Collection.t()} | {:error, :not_found} | {:error, any()}
 
-  @optional_callbacks insert: 2, insert!: 2, update: 1, update!: 1, insert_or_update: 1, insert_or_update!: 1, delete: 2, delete!: 2
-  # @optional_callbacks insert_all: 3
+  @optional_callbacks insert: 2, insert!: 2, update: 1, update!: 1, insert_or_update: 1, insert_or_update!: 1, delete: 2, delete!: 2, insert_all: 3
 
   @doc """
   Inserts a new document struct into the database and returns a `{:ok, doc}` tuple.
@@ -456,4 +459,16 @@ defmodule Mongo.Repo do
   Same as `Mongo.Repo.delete/2` but raises an error.
   """
   @callback delete!(doc :: Mongo.Collection.t(), opts :: Keyword.t()) :: Mongo.Collection.t()
+
+  @doc """
+  Inserts all given documents into the document in one write operation and returns an `:ok` tuple
+  with the count of inserted documents as second element and the inserted ids as third element.
+
+  Returns `{:error, reason}` on failure.
+
+  ## Example
+
+      MyApp.Repo.insert_all(Post, [%{title: "a"}, %{title: "b"}])
+  """
+  @callback insert_all(module :: module(), entries :: list(BSON.document()), opts :: Keyword.t()) :: {:ok, integer(), list(BSON.ObjectId.t())} | {:error, any()}
 end
