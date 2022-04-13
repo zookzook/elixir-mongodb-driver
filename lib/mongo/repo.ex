@@ -328,4 +328,44 @@ defmodule Mongo.Repo do
   """
   @callback delete_all(module :: module(), filter :: BSON.document(), opts :: Keyword.t()) ::
               {:ok, Mongo.DeleteResult.t()}
+
+  @optional_callbacks fetch: 3, fetch_by: 3
+
+  @doc """
+  Returns a single document struct for the collection defined in the given module and bson object id as
+  a tuple of `{:ok, document}`.
+
+  Returns `{:error, :not_found}` if no result was found.
+
+  If multiple documents satisfy the query, this method returns the first document
+  according to the natural order which reflects the order of documents on the disk.
+
+  For all options see [Options](https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find)
+
+  ## Example
+
+      MyApp.Repo.fetch(Post, id)
+      MyApp.Repo.fetch(Post, id, read_concern: %{level: "local"})
+  """
+  @callback fetch(module :: module(), id :: BSON.ObjectId.t(), opts :: Keyword.t()) ::
+              {:ok, Mongo.Collection.t()} | {:error, :not_found} | {:error, any()}
+
+  @doc """
+  Returns a single document struct for the collection defined in the given module and query as
+  a tuple of `{:ok, document}`.
+
+  Returns `{:error, :not_found}` if no result was found.
+
+  If multiple documents satisfy the query, this method returns the first document
+  according to the natural order which reflects the order of documents on the disk.
+
+  For all options see [Options](https://docs.mongodb.com/manual/reference/command/find/#dbcmd.find)
+
+  ## Example
+
+      MyApp.Repo.fetch_by(Post, %{title: title})
+      MyApp.Repo.fetch_by(Post, %{title: title}, read_concern: %{level: "local"})
+  """
+  @callback fetch_by(module :: module(), query :: BSON.document(), opts :: Keyword.t()) ::
+              {:ok, Mongo.Collection.t()} | {:error, :not_found} | {:error, any()}
 end

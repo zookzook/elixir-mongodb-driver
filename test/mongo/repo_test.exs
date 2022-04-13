@@ -236,4 +236,37 @@ defmodule Mongo.RepoTest do
       assert {:ok, 5} = MyRepo.count(Post, %{title: "none"})
     end
   end
+
+  describe "fetch/3" do
+    test "returns a single document for the given bson id" do
+      {:ok, %{inserted_id: id}} = Mongo.insert_one(:mongo, "posts", %{title: "Hello World"})
+
+      assert {:ok, %Post{title: title}} = MyRepo.fetch(Post, id)
+      assert title == "Hello World"
+    end
+
+    test "returns an error tuple if the document is not found" do
+      assert {:error, :not_found} = MyRepo.fetch(Post, "doesnotexist")
+    end
+  end
+
+  describe "fetch_by/3" do
+    test "returns a single document for the given filter" do
+      {:ok, _insert_one_result} = Mongo.insert_one(:mongo, "posts", %{title: "Hello World"})
+
+      assert {:ok, %Post{title: title}} = MyRepo.fetch_by(Post, %{title: "Hello World"})
+      assert title == "Hello World"
+    end
+
+    test "filters case insensitive with collation option" do
+      {:ok, _insert_one_result} = Mongo.insert_one(:mongo, "posts", %{title: "Hello World"})
+
+      assert {:ok, %Post{title: title}} = MyRepo.fetch_by(Post, %{title: "hello world"}, collation: %{locale: "en", strength: 2})
+      assert title == "Hello World"
+    end
+
+    test "returns an error tuple if the document is not found" do
+      assert {:error, :not_found} = MyRepo.fetch_by(Post, %{title: "doesnotexist"})
+    end
+  end
 end
