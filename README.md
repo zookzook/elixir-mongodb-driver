@@ -100,15 +100,15 @@ it will be written to database, as:
 
 While using the `Mongo.Encoder` protocol give you the possibility to encode your structs into maps the opposite way to decode those maps into structs is missing. To handle it you can use the `Mongo.Collection` which provides some boilerplate code for a better support of structs while using the MongoDB driver
 
-* automatic load and dump function
-* reflection functions
-* type specification
-* support for embedding one and many structs
-* support for `after load` function
-* support for `before dump` function
-* support for id generation
-* support for default values
-* support for derived values
+- automatic load and dump function
+- reflection functions
+- type specification
+- support for embedding one and many structs
+- support for `after load` function
+- support for `before dump` function
+- support for id generation
+- support for default values
+- support for derived values
 
 When using the MongoDB driver only maps and keyword lists are used to represent documents.
 If you would prefer to use structs instead of the maps to give the document a stronger meaning or to emphasize
@@ -141,11 +141,12 @@ converts the atom keys into strings (Or use the `Mongo.Encode` protocol)
 iex>  Map.drop(label, [:__struct__])
 %{color: :red, name: "warning"}
 ```
+
 If you use nested structures, the work becomes a bit more complex. In this case, you have to use the inner structures
 convert manually, too. If you take a closer look at the necessary work, two basic functions can be derived:
 
-* `load` Conversion of the map into a struct.
-* `dump` Conversion of the struct into a map.
+- `load` Conversion of the map into a struct.
+- `dump` Conversion of the struct into a map.
 
 `Mongo.Collection` provides the necessary macros to automate this boilerplate code. The above example can be rewritten as follows:
 
@@ -159,6 +160,7 @@ defmodule Label do
     end
 end
 ```
+
 This results in the following module:
 
 ```elixir
@@ -197,6 +199,7 @@ iex(1)> m = %{"color" => :red, "name" => "warning"}
 iex(2)> Label.load(m)
 %Label{color: :red, name: "warning"}
 ```
+
 If you would now expect atoms as keys, the result of the conversion is not correct in this case:
 
 ```elixir
@@ -274,15 +277,54 @@ Failing operations return a `{:error, error}` tuple where `error` is a
  }}
 ```
 
+### Using the Repo Module
+
+For convenience you can also `use` the `Mongo.Repo` module in your application to configure the MongoDB application.
+
+Simply create a new module and include the `use Mongo.Repo` macro:
+
+```elixir
+defmodule MyApp.Repo do
+  use Mongo.Repo,
+    otp_app: :my_app,
+    topology: :mongo
+end
+```
+
+To configure the MongoDB add the configuration to your `config.exs`:
+
+```elixir
+config :my_app, MyApp.Repo,
+  url: "mongodb://localhost:27017/my-app-dev",
+  timeout: 60_000,
+  idle_interval: 10_000,
+  queue_target: 5_000
+```
+
+Finally we can add the `Mongo` instance to our application supervision tree:
+
+```elixir
+  children = [
+    # ...
+    {Mongo, MyApp.Repo.config()},
+    # ...
+  ]
+```
+
+In addition the the convenient configuration, the `Mongo.Repo` module will also include query functions to use with your
+`Mongo.Collection` modules.
+
+For more information check out the `Mongo.Repo` module documentation and the `Mongo` module documentation.
+
 ### Logging
 
-You config the logging output by adding in your config file this line  
+You config the logging output by adding in your config file this line
 
 ```elixir
 config :mongodb_driver, log: true
 ```
 
-The attribute `log` supports `true`, `false` or a log level like `:info`. The default value is `false`. If you turn 
+The attribute `log` supports `true`, `false` or a log level like `:info`. The default value is `false`. If you turn
 logging on, then you will see log output (command, collection, parameters):
 
 ```
