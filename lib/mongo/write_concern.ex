@@ -3,6 +3,7 @@ defmodule Mongo.WriteConcern do
 
   import Keywords
 
+  @spec write_concern(keyword) :: nil | map
   def write_concern(opts) do
     %{
       w: Keyword.get(opts, :w),
@@ -13,29 +14,16 @@ defmodule Mongo.WriteConcern do
     |> filter_empty()
   end
 
-  def filter_empty(map) when is_map(map) and map == %{} do
-    nil
-  end
+  @spec filter_empty(map) :: nil | map
+  defp filter_empty(%{} = map) when map == %{}, do: nil
+  defp filter_empty(%{} = map), do: map
 
-  def filter_empty(map) when is_map(map) do
-    map
-  end
+  @spec acknowledged?(nil | keyword | map) :: boolean
+  def acknowledged?(nil), do: true
 
-  def acknowledged?(nil) do
-    true
-  end
+  def acknowledged?(%{} = write_concern), do:
+    Map.get(write_concern, :w) != 0
 
-  def acknowledged?(write_concern) when is_map(write_concern) do
-    case Map.get(write_concern, :w) do
-      0 -> false
-      _ -> true
-    end
-  end
-
-  def acknowledged?(write_concern) when is_list(write_concern) do
-    case Keyword.get(write_concern, :w) do
-      0 -> false
-      _ -> true
-    end
-  end
+  def acknowledged?(write_concern) when is_list(write_concern), do:
+    Keyword.get(write_concern, :w) != 0
 end

@@ -55,9 +55,9 @@ defmodule Mongo.UnorderedBulk do
 
   @type t :: %__MODULE__{
           coll: String.t(),
-          inserts: [BulkOps.bulk_op()],
-          updates: [BulkOps.bulk_op()],
-          deletes: [BulkOps.bulk_op()]
+          inserts: [Mongo.BulkOps.bulk_op()],
+          updates: [Mongo.BulkOps.bulk_op()],
+          deletes: [Mongo.BulkOps.bulk_op()]
         }
 
   defstruct coll: nil, inserts: [], updates: [], deletes: []
@@ -99,7 +99,7 @@ defmodule Mongo.UnorderedBulk do
   Appends a bulk operation to the unordered bulk. One of the field (inserts, updates or deletes)
   will be updated.
   """
-  @spec push(BulkOps.bulk_op(), UnorderedBulk.t()) :: UnorderedBulk.t()
+  @spec push(Mongo.BulkOps.bulk_op(), UnorderedBulk.t()) :: UnorderedBulk.t()
   def push({:insert, doc}, %UnorderedBulk{inserts: rest} = bulk) do
     %UnorderedBulk{bulk | inserts: [doc | rest]}
   end
@@ -127,7 +127,7 @@ defmodule Mongo.UnorderedBulk do
   }
   ```
   """
-  @spec insert_one(UnorderedBulk.t(), BulkOps.bulk_op()) :: UnorderedBulk.t()
+  @spec insert_one(UnorderedBulk.t(), BSON.document()) :: UnorderedBulk.t()
   def insert_one(%UnorderedBulk{} = bulk, doc) do
     get_insert_one(doc) |> push(bulk)
   end
@@ -147,7 +147,7 @@ defmodule Mongo.UnorderedBulk do
   }
   ```
   """
-  @spec delete_one(UnorderedBulk.t(), BulkOps.bulk_op()) :: UnorderedBulk.t()
+  @spec delete_one(UnorderedBulk.t(), BSON.document()) :: UnorderedBulk.t()
   def delete_one(%UnorderedBulk{} = bulk, doc) do
     get_delete_one(doc) |> push(bulk)
   end
@@ -167,7 +167,7 @@ defmodule Mongo.UnorderedBulk do
   }
   ```
   """
-  @spec delete_many(UnorderedBulk.t(), BulkOps.bulk_op()) :: UnorderedBulk.t()
+  @spec delete_many(UnorderedBulk.t(), BSON.document()) :: UnorderedBulk.t()
   def delete_many(%UnorderedBulk{} = bulk, doc) do
     get_delete_many(doc) |> push(bulk)
   end

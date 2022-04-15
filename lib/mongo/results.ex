@@ -88,7 +88,7 @@ defmodule Mongo.BulkWriteResult do
           upserted_count: non_neg_integer,
           upserted_ids: list(BSON.ObjectId.t()),
           inserted_ids: list(BSON.ObjectId.t()),
-          errors: list(Map.t())
+          errors: list(map)
         }
 
   alias Mongo.BulkWriteResult
