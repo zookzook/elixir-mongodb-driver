@@ -177,7 +177,7 @@ defmodule Mongo do
       iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66-c6b328242")
       {:error, %ArgumentError{message: "non-alphabet digit found: \"-\" (byte 45)"}}
   """
-  @spec uuid(any) :: {:ok, BSON.Binary.t()} | {:error, %ArgumentError{}}
+  @spec uuid(any) :: {:ok, BSON.Binary.t()} | {:error, Exception.t()}
   def uuid(string) when is_binary(string) and byte_size(string) == 36 do
     try do
       p1 = binary_part(string, 0, 8) |> Base.decode16!(case: :lower)
@@ -572,8 +572,7 @@ defmodule Mongo do
   end
 
   @doc false
-  @spec count(GenServer.server(), collection, BSON.document(), Keyword.t()) ::
-          result(non_neg_integer)
+  @spec count(GenServer.server(), collection, BSON.document(), Keyword.t()) :: result(non_neg_integer)
   def count(topology_pid, coll, filter, opts \\ []) do
     cmd =
       [
@@ -589,9 +588,7 @@ defmodule Mongo do
     opts = Keyword.drop(opts, ~w(limit skip hint collation)a)
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :read, opts) do
-      {:ok, trunc(doc["n"])}
-    else
-      _ -> {:error, Mongo.Error.exception("Failed to count")}
+        {:ok, trunc(doc["n"])}
     end
   end
 
@@ -623,11 +620,11 @@ defmodule Mongo do
       |> Enum.map(&List.wrap/1)
 
     with %Mongo.Stream{} = cursor <- Mongo.aggregate(topology_pid, coll, pipeline, opts),
-      documents <- Enum.to_list(cursor) do
-        case documents do
-          [%{"n" => count}] -> {:ok, count}
-          [] -> {:ok, 0}
-        end
+         documents <- Enum.to_list(cursor) do
+      case documents do
+        [%{"n" => count}] -> {:ok, count}
+        [] -> {:ok, 0}
+      end
     else
       _ -> {:error, Mongo.Error.exception("Failed to count")}
     end
@@ -1070,19 +1067,18 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
-      case doc do
-        %{"writeErrors" => _} ->
-          {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
+    case issue_command(topology_pid, cmd, :write, opts) do
+      {:ok, %{"writeErrors" => _} = doc} ->
+        {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
 
-        _ ->
-          case acknowledged?(write_concern) do
-            false -> {:ok, %Mongo.InsertManyResult{acknowledged: false}}
-            true -> {:ok, %Mongo.InsertManyResult{inserted_ids: ids}}
-          end
-      end
-    else
-      _ -> {:error, Mongo.Error.exception("Failed to insert many")}
+      {:ok, _doc} ->
+        case acknowledged?(write_concern) do
+          false -> {:ok, %Mongo.InsertManyResult{acknowledged: false}}
+          true -> {:ok, %Mongo.InsertManyResult{inserted_ids: ids}}
+        end
+
+      _ ->
+        {:error, Mongo.Error.exception("Failed to insert many")}
     end
   end
 
@@ -1311,9 +1307,8 @@ defmodule Mongo do
     end
   end
 
-
   @spec filter_upsert_ids(any) :: list
-  defp filter_upsert_ids([_|_] = upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
+  defp filter_upsert_ids([_ | _] = upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
   defp filter_upsert_ids(_), do: []
 
   @doc """

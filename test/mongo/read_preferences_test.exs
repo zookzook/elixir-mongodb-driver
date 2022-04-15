@@ -53,7 +53,6 @@ defmodule Mongo.ReadPreferencesTest do
     rs.reconfig(conf);
 
   """
-  @tag timeout: 700_000
   @tag :tag_set
   @tag :rs_required
   test "find_one, using read_preferences options, tag_set", %{pid: top, catcher: catcher} do
@@ -75,7 +74,6 @@ defmodule Mongo.ReadPreferencesTest do
     }
 
     assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
-
     prefs = %{
       mode: :nearest,
       max_staleness_ms: 120_000,
@@ -83,7 +81,6 @@ defmodule Mongo.ReadPreferencesTest do
     }
 
     assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
-
     ## this configuration results in an empty selection
     prefs = %{
       mode: :secondary,
@@ -91,7 +88,7 @@ defmodule Mongo.ReadPreferencesTest do
       tag_sets: [dc: "east", usage: "production"]
     }
 
-    assert catch_exit(Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs))
+    assert catch_exit(Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs, checkout_timeout: 500))
     assert [:checkout_session | _xs] = EventCatcher.empty_selection_events(catcher) |> Enum.map(fn event -> event.action end)
   end
 end

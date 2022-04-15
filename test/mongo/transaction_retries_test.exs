@@ -51,7 +51,7 @@ defmodule Mongo.TransactionRetriesTest do
     assert :ok == Session.end_session(top, session)
 
     assert [:commitTransaction, :commitTransaction, :commitTransaction] = EventCatcher.failed_events(catcher) |> Enum.map(fn event -> event.command_name end)
-    assert [:commitTransaction, :configureFailPoint, :insert, :create] = get_succeeded_events(catcher)
+    assert [:commitTransaction, :configureFailPoint, :insert, :create] = get_succeeded_events(catcher) |> Enum.reject(fn event -> event == :more_to_come end)
   end
 
   @tag :rs_required

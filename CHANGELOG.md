@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 0.8.5
 * Enhancements
-  * Add colored log output
-  * Add telemetry support for execution
+  * add colored log output
+  * add telemetry support for execution
+  * add new Repo module (thanks to daskycodes)
+  * add missing typespecs (thanks to fdie)
 
 ## 0.8.4 (2022-03-09)
 * Bugfix
@@ -16,11 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   
 ## 0.8.3 (2022-02-17)
 * Bugfix
-  * fix no function clause matching (thanks for bodbdigr)
+  * fix no function clause matching (thanks to bodbdigr)
 
 ## 0.8.2 (2022-02-03)
 * Enhancements
-  * Remove a compiler warning (thanks for a-jimenez )
+  * Remove a compiler warning (thanks to a-jimenez )
 
 ## 0.8.1 (2022-01-22) 
 * Enhancements

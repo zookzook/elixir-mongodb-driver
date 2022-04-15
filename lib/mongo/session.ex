@@ -115,7 +115,7 @@ defmodule Mongo.Session do
   # * `server_session` the server_session data
   # * `opts` options
   # * `implicit` true or false
-  # * `causal_consistency` true orfalse
+  # * `causal_consistency` true or false
   # * `wire_version` current wire version to check if transactions are possible
   # * `recovery_token` tracked recovery token from response in a sharded transaction
   defstruct topology: nil,
