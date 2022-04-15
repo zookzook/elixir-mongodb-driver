@@ -74,6 +74,7 @@ defmodule Mongo.ReadPreferencesTest do
     }
 
     assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
+
     prefs = %{
       mode: :nearest,
       max_staleness_ms: 120_000,

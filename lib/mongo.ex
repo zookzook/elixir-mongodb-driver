@@ -588,7 +588,7 @@ defmodule Mongo do
     opts = Keyword.drop(opts, ~w(limit skip hint collation)a)
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :read, opts) do
-        {:ok, trunc(doc["n"])}
+      {:ok, trunc(doc["n"])}
     end
   end
 
