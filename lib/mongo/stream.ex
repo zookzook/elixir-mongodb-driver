@@ -4,123 +4,132 @@ defmodule Mongo.Stream do
   alias Mongo.Session
   alias Mongo.Error
 
-  import Record, only: [defrecordp: 2]
-
-  defstruct [:topology_pid, :session, :cursor, :coll, :docs, :cmd, :opts]
+  defstruct [
+    :topology_pid,
+    :session,
+    :cursor,
+    :coll,
+    :docs,
+    :cmd,
+    :opts
+  ]
 
   def new(topology_pid, cmd, opts) do
     ## check, if retryable reads are enabled
     opts = Mongo.retryable_reads(opts)
 
-    with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
-         {:ok,
-          %{
-            "ok" => ok,
-            "cursor" => %{
-              "id" => cursor_id,
-              "ns" => coll,
-              "firstBatch" => docs
-            }
-          }}
-         when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
-      %Mongo.Stream{topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, docs: docs, cmd: cmd, opts: opts}
-    else
-      {:error, error} ->
-        case Error.should_retry_read(error, cmd, opts) do
-          true -> new(topology_pid, cmd, Keyword.put(opts, :read_counter, 2))
-          false -> {:error, error}
-        end
+    with {type, session} <- checkout_session(topology_pid, opts) do
+      case Mongo.exec_command_session(session, cmd, opts) do
+        {:ok, %{"ok" => ok, "cursor" => cursor}} when ok == 1 ->
+          %Mongo.Stream{topology_pid: topology_pid, session: {type, session}, cursor: cursor["id"], coll: cursor["ns"], docs: cursor["firstBatch"], cmd: cmd, opts: Keyword.put(opts, :session, session)}
 
-      other ->
-        {:error, Mongo.Error.exception("Unknown result #{inspect(other)} while calling Session.start_implicit_session/3")}
+        {:error, error} ->
+          checkin_session(type, session, topology_pid)
+
+          case Error.should_retry_read(error, cmd, opts) do
+            true -> new(topology_pid, cmd, Keyword.put(opts, :read_counter, 2))
+            false -> {:error, error}
+          end
+      end
     end
   end
 
+  defp checkout_session(topology_pid, opts) do
+    case Mongo.get_session(opts) do
+      nil ->
+        with {:ok, session} <- Session.start_session(topology_pid, :read, opts) do
+          Process.put(:session, session)
+          {:own, session}
+        end
+
+      session ->
+        {:borrowed, session}
+    end
+  end
+
+  def checkin_session(:own, session, topology_pid) do
+    Session.end_session(topology_pid, session)
+    Process.delete(:session)
+  end
+
+  def checkin_session(:borrowed, _session, _topology_pid) do
+  end
+
   defimpl Enumerable do
-    defrecordp :state, [:topology_pid, :session, :cursor, :coll, :cmd, :docs]
-
-    def reduce(%Mongo.Stream{topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, docs: docs, cmd: cmd, opts: opts}, acc, reduce_fun) do
-      start_fun = fn -> state(topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, cmd: cmd, docs: docs) end
-      next_fun = next_fun(opts)
-      after_fun = after_fun(opts)
-
-      Stream.resource(start_fun, next_fun, after_fun).(acc, reduce_fun)
+    def reduce(%Mongo.Stream{} = stream, acc, reduce_fun) do
+      start_fun = fn -> stream end
+      Stream.resource(start_fun, next_fun(), after_fun()).(acc, reduce_fun)
     end
 
-    defp next_fun(opts) do
+    def slice(_cursor), do: {:error, __MODULE__}
+    def count(_stream), do: {:error, __MODULE__}
+    def member?(_stream, _term), do: {:error, __MODULE__}
+
+    defp next_fun() do
       fn
-        state(docs: [], cursor: 0) = state ->
-          {:halt, state}
-
-        # this is a regular cursor
-        state(docs: [], topology_pid: topology_pid, session: session, cursor: cursor, coll: coll, cmd: cmd) = state ->
-          case get_more(topology_pid, session, only_coll(coll), cursor, nil, opts) do
-            {:ok, %{cursor_id: cursor_id, docs: []}} -> {if(cmd[:tailable], do: [], else: :halt), state(state, cursor: cursor_id)}
-            {:ok, %{cursor_id: cursor_id, docs: docs}} -> {docs, state(state, cursor: cursor_id)}
-            {:error, error} -> raise error
-          end
-
-        state(docs: docs) = state ->
-          {docs, state(state, docs: [])}
-
-        ## In case of an error, we should raise the error
-        {:error, error} ->
-          raise error
+        %Mongo.Stream{docs: [], cursor: 0} = stream -> {:halt, stream}
+        %Mongo.Stream{docs: []} = stream -> get_more(stream)
+        %Mongo.Stream{docs: docs} = stream -> {docs, %{stream | docs: []}}
+        {:error, error} -> raise error
       end
     end
 
-    @doc """
-      Calls the GetCore-Command
-      See https://github.com/mongodb/specifications/blob/master/source/find_getmore_killcursors_commands.rst
-    """
-    def get_more(_topology_pid, session, coll, cursor, nil, opts) do
-      cmd =
-        [
-          getMore: %BSON.LongNumber{value: cursor},
-          collection: coll,
-          batchSize: opts[:batch_size],
-          maxTimeMS: opts[:max_time]
-        ]
-        |> filter_nils()
-
-      with {:ok, %{"cursor" => %{"id" => cursor_id, "nextBatch" => docs}, "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
-        {:ok, %{cursor_id: cursor_id, docs: docs}}
-      end
-    end
-
-    @doc """
-      Calls the KillCursors-Command
-      See https://github.com/mongodb/specifications/blob/master/source/find_getmore_killcursors_commands.rst
-    """
-    def kill_cursors(session, coll, cursor_ids, opts) do
-      cmd =
-        [
-          killCursors: coll,
-          cursors: cursor_ids |> Enum.map(fn id -> %BSON.LongNumber{value: id} end)
-        ]
-        |> filter_nils()
-
-      with {:ok, %{"cursorsAlive" => [], "cursorsNotFound" => [], "cursorsUnknown" => [], "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
-        :ok
-      end
-    end
-
-    defp filter_nils(keyword) when is_list(keyword) do
-      Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
-    end
-
-    defp after_fun(opts) do
+    defp after_fun() do
       fn
-        state(topology_pid: topology_pid, session: session, cursor: 0) ->
-          Session.end_implict_session(topology_pid, session)
+        %Mongo.Stream{topology_pid: topology_pid, session: {type, session}, cursor: 0} ->
+          Mongo.Stream.checkin_session(type, session, topology_pid)
 
-        state(topology_pid: topology_pid, session: session, cursor: cursor, coll: coll) ->
-          with :ok <- kill_cursors(session, only_coll(coll), [cursor], opts) do
-            Session.end_implict_session(topology_pid, session)
+        %Mongo.Stream{topology_pid: topology_pid, session: {type, session}} = stream ->
+          with :ok <- kill_cursors(stream) do
+            Mongo.Stream.checkin_session(type, session, topology_pid)
           end
 
         error ->
           error
+      end
+    end
+
+    defp get_more(%{session: {_type, session}} = stream) do
+      cmd =
+        [
+          getMore: %BSON.LongNumber{value: stream.cursor},
+          collection: only_coll(stream.coll),
+          batchSize: stream.opts[:batch_size],
+          maxTimeMS: stream.opts[:max_time]
+        ]
+        |> filter_nils()
+
+      case Mongo.exec_command_session(session, cmd, stream.opts) do
+        {:ok, %{"cursor" => %{"id" => cursor_id, "nextBatch" => []}, "ok" => ok}} when ok == 1 ->
+          {cmd_tailable?(stream), %{stream | cursor: cursor_id}}
+
+        {:ok, %{"cursor" => %{"id" => cursor_id, "nextBatch" => docs}, "ok" => ok}} when ok == 1 ->
+          {docs, %{stream | cursor: cursor_id}}
+
+        error ->
+          raise error
+      end
+    end
+
+    defp cmd_tailable?(%{cmd: cmd}) do
+      case cmd[:tailable] == true do
+        true -> []
+        false -> :halt
+      end
+    end
+
+    defp cmd_tailable?(_other) do
+      :halt
+    end
+
+    defp kill_cursors(%{session: {_type, session}} = stream) do
+      cmd = [
+        killCursors: only_coll(stream.coll),
+        cursors: [%BSON.LongNumber{value: stream.cursor}]
+      ]
+
+      with {:ok, %{"cursorsAlive" => [], "cursorsNotFound" => [], "cursorsUnknown" => [], "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, cmd, stream.opts) do
+        :ok
       end
     end
 
@@ -129,10 +138,8 @@ defmodule Mongo.Stream do
       coll
     end
 
-    # we cannot deterministically slice, so tell Enumerable to
-    # fall back on brute force
-    def slice(_cursor), do: {:error, __MODULE__}
-    def count(_stream), do: {:error, __MODULE__}
-    def member?(_stream, _term), do: {:error, __MODULE__}
+    defp filter_nils(keyword) when is_list(keyword) do
+      Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
+    end
   end
 end

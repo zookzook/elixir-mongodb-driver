@@ -57,6 +57,7 @@ defmodule Mongo do
   use Bitwise
   use Mongo.Messages
 
+  import Mongo.Session, only: [in_read_session: 3, in_write_session: 3]
   alias Mongo.Query
   alias Mongo.Topology
   alias Mongo.UrlParser
@@ -67,6 +68,7 @@ defmodule Mongo do
   alias Mongo.Error
 
   @timeout 15_000
+  @retry_timeout_seconds 120
 
   @type conn :: DbConnection.Conn
   @type collection :: String.t()
@@ -237,6 +239,153 @@ defmodule Mongo do
   defp uuid4() do
     <<u0::48, _::4, u1::12, _::2, u2::62>> = :crypto.strong_rand_bytes(16)
     <<u0::48, @uuid_v4::4, u1::12, @variant10::2, u2::62>>
+  end
+
+  @doc """
+  Convenient function for running multiple write commands in a transaction.
+
+  In case of `TransientTransactionError` or `UnknownTransactionCommitResult` the function will retry the whole transaction or
+  the commit of the transaction. You can specify a timeout (`:transaction_retry_timeout_s`) to limit the time of repeating.
+  The default value is 120 seconds. If you don't wait so long, you call `with_transaction` with the
+  option `transaction_retry_timeout_s: 10`. In this case after 10 seconds of retrying, the function will return
+  an error.
+
+  ## Example
+
+      {:ok, ids} = Mongo.transaction(top, fn ->
+      {:ok, %InsertOneResult{:inserted_id => id1}} = Mongo.insert_one(top, "dogs", %{name: "Greta"})
+      {:ok, %InsertOneResult{:inserted_id => id2}} = Mongo.insert_one(top, "dogs", %{name: "Waldo"})
+      {:ok, %InsertOneResult{:inserted_id => id3}} = Mongo.insert_one(top, "dogs", %{name: "Tom"})
+      {:ok, [id1, id2, id3]}
+      end, transaction_retry_timeout_s: 10)
+
+  If transaction/3 is called inside another transaction, the function is simply executed, without wrapping the new transaction call in any way.
+  If there is an error in the inner transaction and the error is rescued, or the inner transaction is aborted (abort_transaction/1),
+  the whole outer transaction is aborted, guaranteeing nothing will be committed.
+  """
+  @spec transaction(GenServer.server(), function) :: {:ok, any()} | :error | {:error, term}
+  def transaction(topology_pid, fun, opts \\ []) do
+    :session
+    |> Process.get()
+    |> do_transaction(topology_pid, fun, opts)
+  end
+
+  defp do_transaction(nil, topology_pid, fun, opts) do
+    ## try catch
+    with {:ok, session} <- Session.start_session(topology_pid, :write, opts) do
+      Process.put(:session, session)
+
+      try do
+        run_in_transaction(topology_pid, session, fun, DateTime.utc_now(), opts)
+      rescue
+        error ->
+          {:error, error}
+      after
+        Session.end_session(topology_pid, session)
+        Process.delete(:session)
+      end
+    end
+  end
+
+  defp do_transaction(_session, _topology_pid, fun, _opts) when is_function(fun, 0) do
+    fun.()
+  end
+
+  defp do_transaction(_session, _topology_pid, fun, opts) when is_function(fun, 1) do
+    fun.(opts)
+  end
+
+  defp run_in_transaction(topology_pid, session, fun, start_time, opts) do
+    Session.start_transaction(session)
+
+    case run_function(fun, Keyword.merge(opts, session: session)) do
+      :ok ->
+        handle_commit(session, start_time)
+
+      {:ok, result} ->
+        handle_commit(session, start_time, result)
+
+      {:error, error} ->
+        ## check in case of an error while processing transaction
+        Session.abort_transaction(session)
+        timeout = opts[:transaction_retry_timeout_s] || @retry_timeout_seconds
+
+        case Error.has_label(error, "TransientTransactionError") && DateTime.diff(DateTime.utc_now(), start_time, :second) < timeout do
+          true ->
+            run_in_transaction(topology_pid, session, fun, start_time, opts)
+
+          false ->
+            {:error, error}
+        end
+
+      :error ->
+        Session.abort_transaction(session)
+        :error
+
+      other ->
+        ## everything else is an error
+        Session.abort_transaction(session)
+        {:error, other}
+    end
+  end
+
+  ##
+  # calling the function and wrapping it to catch exceptions
+  #
+  defp run_function(fun, _opts) when is_function(fun, 0) do
+    try do
+      fun.()
+    rescue
+      reason -> {:error, reason}
+    end
+  end
+
+  defp run_function(fun, opts) when is_function(fun, 1) do
+    try do
+      fun.(opts)
+    rescue
+      reason -> {:error, reason}
+    end
+  end
+
+  defp handle_commit(session, start_time) do
+    case Session.commit_transaction(session, start_time) do
+      ## everything is okay
+      :ok ->
+        :ok
+
+      error ->
+        ## the rest is an error
+        Session.abort_transaction(session)
+        error
+    end
+  end
+
+  defp handle_commit(session, start_time, result) do
+    case Session.commit_transaction(session, start_time) do
+      ## everything is okay
+      :ok ->
+        {:ok, result}
+
+      error ->
+        ## the rest is an error
+        Session.abort_transaction(session)
+        error
+    end
+  end
+
+  def abort_transaction(reason) do
+    :session
+    |> Process.get()
+    |> abort_transaction(reason)
+  end
+
+  def abort_transaction(nil, reason) do
+    raise Mongo.Error.exception("Aborting transaction (#{inspect(reason)}) is not allowed, because there is no active transaction!")
+  end
+
+  def abort_transaction(_session, reason) do
+    raise Mongo.Error.exception("Aborting transaction, reason #{inspect(reason)}")
   end
 
   @doc """
@@ -427,28 +576,22 @@ defmodule Mongo do
     ## check, if retryable reads are enabled
     opts = Mongo.retryable_reads(opts)
 
-    with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
-         result <- exec_command_session(session, cmd, opts),
-         :ok <- Session.end_implict_session(topology_pid, session) do
-      case result do
-        {:error, error} ->
-          cond do
-            Error.not_writable_primary_or_recovering?(error, opts) ->
-              ## in case of explicitly
-              issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
+    case in_read_session(topology_pid, &exec_command_session(&1, cmd, &2), opts) do
+      {:ok, doc} ->
+        {:ok, doc}
 
-            Error.should_retry_read(error, cmd, opts) ->
-              issue_command(topology_pid, cmd, :read, Keyword.put(opts, :read_counter, 2))
+      {:error, error} ->
+        cond do
+          Error.not_writable_primary_or_recovering?(error, opts) ->
+            ## in case of explicitly
+            issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
 
-            true ->
-              {:error, error}
-          end
+          Error.should_retry_read(error, cmd, opts) ->
+            issue_command(topology_pid, cmd, :read, Keyword.put(opts, :read_counter, 2))
 
-        _other ->
-          result
-      end
-    else
-      _ -> {:error, Mongo.Error.exception("Command processing error")}
+          true ->
+            {:error, error}
+        end
     end
   end
 
@@ -456,26 +599,22 @@ defmodule Mongo do
     ## check, if retryable reads are enabled
     opts = Mongo.retryable_writes(opts, acknowledged?(cmd[:writeConcerns]))
 
-    with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
-         result <- exec_command_session(session, cmd, opts),
-         :ok <- Session.end_implict_session(topology_pid, session) do
-      case result do
-        {:error, error} ->
-          cond do
-            Error.not_writable_primary_or_recovering?(error, opts) ->
-              ## in case of explicitly
-              issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
+    case in_write_session(topology_pid, &exec_command_session(&1, cmd, &2), opts) do
+      {:ok, doc} ->
+        {:ok, doc}
 
-            Error.should_retry_write(error, cmd, opts) ->
-              issue_command(topology_pid, cmd, :write, Keyword.put(opts, :write_counter, 2))
+      {:error, error} ->
+        cond do
+          Error.not_writable_primary_or_recovering?(error, opts) ->
+            ## in case of explicitly
+            issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
 
-            true ->
-              {:error, error}
-          end
+          Error.should_retry_write(error, cmd, opts) ->
+            issue_command(topology_pid, cmd, :write, Keyword.put(opts, :write_counter, 2))
 
-        result ->
-          result
-      end
+          true ->
+            {:error, error}
+        end
     end
   end
 
@@ -1389,16 +1528,16 @@ defmodule Mongo do
   Convenient function that drops the database `name`.
   """
   @spec drop_database(GenServer.server(), String.t() | nil) :: :ok | {:error, Mongo.Error.t()}
-  def drop_database(topology_pid, name \\ nil)
+  def drop_database(topology_pid, name, opts \\ [])
 
-  def drop_database(topology_pid, nil) do
-    with {:ok, _} <- Mongo.issue_command(topology_pid, [dropDatabase: 1], :write, []) do
+  def drop_database(topology_pid, nil, opts) do
+    with {:ok, _} <- Mongo.issue_command(topology_pid, [dropDatabase: 1], :write, opts) do
       :ok
     end
   end
 
-  def drop_database(topology_pid, name) do
-    with {:ok, _} <- Mongo.issue_command(topology_pid, [dropDatabase: 1], :write, database: name) do
+  def drop_database(topology_pid, name, opts) do
+    with {:ok, _} <- Mongo.issue_command(topology_pid, [dropDatabase: 1], :write, Keyword.put(opts, :database, name)) do
       :ok
     end
   end
@@ -1442,7 +1581,7 @@ defmodule Mongo do
   def retryable_reads(opts) do
     case opts[:read_counter] do
       nil ->
-        case opts[:retryable_reads] == true && opts[:session] == nil do
+        case opts[:retryable_reads] == true && get_session(opts) == nil do
           true -> opts ++ [read_counter: 1]
           false -> opts
         end
@@ -1651,4 +1790,8 @@ defmodule Mongo do
   defp command_color(:commitTransaction), do: :magenta
   defp command_color(:configureFailPoint), do: :blue
   defp command_color(_), do: nil
+
+  def get_session(opts) do
+    Process.get(:session) || opts[:session]
+  end
 end

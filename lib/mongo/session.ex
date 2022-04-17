@@ -45,15 +45,9 @@ defmodule Mongo.Session do
 
   ## Implicit vs explicit sessions
 
-  In most cases the driver will create implicit sessions for you. Each time when you run a query or a command the driver
-  executes the following functions:
-
-      with {:ok, session} <- Session.start_implicit_session(topology_pid, type, opts),
-         result <- exec_command_session(session, new_cmd, opts),
-         :ok <- Session.end_implict_session(topology_pid, session) do
-      ...
-
-  This behaviour is specified by the mongodb specification for [drivers](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst#explicit-vs-implicit-sessions).
+  In most cases the driver will create implicit sessions for you. The session is put in the process' dictionary under the key `:session` and the opts
+  is extended by `:session` as well. This behaviour is specified by the mongodb specification for
+  [drivers](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst#explicit-vs-implicit-sessions).
 
   If you use the `:causal_consistency` flag, then you need to create an explicit session:
 
@@ -95,6 +89,7 @@ defmodule Mongo.Session do
 
   """
 
+  require Logger
   import Keywords
   import Mongo.WriteConcern
 
@@ -114,7 +109,6 @@ defmodule Mongo.Session do
   # * `conn` the used connection to the database
   # * `server_session` the server_session data
   # * `opts` options
-  # * `implicit` true or false
   # * `causal_consistency` true or false
   # * `wire_version` current wire version to check if transactions are possible
   # * `recovery_token` tracked recovery token from response in a sharded transaction
@@ -125,7 +119,6 @@ defmodule Mongo.Session do
             server_session: nil,
             causal_consistency: false,
             operation_time: nil,
-            implicit: false,
             wire_version: 0,
             state: :no_transaction,
             opts: []
@@ -134,8 +127,8 @@ defmodule Mongo.Session do
   Start the generic state machine.
   """
   # @spec start_link(GenServer.server, ServerSession.t, atom, integer, keyword()) :: {:ok, Session.t} | :ignore | {:error, term()}
-  def start_link(topology, conn, address, server_session, type, wire_version, opts) do
-    {:ok, spawn_link(__MODULE__, :init, [topology, conn, address, server_session, type, wire_version, opts])}
+  def start_link(topology, conn, address, server_session, wire_version, opts) do
+    {:ok, spawn_link(__MODULE__, :init, [topology, conn, address, server_session, wire_version, opts])}
   end
 
   @doc """
@@ -147,40 +140,13 @@ defmodule Mongo.Session do
 
   """
   @spec start_session(GenServer.server(), atom, keyword()) :: {:ok, Session.t()} | {:error, term()}
-  def start_session(topology_pid, type, opts \\ []) do
-    case Topology.checkout_session(topology_pid, type, :explicit, opts) do
+  def start_session(topology_pid, read_write_type, opts \\ []) do
+    case Topology.checkout_session(topology_pid, read_write_type, opts) do
       {:ok, session} ->
         {:ok, session}
 
       :new_connection ->
-        start_session(topology_pid, type, opts)
-    end
-  end
-
-  @doc """
-  Start a new implicit session only if no explicit session exists. It returns the session in the `opts` keyword list or
-  creates a new one.
-  """
-  @spec start_implicit_session(GenServer.server(), atom, keyword()) :: {:ok, Session.t()} | {:error, term()}
-  def start_implicit_session(topology_pid, type, opts) do
-    case Keyword.get(opts, :session, nil) do
-      nil ->
-        case Topology.checkout_session(topology_pid, type, :implicit, opts) do
-          {:ok, session} ->
-            {:ok, session}
-
-          :new_connection ->
-            start_implicit_session(topology_pid, type, opts)
-
-          {:error, error} ->
-            {:error, error}
-
-          other ->
-            {:error, Mongo.Error.exception("Unknown result #{inspect(other)} while calling Topology.checkout_session/4")}
-        end
-
-      session ->
-        {:ok, session}
+        start_session(topology_pid, read_write_type, opts)
     end
   end
 
@@ -273,23 +239,6 @@ defmodule Mongo.Session do
   end
 
   @doc """
-  End implicit session. There is no need to call this function directly. It is called automatically.
-  """
-  @spec end_implict_session(GenServer.server(), Session.t()) :: :ok | :error
-  def end_implict_session(topology_pid, session) do
-    case call(session, :end_implicit_session) do
-      {:ok, session_server} ->
-        Topology.checkin_session(topology_pid, session_server)
-
-      :noop ->
-        :ok
-
-      _ ->
-        :error
-    end
-  end
-
-  @doc """
   End explicit session.
   """
   @spec end_session(GenServer.server(), Session.t()) :: :ok | :error
@@ -328,6 +277,7 @@ defmodule Mongo.Session do
   Drivers are free to encourage their users to design idempotent callbacks.
 
   """
+  @deprecated "Use Mongo.transaction/3 instead"
   @spec with_transaction(Session.t(), (keyword() -> {:ok, any()} | :error)) :: {:ok, any()} | :error | {:error, term}
   def with_transaction(topology_pid, fun, opts \\ []) do
     with {:ok, session} <- Session.start_session(topology_pid, :write, opts),
@@ -338,35 +288,58 @@ defmodule Mongo.Session do
   end
 
   def run_in_transaction(topology_pid, session, fun, start_time, opts) do
-    with :ok <- Session.start_transaction(session),
-         {:ok, result} <- run_function(fun, Keyword.merge(opts, session: session)),
-         commit_result <- commit_transaction(session, start_time) do
-      ## check the result
-      case commit_result do
-        ## everything is okay
-        :ok ->
-          {:ok, result}
+    start_transaction(session)
 
-        error ->
-          ## the rest is an error
-          abort_transaction(session)
-          error
-      end
-    else
+    case run_function(fun, Keyword.merge(opts, session: session)) do
+      :ok ->
+        handle_commit(session, start_time)
+
+      {:ok, result} ->
+        handle_commit(session, start_time, result)
+
       {:error, error} ->
         ## check in case of an error while processing transaction
         abort_transaction(session)
         timeout = opts[:transaction_retry_timeout_s] || @retry_timeout_seconds
 
         case Error.has_label(error, "TransientTransactionError") && DateTime.diff(DateTime.utc_now(), start_time, :second) < timeout do
-          true -> run_in_transaction(topology_pid, session, fun, start_time, opts)
-          false -> {:error, error}
+          true ->
+            run_in_transaction(topology_pid, session, fun, start_time, opts)
+
+          false ->
+            {:error, error}
         end
 
       other ->
         ## everything else is an error
         abort_transaction(session)
         {:error, other}
+    end
+  end
+
+  defp handle_commit(session, start_time) do
+    case commit_transaction(session, start_time) do
+      ## everything is okay
+      :ok ->
+        :ok
+
+      error ->
+        ## the rest is an error
+        abort_transaction(session)
+        error
+    end
+  end
+
+  defp handle_commit(session, start_time, result) do
+    case commit_transaction(session, start_time) do
+      ## everything is okay
+      :ok ->
+        {:ok, result}
+
+      error ->
+        ## the rest is an error
+        abort_transaction(session)
+        error
     end
   end
 
@@ -398,14 +371,6 @@ defmodule Mongo.Session do
   end
 
   @doc """
-  Return the server session used in the session.
-  """
-  @spec server_session(Session.t()) :: ServerSession.t()
-  def server_session(pid) do
-    call(pid, :server_session)
-  end
-
-  @doc """
   Check if the session is alive.
   """
   @spec alive?(Session.t()) :: boolean()
@@ -426,7 +391,7 @@ defmodule Mongo.Session do
     send(pid, {:cast, arguments})
   end
 
-  def init(topology, conn, address, server_session, type, wire_version, opts) do
+  def init(topology, conn, address, server_session, wire_version, opts) do
     ## in case of `:retryable_write` we need to inc the transaction id
     server_session =
       case opts[:retryable_write] do
@@ -439,7 +404,6 @@ defmodule Mongo.Session do
       conn: conn,
       address: address,
       server_session: server_session,
-      implicit: type == :implicit,
       wire_version: wire_version,
       recovery_token: nil,
       causal_consistency: Keyword.get(opts, :causal_consistency, false),
@@ -590,18 +554,6 @@ defmodule Mongo.Session do
     {:stop_and_reply, {:ok, session_server}}
   end
 
-  def handle_call_event(:end_implicit_session, _state, %Session{server_session: session_server, implicit: true}) do
-    {:stop_and_reply, {:ok, session_server}}
-  end
-
-  def handle_call_event(:end_implicit_session, _state, %Session{implicit: false}) do
-    {:keep_state_and_data, :noop}
-  end
-
-  def handle_call_event(:server_session, _state, %Session{server_session: session_server, implicit: implicit}) do
-    {:keep_state_and_data, session_server, implicit}
-  end
-
   def handle_call_event({:select_server, opts}, _state, %Session{topology: topology} = data) do
     case Topology.select_server(topology, :write, opts) do
       {:ok, conn} ->
@@ -722,5 +674,42 @@ defmodule Mongo.Session do
 
   defp read_concern(%Session{causal_consistency: true, operation_time: time}, read_concern) when is_list(read_concern) do
     read_concern ++ [afterClusterTime: time]
+  end
+
+  @doc """
+  This function allows nested `in_session` calls and provides a session if no session exists so far. A provided
+  session lives in the Process dictionary `:session` or is specified in the `opts` dictionary.
+  """
+  def in_write_session(topology_pid, fun, opts) do
+    opts
+    |> Mongo.get_session()
+    |> in_session(topology_pid, :write, fun, opts)
+  end
+
+  def in_read_session(topology_pid, fun, opts) do
+    opts
+    |> Mongo.get_session()
+    |> in_session(topology_pid, :read, fun, opts)
+  end
+
+  def in_session(nil, topology_pid, read_write_type, fun, opts) do
+    with {:ok, session} <- start_session(topology_pid, read_write_type, opts) do
+      Process.put(:session, session)
+      opts = Keyword.put(opts, :session, session)
+
+      try do
+        fun.(session, opts)
+      rescue
+        error ->
+          {:error, error}
+      after
+        end_session(topology_pid, session)
+        Process.delete(:session)
+      end
+    end
+  end
+
+  def in_session(session, _topology_pid, _read_write_type, fun, opts) do
+    fun.(session, opts)
   end
 end

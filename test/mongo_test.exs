@@ -1,6 +1,8 @@
 defmodule Mongo.Test do
   use ExUnit.Case
 
+  import CollectionCase, only: [unique_collection: 0]
+
   defmodule TestUser do
     defstruct name: "John", age: 27
 
@@ -11,7 +13,7 @@ defmodule Mongo.Test do
 
   setup_all do
     assert {:ok, pid} = Mongo.TestConnection.connect()
-    Mongo.drop_database(pid)
+    Mongo.drop_database(pid, nil, w: 3)
     {:ok, [pid: pid]}
   end
 
@@ -591,5 +593,81 @@ defmodule Mongo.Test do
     user = struct(TestUser, user)
 
     assert value == user
+  end
+
+  test "nested transaction", %{pid: top} do
+    coll = unique_collection()
+    Mongo.drop_collection(top, coll, w: 3)
+    Mongo.create(top, coll, w: 3)
+
+    assert :error =
+             Mongo.transaction(top, fn _opts ->
+               Mongo.insert_one(top, coll, %{name: "Tom", age: 13})
+               test_insert_1(top, coll)
+               test_insert_2(top, coll)
+               :error
+             end)
+
+    assert nil == Mongo.find_one(top, coll, %{name: "Tom"})
+    assert nil == Mongo.find_one(top, coll, %{name: "Greta"})
+    assert nil == Mongo.find_one(top, coll, %{name: "Oskar"})
+
+    assert {:error, %RuntimeError{message: "Error"}} =
+             Mongo.transaction(top, fn ->
+               Mongo.insert_one(top, coll, %{name: "Tom", age: 13})
+               test_insert_1(top, coll)
+               test_insert_3(top, coll)
+               :not_returning
+             end)
+
+    assert nil == Mongo.find_one(top, coll, %{name: "Tom"})
+    assert nil == Mongo.find_one(top, coll, %{name: "Greta"})
+    assert nil == Mongo.find_one(top, coll, %{name: "Oskar"})
+
+    assert {:error, %Mongo.Error{message: "Aborting transaction, reason :many_reasons"}} =
+             Mongo.transaction(top, fn ->
+               Mongo.insert_one(top, coll, %{name: "Tom", age: 13})
+               test_insert_1(top, coll)
+               test_insert_4(top, coll)
+               :ok
+             end)
+
+    assert nil == Mongo.find_one(top, coll, %{name: "Tom"})
+    assert nil == Mongo.find_one(top, coll, %{name: "Greta"})
+    assert nil == Mongo.find_one(top, coll, %{name: "Oskar"})
+
+    assert :ok =
+             Mongo.transaction(top, fn ->
+               Mongo.insert_one(top, coll, %{name: "Tom", age: 13})
+               test_insert_1(top, coll)
+               test_insert_2(top, coll)
+               :ok
+             end)
+
+    assert %{"age" => 13, "name" => "Tom"} = Mongo.find_one(top, coll, %{name: "Tom"})
+    assert %{"age" => 11, "name" => "Greta"} = Mongo.find_one(top, coll, %{name: "Greta"})
+    assert %{"age" => 14, "name" => "Oskar"} = Mongo.find_one(top, coll, %{name: "Oskar"})
+  end
+
+  def test_insert_1(top, coll) do
+    Mongo.insert_one(top, coll, %{name: "Greta", age: 11})
+  end
+
+  def test_insert_2(top, coll) do
+    Mongo.transaction(top, fn _opts ->
+      Mongo.insert_one(top, coll, %{name: "Oskar", age: 14})
+      :ok
+    end)
+  end
+
+  def test_insert_3(top, coll) do
+    Mongo.transaction(top, fn _opts ->
+      Mongo.insert_one(top, coll, %{name: "Fass", age: 15})
+      raise "Error"
+    end)
+  end
+
+  def test_insert_4(_top, _coll) do
+    Mongo.abort_transaction(:many_reasons)
   end
 end

@@ -3,7 +3,7 @@ defmodule Mongo.NotWritablePrimaryTest do
 
   setup_all do
     assert {:ok, top} = Mongo.TestConnection.connect()
-    Mongo.drop_database(top)
+    Mongo.drop_database(top, nil, w: 3)
     %{pid: top}
   end
 

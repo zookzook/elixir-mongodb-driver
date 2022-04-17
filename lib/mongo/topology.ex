@@ -98,9 +98,9 @@ defmodule Mongo.Topology do
     GenServer.call(pid, :wire_version)
   end
 
-  def checkout_session(pid, cmd_type, type, opts \\ []) do
+  def checkout_session(pid, read_write_type, opts \\ []) do
     timeout = Keyword.get(opts, :checkout_timeout, @default_checkout_timeout)
-    GenServer.call(pid, {:checkout_session, cmd_type, type, opts}, timeout)
+    GenServer.call(pid, {:checkout_session, read_write_type, opts}, timeout)
   end
 
   def checkin_session(pid, server_session) do
@@ -372,10 +372,10 @@ defmodule Mongo.Topology do
   ##
   # checkout a new session
   #
-  def handle_call({:checkout_session, cmd_type, type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
-    case TopologyDescription.select_servers(topology, cmd_type, opts) do
+  def handle_call({:checkout_session, read_write_type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
+    case TopologyDescription.select_servers(topology, read_write_type, opts) do
       :empty ->
-        Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :checkout_session, cmd_type: cmd_type, topology: topology, opts: opts})
+        Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :checkout_session, cmd_type: read_write_type, topology: topology, opts: opts})
         ## no servers available, wait for connection
         {:noreply, %{state | waiting_pids: [from | waiting]}}
 
@@ -384,7 +384,7 @@ defmodule Mongo.Topology do
         with {:ok, connection} <- get_connection(address, state),
              wire_version <- wire_version(address, topology),
              {server_session, new_state} <- checkout_server_session(state),
-             {:ok, session} <- Session.start_link(self(), connection, address, server_session, type, wire_version, opts) do
+             {:ok, session} <- Session.start_link(self(), connection, address, server_session, wire_version, opts) do
           {:reply, {:ok, session}, new_state}
         else
           ## in case of an error, just return the error
@@ -397,10 +397,10 @@ defmodule Mongo.Topology do
     end
   end
 
-  def handle_call({:select_server, cmd_type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
-    case TopologyDescription.select_servers(topology, cmd_type, opts) do
+  def handle_call({:select_server, read_write_type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
+    case TopologyDescription.select_servers(topology, read_write_type, opts) do
       :empty ->
-        Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :select_server, cmd_type: cmd_type, topology: topology, opts: opts})
+        Mongo.Events.notify(%ServerSelectionEmptyEvent{action: :select_server, cmd_type: read_write_type, topology: topology, opts: opts})
         ## no servers available, wait for connection
         {:noreply, %{state | waiting_pids: [from | waiting]}}
 

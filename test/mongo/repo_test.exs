@@ -17,7 +17,7 @@ defmodule Mongo.RepoTest do
 
   setup do
     assert {:ok, pid} = start_supervised({Mongo, MyRepo.config()})
-    Mongo.drop_database(pid)
+    Mongo.drop_database(pid, nil, w: 3)
     {:ok, [pid: pid]}
   end
 
@@ -28,6 +28,54 @@ defmodule Mongo.RepoTest do
                url: "mongodb://127.0.0.1:27017/mongodb_test",
                show_sensitive_data_on_connection_error: true
              ] = MyRepo.config()
+    end
+  end
+
+  describe "transaction/3" do
+    test "returns a single document for the given bson id" do
+      assert :error =
+               MyRepo.transaction(fn ->
+                 {:ok, %Post{title: "test"}} =
+                   Post.new()
+                   |> Map.put(:title, "test")
+                   |> MyRepo.insert()
+
+                 :error
+               end)
+
+      assert {:error, :not_found} = MyRepo.fetch_by(Post, %{title: "test"})
+
+      assert :error =
+               MyRepo.transaction(fn ->
+                 {:ok, %Post{title: "test"}} =
+                   Post.new()
+                   |> Map.put(:title, "test")
+                   |> MyRepo.insert()
+
+                 MyRepo.transaction(fn ->
+                   {:ok, %Post{title: "nested"}} =
+                     Post.new()
+                     |> Map.put(:title, "nested")
+                     |> MyRepo.insert()
+
+                   :error
+                 end)
+               end)
+
+      assert {:error, :not_found} = MyRepo.fetch_by(Post, %{title: "test"})
+      assert {:error, :not_found} = MyRepo.fetch_by(Post, %{title: "nested"})
+
+      assert {:ok, post} =
+               MyRepo.transaction(fn ->
+                 Post.new()
+                 |> Map.put(:title, "test")
+                 |> MyRepo.insert()
+               end)
+
+      assert "test" = post.title
+
+      assert {:ok, %Post{title: title}} = MyRepo.fetch_by(Post, %{title: "test"})
+      assert "test" = title
     end
   end
 
