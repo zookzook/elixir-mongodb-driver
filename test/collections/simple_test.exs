@@ -8,7 +8,7 @@ defmodule Collections.SimpleTest do
 
   setup_all do
     assert {:ok, pid} = Mongo.TestConnection.connect()
-    Mongo.drop_database(pid)
+    Mongo.drop_database(pid, nil, w: 3)
     {:ok, [pid: pid]}
   end
 

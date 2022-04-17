@@ -157,10 +157,11 @@ defmodule Mongo.BulkWrite do
   import Keywords
   import Mongo.Utils
   import Mongo.WriteConcern
+  import Mongo.Session, only: [in_write_session: 3]
+
   alias Mongo.UnorderedBulk
   alias Mongo.OrderedBulk
   alias Mongo.BulkWriteResult
-  alias Mongo.Session
 
   @doc """
   Executes unordered and ordered bulk writes.
@@ -182,20 +183,19 @@ defmodule Mongo.BulkWrite do
   """
   @spec write(GenServer.server(), UnorderedBulk.t() | OrderedBulk.t(), Keyword.t()) :: Mongo.BulkWriteResult.t()
   def write(topology_pid, %UnorderedBulk{} = bulk, opts) do
-    with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
-         result = one_bulk_write(topology_pid, session, bulk, opts),
-         :ok <- Session.end_implict_session(topology_pid, session) do
-      result
-    end
+    in_write_session(topology_pid, &one_bulk_write(&1, topology_pid, bulk, &2), opts)
   end
 
-  def write(topology_pid, %OrderedBulk{coll: coll, ops: ops}, opts) do
+  def write(topology_pid, %OrderedBulk{} = bulk, opts) do
+    in_write_session(topology_pid, &write_ordered_bulk(&1, topology_pid, bulk, &2), opts)
+  end
+
+  defp write_ordered_bulk(session, topology_pid, %OrderedBulk{coll: coll, ops: ops}, opts) do
     write_concern = write_concern(opts)
 
     empty = %BulkWriteResult{acknowledged: acknowledged?(write_concern)}
 
-    with {:ok, session} <- Session.start_implicit_session(topology_pid, :write, opts),
-         {:ok, limits} <- Mongo.limits(topology_pid) do
+    with {:ok, limits} <- Mongo.limits(topology_pid) do
       max_batch_size = limits.max_write_batch_size
 
       ops
@@ -224,7 +224,7 @@ defmodule Mongo.BulkWrite do
   # The function returns a keyword list with the results of each operation group:
   # For the details see https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#results
   #
-  defp one_bulk_write(topology_pid, session, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, opts) do
+  defp one_bulk_write(session, topology_pid, %UnorderedBulk{coll: coll, inserts: inserts, updates: updates, deletes: deletes}, opts) do
     with {:ok, limits} <- Mongo.limits(topology_pid) do
       max_batch_size = limits.max_write_batch_size
 

@@ -634,14 +634,38 @@ For more information see:
 Since MongoDB 4.x, transactions for multiple write operations are possible. The [Mongo.Session](https://hexdocs.pm/mongodb_driver/Mongo.Session.html#content) is responsible for the details and you can use a convenient api for transactions:
 
 ```elixir
-alias Mongo.Session
 
-{:ok, ids} = Session.with_transaction(top, fn opts ->
-{:ok, %InsertOneResult{:inserted_id => id1}} = Mongo.insert_one(top, "dogs", %{name: "Greta"}, opts)
-{:ok, %InsertOneResult{:inserted_id => id2}} = Mongo.insert_one(top, "dogs", %{name: "Waldo"}, opts)
-{:ok, %InsertOneResult{:inserted_id => id3}} = Mongo.insert_one(top, "dogs", %{name: "Tom"}, opts)
+{:ok, ids} = Mongo.transaction(top, fn ->
+{:ok, %InsertOneResult{:inserted_id => id1}} = Mongo.insert_one(top, "dogs", %{name: "Greta"})
+{:ok, %InsertOneResult{:inserted_id => id2}} = Mongo.insert_one(top, "dogs", %{name: "Waldo"})
+{:ok, %InsertOneResult{:inserted_id => id3}} = Mongo.insert_one(top, "dogs", %{name: "Tom"})
 {:ok, [id1, id2, id3]}
 end, w: 1)
+
+```
+The transaction/3 function supports nesting. This allows the functions to be called from each other and all write operations 
+are still in the same transaction. The session is stored in the process dictionary under the key `:session`. The surrounding 
+transaction/3 call creates the session and starts the transaction, storing the session in the process dictionary, commits or
+aborts the transaction. All other transaction/3 calls just call the function parameter without other actions.
+
+```elixir
+def insert_dog(top, name) do
+  Mongo.insert_one(top, "dogs", %{name: name})
+end
+
+def insert_dogs(top) do
+  Mongo.transaction(top, fn ->
+    insert_dog(top, "Tom")
+    insert_dog(top, "Bell")
+    insert_dog(top, "Fass")
+    :ok
+  end)
+end
+
+:ok = Mongo.transaction(top, fn ->
+    insert_dog(top, "Greta")
+    insert_dogs(top)
+end)
 ```
 
 It is also possible to get more control over the progress of the transaction:
@@ -660,11 +684,7 @@ Mongo.insert_one(top, "dogs", %{name: "Tom"}, session: session)
 :ok = Session.end_session(top, session)
 ```
 
-For more information see:
-
-- [Mongo.Session](https://hexdocs.pm/mongodb_driver/Mongo.Session.html#content)
-
-and have a look at the test units as well.
+For more information see [Mongo.Session](https://hexdocs.pm/mongodb_driver/Mongo.Session.html#content) and have a look at the test units as well.
 
 ### Command Monitoring
 
@@ -712,12 +732,6 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 
 - For `--sslMode` you can use one of `allowSSL` or `preferSSL`
 - You can enable any other options you want when starting `mongod`
-
-## More Examples
-
-There are some basic examples in the `example` folder. But if you want to see the driver in action
-take a look at [Vega](https://github.com/zookzook/vega), especially the [Board.ex](https://github.com/zookzook/vega/blob/master/lib/vega/board.ex) module for using the transaction api together with
-bulk operations.
 
 ## Special Thanks
 

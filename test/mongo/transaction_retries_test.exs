@@ -158,7 +158,7 @@ defmodule Mongo.TransactionRetriesTest do
 
     Mongo.admin_command(top, configureFailPoint: "failCommand", mode: "off")
 
-    assert [:configureFailPoint, :abortTransaction, :insert, :configureFailPoint, :create] = get_succeeded_events(catcher)
+    assert [:configureFailPoint, :abortTransaction, :insert, :configureFailPoint, :create] = get_succeeded_events(catcher) |> Enum.reject(fn event -> event == :more_to_come end)
   end
 
   defp get_succeeded_events(catcher) do

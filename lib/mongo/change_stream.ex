@@ -4,37 +4,43 @@ defmodule Mongo.ChangeStream do
   alias Mongo.Session
   alias Mongo.Error
 
-  import Record, only: [defrecordp: 2]
-
-  defstruct [:topology_pid, :session, :doc, :cmd, :on_resume_token, :opts]
+  defstruct [
+    :topology_pid,
+    :session,
+    :doc,
+    :cmd,
+    :on_resume_token,
+    :opts
+  ]
 
   def new(topology_pid, cmd, on_resume_token_fun, opts) do
     ## check, if retryable reads are enabled
     opts = Mongo.retryable_reads(opts)
 
-    with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
-         {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
-      %Mongo.ChangeStream{
-        topology_pid: topology_pid,
-        session: session,
-        doc: doc,
-        on_resume_token: on_resume_token_fun,
-        cmd: cmd,
-        opts: opts
-      }
-    else
-      {:error, error} ->
-        case Error.should_retry_read(error, cmd, opts) do
-          true -> new(topology_pid, cmd, on_resume_token_fun, Keyword.put(opts, :read_counter, 2))
-          false -> {:error, error}
-        end
+    with {:ok, session} <- Session.start_session(topology_pid, :read, opts) do
+      case Mongo.exec_command_session(session, cmd, opts) do
+        {:ok, %{"ok" => ok} = doc} when ok == 1 ->
+          %Mongo.ChangeStream{
+            topology_pid: topology_pid,
+            session: session,
+            doc: doc,
+            on_resume_token: on_resume_token_fun,
+            cmd: cmd,
+            opts: opts
+          }
+
+        {:error, error} ->
+          Session.end_session(topology_pid, session)
+
+          case Error.should_retry_read(error, cmd, opts) do
+            true -> new(topology_pid, cmd, on_resume_token_fun, Keyword.put(opts, :read_counter, 2))
+            false -> {:error, error}
+          end
+      end
     end
   end
 
   defimpl Enumerable do
-    defrecordp :change_stream, [:resume_token, :op_time, :cmd, :on_resume_token]
-    defrecordp :state, [:topology_pid, :session, :cursor, :coll, :change_stream, :docs]
-
     def reduce(change_stream, acc, reduce_fun) do
       start_fun = fn ->
         with {:ok, state} <- aggregate(change_stream.topology_pid, change_stream.session, change_stream.doc, change_stream.cmd, change_stream.on_resume_token) do
@@ -50,18 +56,18 @@ defmodule Mongo.ChangeStream do
 
     defp next_fun(opts) do
       fn
-        state(docs: [], cursor: 0) = state ->
+        %{docs: [], cursor: 0} = state ->
           {:halt, state}
 
-        state(docs: [], topology_pid: topology_pid, session: session, cursor: cursor, change_stream: change_stream, coll: coll) = state ->
+        %{docs: [], topology_pid: topology_pid, session: session, cursor: cursor, change_stream: change_stream, coll: coll} = state ->
           case get_more(topology_pid, session, only_coll(coll), cursor, change_stream, opts) do
-            {:ok, %{cursor_id: cursor_id, docs: docs, change_stream: change_stream}} -> {docs, state(state, cursor: cursor_id, change_stream: change_stream)}
-            {:resume, state(docs: docs) = state} -> {docs, state(state, docs: [])}
+            {:ok, %{cursor_id: cursor_id, docs: docs, change_stream: change_stream}} -> {docs, %{state | cursor: cursor_id, change_stream: change_stream}}
+            {:resume, %{docs: docs} = state} -> {docs, %{state | docs: []}}
             {:error, error} -> raise error
           end
 
-        state(docs: docs) = state ->
-          {docs, state(state, docs: [])}
+        %{docs: docs} = state ->
+          {docs, %{state | docs: []}}
 
         ## In case of an error, we should raise the error
         {:error, error} ->
@@ -70,15 +76,19 @@ defmodule Mongo.ChangeStream do
     end
 
     def aggregate(topology_pid, cmd, fun, opts) do
-      with {:ok, session} <- Session.start_implicit_session(topology_pid, :read, opts),
-           {:ok, %{"ok" => ok} = doc} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
-        aggregate(topology_pid, session, doc, cmd, fun)
-      else
-        {:error, error} ->
-          case Error.should_retry_read(error, cmd, opts) do
-            true -> aggregate(topology_pid, cmd, fun, Keyword.put(opts, :read_counter, 2))
-            false -> {:error, error}
-          end
+      with {:ok, session} <- Session.start_session(topology_pid, :read, opts) do
+        case Mongo.exec_command_session(session, cmd, opts) do
+          {:ok, %{"ok" => ok} = doc} when ok == 1 ->
+            aggregate(topology_pid, session, doc, cmd, fun)
+
+          {:error, error} ->
+            Session.end_session(topology_pid, session)
+
+            case Error.should_retry_read(error, cmd, opts) do
+              true -> aggregate(topology_pid, cmd, fun, Keyword.put(opts, :read_counter, 2))
+              false -> {:error, error}
+            end
+        end
       end
     end
 
@@ -114,9 +124,9 @@ defmodule Mongo.ChangeStream do
 
         fun.(resume_token)
 
-        change_stream = change_stream(resume_token: resume_token, op_time: op_time, cmd: cmd, on_resume_token: fun)
+        change_stream = %{resume_token: resume_token, op_time: op_time, cmd: cmd, on_resume_token: fun}
 
-        {:ok, state(topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, change_stream: change_stream, docs: docs)}
+        {:ok, %{topology_pid: topology_pid, session: session, cursor: cursor_id, coll: coll, change_stream: change_stream, docs: docs}}
       end
     end
 
@@ -124,7 +134,7 @@ defmodule Mongo.ChangeStream do
       Calls the GetCore-Command
       See https://github.com/mongodb/specifications/blob/master/source/find_getmore_killcursors_commands.rst
     """
-    def get_more(topology_pid, session, coll, cursor_id, change_stream(resume_token: resume_token, op_time: op_time, cmd: aggregate_cmd, on_resume_token: fun) = change_stream, opts) do
+    def get_more(topology_pid, session, coll, cursor_id, %{resume_token: resume_token, op_time: op_time, cmd: aggregate_cmd, on_resume_token: fun} = change_stream, opts) do
       get_more =
         [
           getMore: %BSON.LongNumber{value: cursor_id},
@@ -136,9 +146,9 @@ defmodule Mongo.ChangeStream do
 
       case Mongo.exec_command_session(session, get_more, opts) do
         {:ok, %{"operationTime" => op_time, "cursor" => %{"id" => new_cursor_id, "nextBatch" => docs} = cursor, "ok" => ok}} when ok == 1 ->
-          old_token = change_stream(change_stream, :resume_token)
+          old_token = change_stream.resume_token
           change_stream = update_change_stream(change_stream, cursor["postBatchResumeToken"], op_time, List.last(docs))
-          new_token = change_stream(change_stream, :resume_token)
+          new_token = change_stream.resume_token
 
           case token_changes(old_token, new_token) do
             true -> fun.(new_token)
@@ -158,7 +168,8 @@ defmodule Mongo.ChangeStream do
           aggregate_cmd = Keyword.update!(aggregate_cmd, :pipeline, fn _ -> [%{"$changeStream" => stream_opts} | pipeline] end)
 
           # kill the cursor
-          kill_cursors(session, coll, [cursor_id], opts)
+          kill_cursor(session, coll, cursor_id, opts)
+          Session.end_session(topology_pid, session)
 
           # Start aggregation again...
           with {:ok, state} <- aggregate(topology_pid, aggregate_cmd, fun, opts) do
@@ -183,16 +194,16 @@ defmodule Mongo.ChangeStream do
     end
 
     defp update_change_stream(change_stream, nil, op_time, nil) do
-      change_stream(change_stream, op_time: op_time)
+      %{change_stream | op_time: op_time}
     end
 
     defp update_change_stream(change_stream, nil, op_time, doc) do
-      change_stream(change_stream, op_time: op_time, resume_token: doc["_id"])
+      %{change_stream | op_time: op_time, resume_token: doc["_id"]}
     end
 
     defp update_change_stream(change_stream, post_batch_resume_token, op_time, doc) do
       resume_token = post_batch_resume_token || doc["_id"]
-      change_stream(change_stream, op_time: op_time, resume_token: resume_token)
+      %{change_stream | op_time: op_time, resume_token: resume_token}
     end
 
     ##
@@ -255,13 +266,11 @@ defmodule Mongo.ChangeStream do
       Calls the KillCursors-Command
       See https://github.com/mongodb/specifications/blob/master/source/find_getmore_killcursors_commands.rst
     """
-    def kill_cursors(session, coll, cursor_ids, opts) do
-      cmd =
-        [
-          killCursors: coll,
-          cursors: cursor_ids |> Enum.map(fn id -> %BSON.LongNumber{value: id} end)
-        ]
-        |> filter_nils()
+    def kill_cursor(session, coll, cursor_id, opts) do
+      cmd = [
+        killCursors: coll,
+        cursors: [%BSON.LongNumber{value: cursor_id}]
+      ]
 
       with {:ok, %{"cursorsAlive" => [], "cursorsNotFound" => [], "cursorsUnknown" => [], "ok" => ok}} when ok == 1 <- Mongo.exec_command_session(session, cmd, opts) do
         :ok
@@ -274,12 +283,12 @@ defmodule Mongo.ChangeStream do
 
     defp after_fun(opts) do
       fn
-        state(topology_pid: topology_pid, session: session, cursor: 0) ->
-          Session.end_implict_session(topology_pid, session)
+        %{topology_pid: topology_pid, session: session, cursor: 0} ->
+          Session.end_session(topology_pid, session)
 
-        state(topology_pid: topology_pid, session: session, cursor: cursor, coll: coll) ->
-          with :ok <- kill_cursors(session, only_coll(coll), [cursor], opts) do
-            Session.end_implict_session(topology_pid, session)
+        %{topology_pid: topology_pid, session: session, cursor: cursor, coll: coll} ->
+          with :ok <- kill_cursor(session, only_coll(coll), cursor, opts) do
+            Session.end_session(topology_pid, session)
           end
 
         error ->

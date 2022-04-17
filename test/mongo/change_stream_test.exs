@@ -4,7 +4,7 @@ defmodule Mongo.ChangeStreamTest do
 
   setup_all do
     assert {:ok, top} = Mongo.TestConnection.connect()
-    Mongo.drop_database(top)
+    Mongo.drop_database(top, nil, w: 3)
     assert {:ok, %Mongo.InsertOneResult{}} = Mongo.insert_one(top, "users", %{name: "Waldo"})
     %{pid: top}
   end

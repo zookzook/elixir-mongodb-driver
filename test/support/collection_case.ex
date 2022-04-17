@@ -9,7 +9,7 @@ defmodule CollectionCase do
   setup_all do
     assert {:ok, pid} = Mongo.start_link(database: "mongodb_test", seeds: @seeds, show_sensitive_data_on_connection_error: true)
     Mongo.admin_command(pid, configureFailPoint: "failCommand", mode: "off")
-    Mongo.drop_database(pid)
+    Mongo.drop_database(pid, nil, w: 3)
     {:ok, [pid: pid]}
   end
 

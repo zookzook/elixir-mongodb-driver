@@ -151,6 +151,10 @@ defmodule Mongo.Repo do
         end
       end
 
+      def transaction(fun, opts \\ []) do
+        Mongo.transaction(@topology, fun, opts)
+      end
+
       def all(module, filter \\ %{}, opts \\ []) do
         collection = module.__collection__(:collection)
 
@@ -471,4 +475,17 @@ defmodule Mongo.Repo do
       MyApp.Repo.insert_all(Post, [%{title: "a"}, %{title: "b"}])
   """
   @callback insert_all(module :: module(), entries :: list(BSON.document()), opts :: Keyword.t()) :: {:ok, integer(), list(BSON.ObjectId.t())} | {:error, any()}
+
+  @doc """
+  Convenient function for running multiple write commands in a transaction.
+
+  In case of `TransientTransactionError` or `UnknownTransactionCommitResult` the function will retry the whole transaction or
+  the commit of the transaction. You can specify a timeout (`:transaction_retry_timeout_s`) to limit the time of repeating.
+  The default value is 120 seconds. If you don't wait so long, you call `transaction` with the
+  option `transaction_retry_timeout_s: 10`. In this case after 10 seconds of retrying, the function will return
+  an error.
+
+  You can nest the function calls. In this case the first session will be reused.
+  """
+  @callback transaction(fun :: (... -> {:ok, any()} | :error), opts :: Keyword.t()) :: {:ok, any()} | :error | {:error, any()}
 end
