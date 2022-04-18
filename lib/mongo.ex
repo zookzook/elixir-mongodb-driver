@@ -75,6 +75,7 @@ defmodule Mongo do
   @opaque cursor :: Mongo.Cursor.t()
   @type result(t) :: :ok | {:ok, t} | {:error, Mongo.Error.t()}
   @type result!(t) :: t
+  @type initial_type :: :unknown | :single | :replica_set_no_primary | :sharded
 
   defmacrop bangify(result) do
     quote do
@@ -84,8 +85,6 @@ defmodule Mongo do
       end
     end
   end
-
-  @type initial_type :: :unknown | :single | :replica_set_no_primary | :sharded
 
   @doc """
   Start and link to a database connection process.
@@ -148,97 +147,6 @@ defmodule Mongo do
 
   def child_spec(opts) do
     %{id: Mongo, start: {Mongo, :start_link, [opts]}}
-  end
-
-  @doc """
-  Generates a new `BSON.ObjectId`.
-  """
-  @spec object_id :: BSON.ObjectId.t()
-  def object_id do
-    Mongo.IdServer.new()
-  end
-
-  @doc """
-  Converts the DataTime to a MongoDB timestamp.
-  """
-  @spec timestamp(DateTime.t()) :: BSON.Timestamp.t()
-  def timestamp(datetime) do
-    %BSON.Timestamp{value: DateTime.to_unix(datetime), ordinal: 1}
-  end
-
-  @doc """
-  Converts the binary to UUID
-
-  ## Example
-      iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66ac6b328242")
-      {:ok, #BSON.UUID<848e90e9-5750-4e0a-ab73-66ac6b328242>}
-
-      iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66ac6b328242x")
-      {:error, %ArgumentError{message: "invalid UUID string"}}
-
-      iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66-c6b328242")
-      {:error, %ArgumentError{message: "non-alphabet digit found: \"-\" (byte 45)"}}
-  """
-  @spec uuid(any) :: {:ok, BSON.Binary.t()} | {:error, Exception.t()}
-  def uuid(string) when is_binary(string) and byte_size(string) == 36 do
-    try do
-      p1 = binary_part(string, 0, 8) |> Base.decode16!(case: :lower)
-      p2 = binary_part(string, 9, 4) |> Base.decode16!(case: :lower)
-      p3 = binary_part(string, 14, 4) |> Base.decode16!(case: :lower)
-      p4 = binary_part(string, 19, 4) |> Base.decode16!(case: :lower)
-      p5 = binary_part(string, 24, 12) |> Base.decode16!(case: :lower)
-
-      value = p1 <> p2 <> p3 <> p4 <> p5
-      {:ok, %BSON.Binary{binary: value, subtype: :uuid}}
-    rescue
-      reason -> {:error, reason}
-    end
-  end
-
-  def uuid(_other) do
-    {:error, %ArgumentError{message: "invalid UUID string"}}
-  end
-
-  @doc """
-  Similar to `uuid/1` except it will unwrap the error tuple and raise
-  in case of errors.
-
-  ## Example
-
-      iex> Mongo.uuid!("848e90e9-5750-4e0a-ab73-66ac6b328242")
-      #BSON.UUID<848e90e9-5750-4e0a-ab73-66ac6b328242>
-
-      iex> Mongo.uuid!("848e90e9-5750-4e0a-ab73-66ac6b328242x")
-      ** (ArgumentError) invalid UUID string
-      (mongodb_driver 0.6.4) lib/mongo.ex:205: Mongo.uuid!/1
-  """
-  def uuid!(string) do
-    case uuid(string) do
-      {:ok, result} -> result
-      {:error, reason} -> raise reason
-    end
-  end
-
-  @doc """
-  Creates a new UUID.
-  """
-  @spec uuid() :: BSON.Binary.t()
-  def uuid() do
-    %BSON.Binary{binary: uuid4(), subtype: :uuid}
-  end
-
-  #
-  # From https://github.com/zyro/elixir-uuid/blob/master/lib/uuid.ex
-  # with modifications:
-  #
-  # We don't need a string version, so we use the binary directly
-  #
-  @uuid_v4 4
-  @variant10 2
-
-  defp uuid4() do
-    <<u0::48, _::4, u1::12, _::2, u2::62>> = :crypto.strong_rand_bytes(16)
-    <<u0::48, @uuid_v4::4, u1::12, @variant10::2, u2::62>>
   end
 
   @doc """
@@ -602,72 +510,6 @@ defmodule Mongo do
   end
 
   @doc """
-  Executes an admin command against the `admin` database using always the primary. Retryable writes are disabled.
-
-  ## Example
-
-    iex>  cmd = [
-      configureFailPoint: "failCommand",
-      mode: "alwaysOn",
-      data: [errorCode: 6, failCommands: ["commitTransaction"], errorLabels: ["TransientTransactionError"]]
-    ]
-
-    iex> {:ok, _doc} = Mongo.admin_command(top, cmd)
-  """
-  def admin_command(topology_pid, cmd) do
-    issue_command(topology_pid, cmd, :write, database: "admin", retryable_writes: false)
-  end
-
-  @doc """
-  This function is very fundamental.
-  """
-  def issue_command(topology_pid, cmd, :read, opts) do
-    ## check, if retryable reads are enabled
-    opts = Mongo.retryable_reads(opts)
-
-    case in_read_session(topology_pid, &exec_command_session(&1, cmd, &2), opts) do
-      {:ok, doc} ->
-        {:ok, doc}
-
-      {:error, error} ->
-        cond do
-          Error.not_writable_primary_or_recovering?(error, opts) ->
-            ## in case of explicitly
-            issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
-
-          Error.should_retry_read(error, cmd, opts) ->
-            issue_command(topology_pid, cmd, :read, Keyword.put(opts, :read_counter, 2))
-
-          true ->
-            {:error, error}
-        end
-    end
-  end
-
-  def issue_command(topology_pid, cmd, :write, opts) do
-    ## check, if retryable reads are enabled
-    opts = Mongo.retryable_writes(opts, acknowledged?(cmd[:writeConcerns]))
-
-    case in_write_session(topology_pid, &exec_command_session(&1, cmd, &2), opts) do
-      {:ok, doc} ->
-        {:ok, doc}
-
-      {:error, error} ->
-        cond do
-          Error.not_writable_primary_or_recovering?(error, opts) ->
-            ## in case of explicitly
-            issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
-
-          Error.should_retry_write(error, cmd, opts) ->
-            issue_command(topology_pid, cmd, :write, Keyword.put(opts, :write_counter, 2))
-
-          true ->
-            {:error, error}
-        end
-    end
-  end
-
-  @doc """
   Finds a document and replaces it.
 
   ## Options
@@ -971,201 +813,6 @@ defmodule Mongo do
   end
 
   @doc """
-  Issue a database command. If the command has parameters use a keyword
-  list for the document because the "command key" has to be the first
-  in the document.
-  """
-  @spec command(GenServer.server(), BSON.document(), Keyword.t()) :: result(BSON.document())
-  def command(topology_pid, cmd, opts \\ []) do
-    issue_command(topology_pid, cmd, :write, opts)
-  end
-
-  @doc false
-  @spec exec_command_session(GenServer.server(), BSON.document(), Keyword.t()) ::
-          {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
-  def exec_command_session(session, cmd, opts) do
-    with {:ok, conn, new_cmd} <- Session.bind_session(session, cmd),
-         {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
-         :ok <- Session.update_session(session, response, opts),
-         {:ok, {_flags, doc}} <- check_for_error(response, cmd, opts) do
-      {:ok, doc}
-    else
-      {:error, error} ->
-        {:error, error}
-    end
-  end
-
-  @doc false
-  @spec exec_command(GenServer.server(), BSON.document(), Keyword.t()) ::
-          {:ok, {any(), BSON.document()} | nil} | {:error, Mongo.Error.t()}
-  def exec_command(conn, cmd, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)) do
-      check_for_error(response, cmd, opts)
-    end
-  end
-
-  def exec_more_to_come(conn, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [:more_to_come], defaults(opts)) do
-      check_for_error(response, [:more_to_come], opts)
-    end
-  end
-
-  ##
-  # Checks for an error and broadcast the event.
-  ##
-  defp check_for_error({%{"ok" => ok} = response, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, flags, duration}, cmd, opts) when ok == 1 do
-    Events.notify(
-      %CommandSucceededEvent{
-        reply: response,
-        duration: duration,
-        command_name: event.command_name,
-        request_id: request_id,
-        operation_id: operation_id,
-        connection_id: connection_id
-      },
-      :commands
-    )
-
-    do_log(cmd, duration, opts)
-
-    {:ok, {flags, response}}
-  end
-
-  defp check_for_error({%{"ok" => ok} = response, event, flags, duration}, cmd, opts) when ok == 1 do
-    Events.notify(
-      %CommandSucceededEvent{
-        reply: response,
-        duration: duration,
-        command_name: event.command_name
-      },
-      :commands
-    )
-
-    do_log(cmd, duration, opts)
-
-    {:ok, {flags, response}}
-  end
-
-  defp check_for_error({doc, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, _flags, duration}, cmd, opts) do
-    error = Mongo.Error.exception(doc)
-
-    Events.notify(
-      %CommandFailedEvent{
-        failure: error,
-        duration: duration,
-        command_name: event.command_name,
-        request_id: request_id,
-        operation_id: operation_id,
-        connection_id: connection_id
-      },
-      :commands
-    )
-
-    do_log(cmd, duration, opts)
-
-    {:error, error}
-  end
-
-  defp check_for_error({doc, event, _flags, duration}, cmd, opts) do
-    error = Mongo.Error.exception(doc)
-
-    Events.notify(
-      %CommandFailedEvent{
-        failure: error,
-        duration: duration,
-        command_name: event.command_name
-      },
-      :commands
-    )
-
-    do_log(cmd, duration, opts)
-
-    {:error, error}
-  end
-
-  @doc """
-  Returns the wire version of the database
-  ## Example
-
-      {:ok, top} = Mongo.start_link(...)
-      Mongo.wire_version(top)
-
-      {:ok, 8}
-  """
-  @spec wire_version(GenServer.server()) :: {:ok, integer} | {:error, Mongo.Error.t()}
-  def wire_version(topology_pid) do
-    Topology.wire_version(topology_pid)
-  end
-
-  @doc """
-  Returns the limits of the database.
-
-  ## Example
-
-      {:ok, top} = Mongo.start_link(...)
-      Mongo.limits(top)
-
-      {:ok, %{
-         compression: nil,
-         logical_session_timeout: 30,
-         max_bson_object_size: 16777216,
-         max_message_size_bytes: 48000000,
-         max_wire_version: 8,
-         max_write_batch_size: 100000,
-         read_only: false
-      }}
-  """
-  @spec limits(GenServer.server()) :: {:ok, BSON.document()} | {:error, Mongo.Error.t()}
-  def limits(topology_pid) do
-    Topology.limits(topology_pid)
-  end
-
-  @doc """
-  Similar to `command/3` but unwraps the result and raises on error.
-  """
-  @spec command!(GenServer.server(), BSON.document(), Keyword.t()) :: result!(BSON.document())
-  def command!(topology_pid, cmd, opts \\ []) do
-    bangify(issue_command(topology_pid, cmd, :write, opts))
-  end
-
-  @doc """
-  Sends a ping command to the server.
-  """
-  @spec ping(GenServer.server()) :: result(BSON.document())
-  def ping(topology_pid) do
-    issue_command(topology_pid, [ping: 1], :read, batch_size: 1)
-  end
-
-  @doc """
-  Explicitly creates a collection or view.
-  """
-  @spec create(GenServer.server(), collection, Keyword.t()) :: :ok | {:error, Mongo.Error.t()}
-  def create(topology_pid, coll, opts \\ []) do
-    cmd =
-      [
-        create: coll,
-        capped: opts[:capped],
-        autoIndexId: opts[:auto_index_id],
-        size: opts[:size],
-        max: opts[:max],
-        storageEngine: opts[:storage_engine],
-        validator: opts[:validator],
-        validationLevel: opts[:validation_level],
-        validationAction: opts[:validation_action],
-        indexOptionDefaults: opts[:index_option_defaults],
-        viewOn: opts[:view_on],
-        pipeline: opts[:pipeline],
-        collation: opts[:collation],
-        writeConcern: write_concern(opts)
-      ]
-      |> filter_nils()
-
-    with {:ok, _doc} <- issue_command(topology_pid, cmd, :write, opts) do
-      :ok
-    end
-  end
-
-  @doc """
   Insert a single document into the collection.
 
   If the document is missing the `_id` field or it is `nil`, an ObjectId
@@ -1435,6 +1082,20 @@ defmodule Mongo do
     update_documents(topology_pid, coll, filter, update, true, opts)
   end
 
+  @doc """
+  Similar to `update_many/5` but unwraps the result and raises on error.
+  """
+  @spec update_many!(
+          GenServer.server(),
+          collection,
+          BSON.document(),
+          BSON.document(),
+          Keyword.t()
+        ) :: result!(Mongo.UpdateResult.t())
+  def update_many!(topology_pid, coll, filter, update, opts \\ []) do
+    bangify(update_many(topology_pid, coll, filter, update, opts))
+  end
+
   ##
   # Calls the update command:
   #
@@ -1476,11 +1137,11 @@ defmodule Mongo do
 
             true ->
               {:ok,
-               %Mongo.UpdateResult{
-                 matched_count: n,
-                 modified_count: n_modified,
-                 upserted_ids: filter_upsert_ids(upserted)
-               }}
+                %Mongo.UpdateResult{
+                  matched_count: n,
+                  modified_count: n_modified,
+                  upserted_ids: filter_upsert_ids(upserted)
+                }}
           end
 
         %{"n" => n, "nModified" => n_modified} ->
@@ -1495,22 +1156,137 @@ defmodule Mongo do
     end
   end
 
-  @spec filter_upsert_ids(any) :: list
   defp filter_upsert_ids([_ | _] = upserted), do: Enum.map(upserted, fn doc -> doc["_id"] end)
   defp filter_upsert_ids(_), do: []
 
   @doc """
-  Similar to `update_many/5` but unwraps the result and raises on error.
+  Returns the wire version of the database
+  ## Example
+
+      {:ok, top} = Mongo.start_link(...)
+      Mongo.wire_version(top)
+
+      {:ok, 8}
   """
-  @spec update_many!(
-          GenServer.server(),
-          collection,
-          BSON.document(),
-          BSON.document(),
-          Keyword.t()
-        ) :: result!(Mongo.UpdateResult.t())
-  def update_many!(topology_pid, coll, filter, update, opts \\ []) do
-    bangify(update_many(topology_pid, coll, filter, update, opts))
+  @spec wire_version(GenServer.server()) :: {:ok, integer} | {:error, Mongo.Error.t()}
+  def wire_version(topology_pid) do
+    Topology.wire_version(topology_pid)
+  end
+
+  @doc """
+  Returns the limits of the database.
+
+  ## Example
+
+      {:ok, top} = Mongo.start_link(...)
+      Mongo.limits(top)
+
+      {:ok, %{
+         compression: nil,
+         logical_session_timeout: 30,
+         max_bson_object_size: 16777216,
+         max_message_size_bytes: 48000000,
+         max_wire_version: 8,
+         max_write_batch_size: 100000,
+         read_only: false
+      }}
+  """
+  @spec limits(GenServer.server()) :: {:ok, BSON.document()} | {:error, Mongo.Error.t()}
+  def limits(topology_pid) do
+    Topology.limits(topology_pid)
+  end
+
+  @doc """
+  Executes an admin command against the `admin` database using always the primary. Retryable writes are disabled.
+
+  ## Example
+
+    iex>  cmd = [
+      configureFailPoint: "failCommand",
+      mode: "alwaysOn",
+      data: [errorCode: 6, failCommands: ["commitTransaction"], errorLabels: ["TransientTransactionError"]]
+    ]
+
+    iex> {:ok, _doc} = Mongo.admin_command(top, cmd)
+  """
+  def admin_command(topology_pid, cmd) do
+    issue_command(topology_pid, cmd, :write, database: "admin", retryable_writes: false)
+  end
+
+  @doc """
+  Issue a database command. If the command has parameters use a keyword
+  list for the document because the "command key" has to be the first
+  in the document.
+  """
+  @spec command(GenServer.server(), BSON.document(), Keyword.t()) :: result(BSON.document())
+  def command(topology_pid, cmd, opts \\ []) do
+    issue_command(topology_pid, cmd, :write, opts)
+  end
+
+  @doc """
+  Similar to `command/3` but unwraps the result and raises on error.
+  """
+  @spec command!(GenServer.server(), BSON.document(), Keyword.t()) :: result!(BSON.document())
+  def command!(topology_pid, cmd, opts \\ []) do
+    bangify(issue_command(topology_pid, cmd, :write, opts))
+  end
+
+  @doc """
+  Sends a ping command to the server.
+  """
+  @spec ping(GenServer.server()) :: result(BSON.document())
+  def ping(topology_pid) do
+    issue_command(topology_pid, [ping: 1], :read, batch_size: 1)
+  end
+
+  @doc """
+  Explicitly creates a collection or view.
+  """
+  @spec create(GenServer.server(), collection, Keyword.t()) :: :ok | {:error, Mongo.Error.t()}
+  def create(topology_pid, coll, opts \\ []) do
+    cmd =
+      [
+        create: coll,
+        capped: opts[:capped],
+        autoIndexId: opts[:auto_index_id],
+        size: opts[:size],
+        max: opts[:max],
+        storageEngine: opts[:storage_engine],
+        validator: opts[:validator],
+        validationLevel: opts[:validation_level],
+        validationAction: opts[:validation_action],
+        indexOptionDefaults: opts[:index_option_defaults],
+        viewOn: opts[:view_on],
+        pipeline: opts[:pipeline],
+        collation: opts[:collation],
+        writeConcern: write_concern(opts)
+      ]
+      |> filter_nils()
+
+    with {:ok, _doc} <- issue_command(topology_pid, cmd, :write, opts) do
+      :ok
+    end
+  end
+
+  @doc """
+  Changes the name of an existing collection. Specify collection names to rename_collection in the form of a
+  complete namespace (<database>.<collection>).
+  """
+  @spec rename_collection(GenServer.server(), collection, collection, Keyword.t()) :: :ok | {:error, Mongo.Error.t()}
+  def rename_collection(topology_pid, collection, to, opts \\ []) do
+    cmd =
+      [
+        renameCollection: collection,
+        to: to,
+        dropTarget: opts[:drop_target],
+        comment: opts[:comment],
+        writeConcern: write_concern(opts)
+      ]
+      |> filter_nils()
+
+    with  {:ok, _} <- admin_command(topology_pid, cmd) do
+      :ok
+    end
   end
 
   @doc """
@@ -1672,6 +1448,250 @@ defmodule Mongo do
 
   def retryable_writes(opts, false) do
     Keyword.put(opts, :retryable_writes, false)
+  end
+
+  @doc """
+  This function is very fundamental.
+  """
+  def issue_command(topology_pid, cmd, :read, opts) do
+    ## check, if retryable reads are enabled
+    opts = Mongo.retryable_reads(opts)
+
+    case in_read_session(topology_pid, &exec_command_session(&1, cmd, &2), opts) do
+      {:ok, doc} ->
+        {:ok, doc}
+
+      {:error, error} ->
+        cond do
+          Error.not_writable_primary_or_recovering?(error, opts) ->
+            ## in case of explicitly
+            issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
+
+          Error.should_retry_read(error, cmd, opts) ->
+            issue_command(topology_pid, cmd, :read, Keyword.put(opts, :read_counter, 2))
+
+          true ->
+            {:error, error}
+        end
+    end
+  end
+
+  def issue_command(topology_pid, cmd, :write, opts) do
+    ## check, if retryable reads are enabled
+    opts = Mongo.retryable_writes(opts, acknowledged?(cmd[:writeConcerns]))
+
+    case in_write_session(topology_pid, &exec_command_session(&1, cmd, &2), opts) do
+      {:ok, doc} ->
+        {:ok, doc}
+
+      {:error, error} ->
+        cond do
+          Error.not_writable_primary_or_recovering?(error, opts) ->
+            ## in case of explicitly
+            issue_command(topology_pid, cmd, :read, Keyword.put(opts, :retry_counter, 2))
+
+          Error.should_retry_write(error, cmd, opts) ->
+            issue_command(topology_pid, cmd, :write, Keyword.put(opts, :write_counter, 2))
+
+          true ->
+            {:error, error}
+        end
+    end
+  end
+
+  @doc false
+  @spec exec_command_session(GenServer.server(), BSON.document(), Keyword.t()) ::
+          {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
+  def exec_command_session(session, cmd, opts) do
+    with {:ok, conn, new_cmd} <- Session.bind_session(session, cmd),
+         {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
+         :ok <- Session.update_session(session, response, opts),
+         {:ok, {_flags, doc}} <- check_for_error(response, cmd, opts) do
+      {:ok, doc}
+    else
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc false
+  @spec exec_command(GenServer.server(), BSON.document(), Keyword.t()) ::
+          {:ok, {any(), BSON.document()} | nil} | {:error, Mongo.Error.t()}
+  def exec_command(conn, cmd, opts) do
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)) do
+      check_for_error(response, cmd, opts)
+    end
+  end
+
+  def exec_more_to_come(conn, opts) do
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [:more_to_come], defaults(opts)) do
+      check_for_error(response, [:more_to_come], opts)
+    end
+  end
+
+
+  @doc """
+  Generates a new `BSON.ObjectId`.
+  """
+  @spec object_id() :: BSON.ObjectId.t()
+  def object_id() do
+    Mongo.IdServer.new()
+  end
+
+  @doc """
+  Converts the DataTime to a MongoDB timestamp.
+  """
+  @spec timestamp(DateTime.t()) :: BSON.Timestamp.t()
+  def timestamp(datetime) do
+    %BSON.Timestamp{value: DateTime.to_unix(datetime), ordinal: 1}
+  end
+
+  @doc """
+  Converts the binary to UUID
+
+  ## Example
+      iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66ac6b328242")
+      {:ok, #BSON.UUID<848e90e9-5750-4e0a-ab73-66ac6b328242>}
+
+      iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66ac6b328242x")
+      {:error, %ArgumentError{message: "invalid UUID string"}}
+
+      iex> Mongo.uuid("848e90e9-5750-4e0a-ab73-66-c6b328242")
+      {:error, %ArgumentError{message: "non-alphabet digit found: \"-\" (byte 45)"}}
+  """
+  @spec uuid(any) :: {:ok, BSON.Binary.t()} | {:error, Exception.t()}
+  def uuid(string) when is_binary(string) and byte_size(string) == 36 do
+    try do
+      p1 = binary_part(string, 0, 8) |> Base.decode16!(case: :lower)
+      p2 = binary_part(string, 9, 4) |> Base.decode16!(case: :lower)
+      p3 = binary_part(string, 14, 4) |> Base.decode16!(case: :lower)
+      p4 = binary_part(string, 19, 4) |> Base.decode16!(case: :lower)
+      p5 = binary_part(string, 24, 12) |> Base.decode16!(case: :lower)
+
+      value = p1 <> p2 <> p3 <> p4 <> p5
+      {:ok, %BSON.Binary{binary: value, subtype: :uuid}}
+    rescue
+      reason -> {:error, reason}
+    end
+  end
+
+  def uuid(_other) do
+    {:error, %ArgumentError{message: "invalid UUID string"}}
+  end
+
+  @doc """
+  Similar to `uuid/1` except it will unwrap the error tuple and raise
+  in case of errors.
+
+  ## Example
+
+      iex> Mongo.uuid!("848e90e9-5750-4e0a-ab73-66ac6b328242")
+      #BSON.UUID<848e90e9-5750-4e0a-ab73-66ac6b328242>
+
+      iex> Mongo.uuid!("848e90e9-5750-4e0a-ab73-66ac6b328242x")
+      ** (ArgumentError) invalid UUID string
+      (mongodb_driver 0.6.4) lib/mongo.ex:205: Mongo.uuid!/1
+  """
+  def uuid!(string) do
+    case uuid(string) do
+      {:ok, result} -> result
+      {:error, reason} -> raise reason
+    end
+  end
+
+  @doc """
+  Creates a new UUID.
+  """
+  @spec uuid() :: BSON.Binary.t()
+  def uuid() do
+    %BSON.Binary{binary: uuid4(), subtype: :uuid}
+  end
+
+  #
+  # From https://github.com/zyro/elixir-uuid/blob/master/lib/uuid.ex
+  # with modifications:
+  #
+  # We don't need a string version, so we use the binary directly
+  #
+  @uuid_v4 4
+  @variant10 2
+
+  defp uuid4() do
+    <<u0::48, _::4, u1::12, _::2, u2::62>> = :crypto.strong_rand_bytes(16)
+    <<u0::48, @uuid_v4::4, u1::12, @variant10::2, u2::62>>
+  end
+
+  ##
+  # Checks for an error and broadcast the event.
+  ##
+  defp check_for_error({%{"ok" => ok} = response, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, flags, duration}, cmd, opts) when ok == 1 do
+    Events.notify(
+      %CommandSucceededEvent{
+        reply: response,
+        duration: duration,
+        command_name: event.command_name,
+        request_id: request_id,
+        operation_id: operation_id,
+        connection_id: connection_id
+      },
+      :commands
+    )
+
+    do_log(cmd, duration, opts)
+
+    {:ok, {flags, response}}
+  end
+
+  defp check_for_error({%{"ok" => ok} = response, event, flags, duration}, cmd, opts) when ok == 1 do
+    Events.notify(
+      %CommandSucceededEvent{
+        reply: response,
+        duration: duration,
+        command_name: event.command_name
+      },
+      :commands
+    )
+
+    do_log(cmd, duration, opts)
+
+    {:ok, {flags, response}}
+  end
+
+  defp check_for_error({doc, %{request_id: request_id, operation_id: operation_id, connection_id: connection_id} = event, _flags, duration}, cmd, opts) do
+    error = Mongo.Error.exception(doc)
+
+    Events.notify(
+      %CommandFailedEvent{
+        failure: error,
+        duration: duration,
+        command_name: event.command_name,
+        request_id: request_id,
+        operation_id: operation_id,
+        connection_id: connection_id
+      },
+      :commands
+    )
+
+    do_log(cmd, duration, opts)
+
+    {:error, error}
+  end
+
+  defp check_for_error({doc, event, _flags, duration}, cmd, opts) do
+    error = Mongo.Error.exception(doc)
+
+    Events.notify(
+      %CommandFailedEvent{
+        failure: error,
+        duration: duration,
+        command_name: event.command_name
+      },
+      :commands
+    )
+
+    do_log(cmd, duration, opts)
+
+    {:error, error}
   end
 
   defp get_stream(topology_pid, cmd, opts) do
@@ -1843,4 +1863,5 @@ defmodule Mongo do
   def get_session(opts) do
     Process.get(:session) || opts[:session]
   end
+
 end

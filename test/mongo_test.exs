@@ -571,14 +571,6 @@ defmodule Mongo.Test do
     assert {:ok, 0} = Mongo.count(c.pid, coll, %{}, verbose: true)
   end
 
-  test "create collection", c do
-    coll = unique_name()
-
-    assert nil == Mongo.show_collections(c.pid) |> Enum.find(fn c -> c == coll end)
-    assert :ok == Mongo.create(c.pid, coll)
-    assert nil != Mongo.show_collections(c.pid) |> Enum.find(fn c -> c == coll end)
-  end
-
   test "save struct", c do
     coll = unique_name()
 
