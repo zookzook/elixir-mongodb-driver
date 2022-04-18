@@ -1137,11 +1137,11 @@ defmodule Mongo do
 
             true ->
               {:ok,
-                %Mongo.UpdateResult{
-                  matched_count: n,
-                  modified_count: n_modified,
-                  upserted_ids: filter_upsert_ids(upserted)
-                }}
+               %Mongo.UpdateResult{
+                 matched_count: n,
+                 modified_count: n_modified,
+                 upserted_ids: filter_upsert_ids(upserted)
+               }}
           end
 
         %{"n" => n, "nModified" => n_modified} ->
@@ -1284,7 +1284,7 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    with  {:ok, _} <- admin_command(topology_pid, cmd) do
+    with {:ok, _} <- admin_command(topology_pid, cmd) do
       :ok
     end
   end
@@ -1528,7 +1528,6 @@ defmodule Mongo do
       check_for_error(response, [:more_to_come], opts)
     end
   end
-
 
   @doc """
   Generates a new `BSON.ObjectId`.
@@ -1863,5 +1862,4 @@ defmodule Mongo do
   def get_session(opts) do
     Process.get(:session) || opts[:session]
   end
-
 end

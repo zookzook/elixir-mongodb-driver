@@ -44,5 +44,4 @@ defmodule Mongo.CollectionTest do
     assert :ok == Mongo.drop_collection(c.pid, coll)
     assert nil == Mongo.show_collections(c.pid) |> Enum.find(fn c -> c == coll end)
   end
-
 end
