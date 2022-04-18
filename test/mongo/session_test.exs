@@ -209,20 +209,20 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
-  test "with_transaction", %{top: top} do
+  test "transaction", %{top: top} do
     coll = "dogs_with_commit_transaction"
 
     Mongo.insert_one(top, coll, %{name: "Wuff"})
     Mongo.delete_many(top, coll, %{})
 
-    Session.with_transaction(
+    Mongo.transaction(
       top,
-      fn opts ->
-        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
+      fn ->
+        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"})
         assert id != nil
-        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Waldo"}, opts)
+        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Waldo"})
         assert id != nil
-        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Tom"}, opts)
+        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Tom"})
         assert id != nil
         {:ok, :ok}
       end,
@@ -233,20 +233,20 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
-  test "with_transaction_causal_consistency", %{top: top} do
+  test "transaction_causal_consistency", %{top: top} do
     coll = "dogs_with_commit_transaction_causal_consistency"
 
     Mongo.insert_one(top, coll, %{name: "Wuff"})
     Mongo.delete_many(top, coll, %{})
 
-    Session.with_transaction(
+    Mongo.transaction(
       top,
-      fn opts ->
-        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
+      fn ->
+        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"})
         assert id != nil
-        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Waldo"}, opts)
+        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Waldo"})
         assert id != nil
-        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Tom"}, opts)
+        {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Tom"})
         assert id != nil
         {:ok, :ok}
       end,
@@ -258,21 +258,21 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
-  test "with_transaction_abort", %{top: top} do
+  test "transaction_abort", %{top: top} do
     coll = "dogs_with_about_transaction"
 
     Mongo.insert_one(top, coll, %{name: "Wuff"})
     Mongo.delete_many(top, coll, %{})
 
-    assert {:error, :error} ==
-             Session.with_transaction(
+    assert :error ==
+             Mongo.transaction(
                top,
-               fn opts ->
-                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
+               fn ->
+                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"})
                  assert id != nil
-                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Waldo"}, opts)
+                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Waldo"})
                  assert id != nil
-                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Tom"}, opts)
+                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Tom"})
                  assert id != nil
                  :error
                end,
@@ -283,21 +283,21 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
-  test "with_transaction_abort_exception", %{top: top} do
+  test "transaction_abort_exception", %{top: top} do
     coll = "dogs_with_transaction_abort_exception"
 
     Mongo.insert_one(top, coll, %{name: "Wuff"})
     Mongo.delete_many(top, coll, %{})
 
     assert {:error, %ArgumentError{message: "test"}} ==
-             Session.with_transaction(
+             Mongo.transaction(
                top,
-               fn opts ->
-                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
+               fn ->
+                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Greta"})
                  assert id != nil
-                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Waldo"}, opts)
+                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Waldo"})
                  assert id != nil
-                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Tom"}, opts)
+                 {:ok, %InsertOneResult{:inserted_id => id}} = Mongo.insert_one(top, coll, %{name: "Tom"})
                  assert id != nil
 
                  raise(ArgumentError, "test")
@@ -328,10 +328,10 @@ defmodule Mongo.SessionTest do
       |> UnorderedBulk.delete_one(%{kind: "dog"})
 
     {:ok, result} =
-      Session.with_transaction(
+      Mongo.transaction(
         top,
-        fn opts ->
-          {:ok, BulkWrite.write(top, bulk, opts)}
+        fn ->
+          {:ok, BulkWrite.write(top, bulk)}
         end,
         w: 1
       )
@@ -363,10 +363,10 @@ defmodule Mongo.SessionTest do
     assert {:ok, _} = Mongo.admin_command(top, cmd)
 
     {:error, [result | _xs]} =
-      Session.with_transaction(
+      Mongo.transaction(
         top,
-        fn opts ->
-          %BulkWriteResult{errors: errors} = result = BulkWrite.write(top, bulk, opts)
+        fn ->
+          %BulkWriteResult{errors: errors} = result = BulkWrite.write(top, bulk)
 
           case Enum.empty?(errors) do
             true -> {:ok, result}
@@ -387,16 +387,16 @@ defmodule Mongo.SessionTest do
     Mongo.delete_many(top, coll, %{})
 
     assert {:ok, :ok} =
-             Session.with_transaction(
+             Mongo.transaction(
                top,
-               fn opts ->
+               fn ->
                  1..1000
                  |> Stream.map(fn
                    1 -> BulkOps.get_insert_one(%{count: 1})
                    1000 -> BulkOps.get_delete_one(%{count: 999})
                    i -> BulkOps.get_update_one(%{count: i - 1}, %{"$set": %{count: i}})
                  end)
-                 |> OrderedBulk.write(top, coll, 25, opts)
+                 |> OrderedBulk.write(top, coll, 25)
                  |> Stream.run()
 
                  {:ok, :ok}
@@ -407,11 +407,11 @@ defmodule Mongo.SessionTest do
 
   @tag :mongo_4_2
   test "commit empty transaction", %{top: top} do
-    assert {:ok, :ok} =
-             Session.with_transaction(
+    assert :ok =
+             Mongo.transaction(
                top,
                fn _opts ->
-                 {:ok, :ok}
+                 :ok
                end,
                w: 1
              )
@@ -419,11 +419,11 @@ defmodule Mongo.SessionTest do
 
   @tag :mongo_4_2
   test "abort empty transaction", %{top: top} do
-    assert {:error, :ok} =
-             Session.with_transaction(
+    assert :error =
+             Mongo.transaction(
                top,
                fn _opts ->
-                 {:error, :ok}
+                 :error
                end,
                w: 1
              )
@@ -450,10 +450,10 @@ defmodule Mongo.SessionTest do
       |> OrderedBulk.delete_one(%{kind: "cat"})
 
     {:ok, result} =
-      Session.with_transaction(
+      Mongo.transaction(
         top,
-        fn opts ->
-          result = BulkWrite.write(top, bulk, opts)
+        fn ->
+          result = BulkWrite.write(top, bulk)
           {:ok, result}
         end,
         w: 1

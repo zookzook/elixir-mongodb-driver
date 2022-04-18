@@ -3,7 +3,6 @@ defmodule Mongo.GridFs.UploadTest do
 
   alias Mongo.GridFs.Bucket
   alias Mongo.GridFs.Upload
-  alias Mongo.Session
 
   setup_all do
     assert {:ok, pid} = Mongo.TestConnection.connect()
@@ -96,10 +95,9 @@ defmodule Mongo.GridFs.UploadTest do
     bucket = Bucket.new(c.pid)
 
     {:ok, upload_stream} =
-      Session.with_transaction(
+      Mongo.transaction(
         c.pid,
-        fn opt ->
-          bucket = Bucket.add_session(bucket, opt)
+        fn ->
           upload_stream = Upload.open_upload_stream(bucket, "my-example-file.txt", %{tag: "checked", chk_sum: chksum})
           File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
           {:ok, upload_stream}
@@ -122,10 +120,9 @@ defmodule Mongo.GridFs.UploadTest do
     bucket = Bucket.new(c.pid)
 
     {:error, upload_stream} =
-      Session.with_transaction(
+      Mongo.transaction(
         c.pid,
-        fn opt ->
-          bucket = Bucket.add_session(bucket, opt)
+        fn ->
           upload_stream = Upload.open_upload_stream(bucket, "my-example-file.txt", %{tag: "checked", chk_sum: chksum})
           File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
           {:error, upload_stream}

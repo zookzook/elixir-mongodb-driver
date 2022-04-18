@@ -182,6 +182,7 @@ defmodule Mongo.BulkWrite do
   Everything is done in memory, so this use case is limited by memory. A better approach seems to use streaming bulk writes.
   """
   @spec write(GenServer.server(), UnorderedBulk.t() | OrderedBulk.t(), Keyword.t()) :: Mongo.BulkWriteResult.t()
+  def write(topology_pid, bulk, opts \\ [])
   def write(topology_pid, %UnorderedBulk{} = bulk, opts) do
     in_write_session(topology_pid, &one_bulk_write(&1, topology_pid, bulk, &2), opts)
   end

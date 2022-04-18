@@ -55,72 +55,72 @@ defmodule Mongo.TransactionRetriesTest do
   end
 
   @tag :rs_required
-  test "with_transaction, return an error", %{pid: top} do
+  test "transaction, return an error", %{pid: top} do
     coll = unique_collection()
 
     :ok = Mongo.create(top, coll)
+
+    cmd = [
+      configureFailPoint: "failCommand",
+      mode: [times: 1],
+      data: [errorCode: 3, failCommands: ["commitTransaction"]]
+    ]
+
+    {:ok, _doc} = Mongo.admin_command(top, cmd)
 
     assert {:error, %Mongo.Error{}} =
-             Session.with_transaction(top, fn opts ->
-               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
-               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Waldo"}, opts)
-               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Tom"}, opts)
-
-               cmd = [
-                 configureFailPoint: "failCommand",
-                 mode: [times: 1],
-                 data: [errorCode: 3, failCommands: ["commitTransaction"]]
-               ]
-
-               {:ok, _doc} = Mongo.admin_command(top, cmd)
+             Mongo.transaction(top, fn ->
+               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Greta"})
+               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Waldo"})
+               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Tom"})
 
                {:ok, []}
              end)
   end
 
   @tag :rs_required
-  test "with_transaction, retry commit", %{pid: top} do
+  test "transaction, retry commit", %{pid: top} do
     coll = unique_collection()
 
     :ok = Mongo.create(top, coll)
+
+    cmd = [
+      configureFailPoint: "failCommand",
+      mode: [times: 3],
+      data: [errorCode: 6, failCommands: ["commitTransaction"], errorLabels: ["UnknownTransactionCommitResult"]]
+    ]
+
+    {:ok, _doc} = Mongo.admin_command(top, cmd)
 
     assert {:ok, []} =
-             Session.with_transaction(top, fn opts ->
-               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
-               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Waldo"}, opts)
-               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Tom"}, opts)
-
-               cmd = [
-                 configureFailPoint: "failCommand",
-                 mode: [times: 3],
-                 data: [errorCode: 6, failCommands: ["commitTransaction"], errorLabels: ["UnknownTransactionCommitResult"]]
-               ]
-
-               {:ok, _doc} = Mongo.admin_command(top, cmd)
+             Mongo.transaction(top, fn ->
+               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Greta"})
+               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Waldo"})
+               {:ok, _} = Mongo.insert_one(top, coll, %{name: "Tom"})
 
                {:ok, []}
              end)
   end
 
   @tag :rs_required
-  test "with_transaction, retry commit timeout", %{pid: top, catcher: catcher} do
+  test "transaction, retry commit timeout", %{pid: top, catcher: catcher} do
     coll = unique_collection()
 
     :ok = Mongo.create(top, coll)
 
+    cmd = [
+      configureFailPoint: "failCommand",
+      mode: "alwaysOn",
+      data: [errorCode: 6, failCommands: ["commitTransaction"], errorLabels: ["UnknownTransactionCommitResult"]]
+    ]
+
+    {:ok, _doc} = Mongo.admin_command(top, cmd)
+
     assert {:error, %Mongo.Error{code: 6, error_labels: ["UnknownTransactionCommitResult"]}} =
-             Session.with_transaction(
+             Mongo.transaction(
                top,
-               fn opts ->
-                 {:ok, _} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
-
-                 cmd = [
-                   configureFailPoint: "failCommand",
-                   mode: "alwaysOn",
-                   data: [errorCode: 6, failCommands: ["commitTransaction"], errorLabels: ["UnknownTransactionCommitResult"]]
-                 ]
-
-                 {:ok, _doc} = Mongo.admin_command(top, cmd)
+               fn ->
+                 {:ok, _} = Mongo.insert_one(top, coll, %{name: "Greta"})
 
                  {:ok, []}
                end,
@@ -129,11 +129,11 @@ defmodule Mongo.TransactionRetriesTest do
 
     Mongo.admin_command(top, configureFailPoint: "failCommand", mode: "off")
 
-    assert [:configureFailPoint, :abortTransaction, :configureFailPoint, :insert, :create] = get_succeeded_events(catcher)
+    assert [:configureFailPoint, :abortTransaction, :insert, :configureFailPoint, :create] = get_succeeded_events(catcher)
   end
 
   @tag :rs_required
-  test "with_transaction, retry transaction timeout", %{pid: top, catcher: catcher} do
+  test "transaction, retry transaction timeout", %{pid: top, catcher: catcher} do
     coll = unique_collection()
 
     :ok = Mongo.create(top, coll)
@@ -147,10 +147,10 @@ defmodule Mongo.TransactionRetriesTest do
     {:ok, _doc} = Mongo.admin_command(top, cmd)
 
     assert {:error, %Mongo.Error{code: 6, error_labels: ["TransientTransactionError"]}} =
-             Session.with_transaction(
+             Mongo.transaction(
                top,
-               fn opts ->
-                 {:ok, _} = Mongo.insert_one(top, coll, %{name: "Greta"}, opts)
+               fn ->
+                 {:ok, _} = Mongo.insert_one(top, coll, %{name: "Greta"})
                  {:ok, []}
                end,
                transaction_retry_timeout_s: 2
