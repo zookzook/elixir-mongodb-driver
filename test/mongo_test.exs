@@ -595,6 +595,29 @@ defmodule Mongo.Test do
     assert value == user
   end
 
+  test "causal consistency", %{pid: top} do
+    coll = unique_collection()
+    Mongo.drop_collection(top, coll, w: 3)
+    Mongo.create(top, coll, w: 3)
+
+    docs = Stream.cycle([%{foo: 10, name: "Zorro"}]) |> Enum.take(100)
+
+    indexes = [
+      [key: [foo: 1, name: 1], name: "foo_index"]
+    ]
+
+    assert :ok = Mongo.create_indexes(top, coll, indexes)
+
+    prefs = %{mode: :secondary}
+
+    assert %{"name" => "Oskar"} =
+             Mongo.causal_consistency(top, fn ->
+               assert {:ok, _} = Mongo.insert_many(top, coll, docs, w: :majority)
+               assert {:ok, _} = Mongo.insert_one(top, coll, %{name: "Oskar"}, w: :majority)
+               Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs, read_concern: %{level: :majority}) |> Map.take(["name"])
+             end)
+  end
+
   test "nested transaction", %{pid: top} do
     coll = unique_collection()
     Mongo.drop_collection(top, coll, w: 3)

@@ -29,7 +29,112 @@
 - support for complex and nested documents using the `Mongo.Collection` macros
 - support for streaming protocol ([See](https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-monitoring.rst#streaming-protocol))
 
+## Usage
+
+### Installation
+
+Add `mongodb_driver` to your mix.exs `deps`.
+
+```elixir
+defp deps do
+  [{:mongodb_driver, "~> 0.8.5"}]
+end
+```
+
+Then run `mix deps.get` to fetch dependencies.
+
+### Simple Connection to MongoDB
+
+```elixir
+# Starts an unpooled connection
+{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/my-database")
+
+# Gets an enumerable cursor for the results
+cursor = Mongo.find(conn, "test-collection", %{})
+
+cursor
+|> Enum.to_list()
+|> IO.inspect
+```
+
+To specify a username and password, use the `:username`, `:password`, and `:auth_source` options.
+
+```elixir
+# Starts an unpooled connection
+{:ok, conn} =
+    Mongo.start_link(url: "mongodb://localhost:27017/db-name",
+                     username: "test_user",
+                     password: "hunter2",
+                     auth_source: "admin_test")
+
+# Gets an enumerable cursor for the results
+cursor = Mongo.find(conn, "test-collection", %{})
+
+cursor
+|> Enum.to_list()
+|> IO.inspect
+```
+
+For secure requests, you may need to add some more options; see the "AWS, TLS and Erlang SSL ciphers" section below.
+
+Failing operations return a `{:error, error}` tuple where `error` is a
+`Mongo.Error` object:
+
+```elixir
+{:error,
+ %Mongo.Error{
+   code: 13435,
+   error_labels: [],
+   host: nil,
+   message: "not master and slaveOk=false",
+   resumable: true,
+   retryable_reads: true,
+   retryable_writes: true
+ }}
+```
+
+## Examples
+
+### Find
+
+Using `$and`
+
+```elixir
+Mongo.find(:mongo, "users", %{"$and" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
+```
+
+Using `$or`
+
+```elixir
+Mongo.find(:mongo, "users", %{"$or" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
+```
+
+Using `$in`
+
+```elixir
+Mongo.find(:mongo, "users", %{email: %{"$in" => ["my@email.com", "other@email.com"]}})
+```
+
+### Inserts
+
+To insert a single document:
+
+```elixir
+Mongo.insert_one(top, "users", %{first_name: "John", last_name: "Smith"})
+```
+
+To insert a list of documents:
+
+```elixir
+Mongo.insert_many(top, "users", [
+  %{first_name: "John", last_name: "Smith"},
+  %{first_name: "Jane", last_name: "Doe"}
+])
+```
+
 ## Data Representation
+
+Since BSON documents are ordered Elixir maps cannot be used to fully represent them. This driver chose to accept both maps and lists of key-value pairs when encoding but will only decode documents to lists. This has the side-effect that it's impossible to discern empty arrays from empty documents. Additionally, the driver will accept both atoms and strings for document keys but will only decode to strings. BSON symbols can only be decoded.
 
     BSON                Elixir
     ----------          ------
@@ -37,23 +142,23 @@
     string              "Elixir"
     document            [{"key", "value"}] | %{"key" => "value"} (1)
     binary              %BSON.Binary{binary: <<42, 43>>, subtype: :generic}
+    UUID                %BSON.Binary{binary: <<42, 43>>, subtype: :uuid}
+    UUID (old style)    %BSON.Binary{binary: <<42, 43>>, subtype: :uuid_old}
     object id           %BSON.ObjectId{value: <<...>>}
     boolean             true | false
     UTC datetime        %DateTime{}
     null                nil
     regex               %BSON.Regex{pattern: "..."}
     JavaScript          %BSON.JavaScript{code: "..."}
-    integer             42
+    timestamp           #BSON.Timestamp<value:ordinal>"
+    integer 32          42
+    integer 64          #BSON.LongNumber<value>
     symbol              "foo" (2)
     min key             :BSON_min
     max key             :BSON_max
     decimal128          Decimal{}
 
-Since BSON documents are ordered Elixir maps cannot be used to fully represent them. This driver chose to accept both maps and lists of key-value pairs when encoding but will only decode documents to lists. This has the side-effect that it's impossible to discern empty arrays from empty documents. Additionally, the driver will accept both atoms and strings for document keys but will only decode to strings.
-
-BSON symbols can only be decoded.
-
-### Writing your own encoding info
+## Writing your own encoding info
 
 If you want to write a custom struct to your mongo collection - you can do that
 by implementing `Mongo.Encoder` protocol for your module. The output should be a map,
@@ -96,7 +201,7 @@ it will be written to database, as:
 }
 ```
 
-### Collections
+## Collections
 
 While using the `Mongo.Encoder` protocol give you the possibility to encode your structs into maps the opposite way to decode those maps into structs is missing. To handle it you can use the `Mongo.Collection` which provides some boilerplate code for a better support of structs while using the MongoDB driver
 
@@ -111,7 +216,7 @@ While using the `Mongo.Encoder` protocol give you the possibility to encode your
 - support for derived values
 
 When using the MongoDB driver only maps and keyword lists are used to represent documents.
-If you would prefer to use structs instead of the maps to give the document a stronger meaning or to emphasize
+If you prefer to use structs instead of the maps to give the document a stronger meaning or to emphasize
 its importance, you have to create a `defstruct` and fill it from the map manually:
 
 ```elixir
@@ -209,77 +314,14 @@ iex(3)> Label.load(m, true)
 
 The background is that MongoDB always returns binarys as keys and structs use atoms as keys.
 
-For more information look at the module documentation [Mongo.Collection](https://hexdocs.pm/mongodb_driver/Mongo.Collection.html#content).
+For more information look at the module documentation `Mongo.Collection`.
 
 Of course, using the `Mongo.Collection` is not free. When loading and saving, the maps are converted into structures, which increases CPU usage somewhat. When it comes to speed, it is better to use the maps directly.
 
-## Usage
 
-### Installation
+## Using the Repo Module
 
-Add `mongodb_driver` to your mix.exs `deps`.
-
-```elixir
-defp deps do
-  [{:mongodb_driver, "~> 0.8.3"}]
-end
-```
-
-Then run `mix deps.get` to fetch dependencies.
-
-### Simple Connection to MongoDB
-
-```elixir
-# Starts an unpooled connection
-{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/db-name")
-
-# Gets an enumerable cursor for the results
-cursor = Mongo.find(conn, "test-collection", %{})
-
-cursor
-|> Enum.to_list()
-|> IO.inspect
-```
-
-To specify a username and password, use the `:username`, `:password`, and `:auth_source` options.
-
-```elixir
-# Starts an unpooled connection
-{:ok, conn} =
-    Mongo.start_link(url: "mongodb://localhost:27017/db-name",
-                     username: "test_user",
-                     password: "hunter2",
-                     auth_source: "admin_test")
-
-# Gets an enumerable cursor for the results
-cursor = Mongo.find(conn, "test-collection", %{})
-
-cursor
-|> Enum.to_list()
-|> IO.inspect
-```
-
-For secure requests, you may need to add some more options; see the "AWS, TLS and Erlang SSL ciphers" section below.
-
-Failing operations return a `{:error, error}` tuple where `error` is a
-`Mongo.Error` object:
-
-```elixir
-{:error,
- %Mongo.Error{
-   code: 13435,
-   error_labels: [],
-   host: nil,
-   message: "not master and slaveOk=false",
-   resumable: true,
-   retryable_reads: true,
-   retryable_writes: true
- }}
-```
-
-### Using the Repo Module
-
-For convenience you can also `use` the `Mongo.Repo` module in your application to configure the MongoDB application.
+For convenience, you can also `use` the `Mongo.Repo` module in your application to configure the MongoDB application.
 
 Simply create a new module and include the `use Mongo.Repo` macro:
 
@@ -301,7 +343,7 @@ config :my_app, MyApp.Repo,
   queue_target: 5_000
 ```
 
-Finally we can add the `Mongo` instance to our application supervision tree:
+Finally, we can add the `Mongo` instance to our application supervision tree:
 
 ```elixir
   children = [
@@ -311,12 +353,12 @@ Finally we can add the `Mongo` instance to our application supervision tree:
   ]
 ```
 
-In addition the the convenient configuration, the `Mongo.Repo` module will also include query functions to use with your
+In addition, the convenient configuration, the `Mongo.Repo` module will also include query functions to use with your
 `Mongo.Collection` modules.
 
 For more information check out the `Mongo.Repo` module documentation and the `Mongo` module documentation.
 
-### Logging
+## Logging
 
 You config the logging output by adding in your config file this line
 
@@ -331,7 +373,7 @@ logging on, then you will see log output (command, collection, parameters):
 [info] CMD find "my-collection" [filter: [name: "Helga"]] db=2.1ms
 ```
 
-### Telemetry
+## Telemetry
 
 The driver uses the [:telemetry](https://github.com/beam-telemetry/telemetry) package to emit the execution duration
 for each command. The event name is `[:mongodb_driver, :execution]` and the driver uses the following meta data:
@@ -359,7 +401,7 @@ In a Phoenix application with installed Phoenix Dashboard the metrics can be use
 
 Then you see for each collection the execution time for each different command in the Dashboard metric page.
 
-### Connection Pooling
+## Connection Pooling
 
 The driver supports pooling by DBConnection (2.x). By default `mongodb_driver` will start a single
 connection, but it also supports pooling with the `:pool_size` option. For 3 connections add the `pool_size: 3` option to `Mongo.start_link` and to all
@@ -394,7 +436,7 @@ end
 
 Due to the mongodb specification, an additional connection is always set up for the monitor process.
 
-### Replica Sets
+## Replica Sets
 
 By default, the driver will discover the deployment's topology and will connect
 to the replica set automatically, using either the seed list syntax or the URI
@@ -420,7 +462,7 @@ URI, as follows:
 
 Using an SRV URI also discovers all nodes of the deployment automatically.
 
-### Auth Mechanisms
+## Auth Mechanisms
 
 For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM.
 If you'd like to use [MONGODB-X509](https://docs.mongodb.com/manual/tutorial/configure-x509-client-authentication/#authenticate-with-a-x-509-certificate)
@@ -430,7 +472,7 @@ authentication, you can specify that as a `start_link` option.
 {:ok, pid} = Mongo.start_link(database: "test", auth_mechanism: :x509)
 ```
 
-### AWS, TLS and Erlang SSL Ciphers
+## AWS, TLS and Erlang SSL Ciphers
 
 Some MongoDB cloud providers (notably AWS) require a particular TLS cipher that isn't enabled
 by default in the Erlang SSL module. In order to connect to these services,
@@ -446,30 +488,10 @@ you'll want to add this cipher to your `ssl_opts`:
 )
 ```
 
-### Find
-
-Using `$and`
-
-```elixir
-Mongo.find(:mongo, "users", %{"$and" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
-```
-
-Using `$or`
-
-```elixir
-Mongo.find(:mongo, "users", %{"$or" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
-```
-
-Using `$in`
-
-```elixir
-Mongo.find(:mongo, "users", %{email: %{"$in" => ["my@email.com", "other@email.com"]}})
-```
-
-### Change Streams
+## Change Streams
 
 Change streams are available in replica set and sharded cluster deployments
-and tell you about changes to documents in collections. They work like endless
+and tell you about changes of documents in collections. They work like endless
 cursors.
 
 The special thing about change streams is that they are resumable: in case of
@@ -497,30 +519,11 @@ end
 spawn(fn -> for_ever(top, self()) end)
 ```
 
-For more information see:
+For more information see `Mongo.watch_collection/5`
 
-- [Mongo.watch_collection](https://hexdocs.pm/mongodb_driver/Mongo.html#watch_collection/5)
+## Indexes
 
-### Inserts
-
-To insert a single document:
-
-```elixir
-Mongo.insert_one(top, "users", %{first_name: "John", last_name: "Smith"})
-```
-
-To insert a list of documents:
-
-```elixir
-Mongo.insert_many(top, "users", [
-  %{first_name: "John", last_name: "Smith"},
-  %{first_name: "Jane", last_name: "Doe"}
-])
-```
-
-### Indexes
-
-To create indexes you can call the function `Mongo.createIndexed/4`:
+To create indexes you can call the function `Mongo.create_indexes/4`:
 
 ```elixir
 indexes =  [[key: [files_id: 1, n: 1], name: "files_n_index", unique: true]]
@@ -531,10 +534,10 @@ You specify the `indexes` parameter as a keyword list with all options described
 
 For more information see:
 
-- [Mongo.create_indexes](https://hexdocs.pm/mongodb_driver/Mongo.html#create_indexes/4)
-- [Mongo.drop_index](https://hexdocs.pm/mongodb_driver/Mongo.html#drop_index/4)
+- `Mongo.create_indexes/4`
+- `Mongo.drop_index/4`
 
-### Bulk Writes
+## Bulk Writes
 
 The motivation for bulk writes lies in the possibility of optimization, the same operations
 to group. Here, a distinction is made between disordered and ordered bulk writes.
@@ -590,14 +593,14 @@ importing big volume of data.
 
 For more information see:
 
-- [Mongo.UnorderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.UnorderedBulk.html#content)
-- [Mongo.OrderedBulk](https://hexdocs.pm/mongodb_driver/Mongo.OrderedBulk.html#content)
-- [Mongo.BulkWrite](https://hexdocs.pm/mongodb_driver/Mongo.BulkWrite.html#content)
-- [Mongo.BulkOps](https://hexdocs.pm/mongodb_driver/Mongo.BulkOps.html#content)
+- `Mongo.UnorderedBulk`
+- `Mongo.OrderedBulk`
+- `Mongo.BulkWrite`
+- `Mongo.BulkOps`
 
 and have a look at the test units as well.
 
-### GridFS
+## GridFS
 
 The driver supports the GridFS specifications. You create a `Mongo.GridFs.Bucket`
 struct and with this struct you can upload and download files. For example:
@@ -629,9 +632,11 @@ For more information see:
 - [Mongo.GridFs.Download](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Download.html#content)
 - [Mongo.GridFs.Upload](https://hexdocs.pm/mongodb_driver/Mongo.GridFs.Upload.html#content)
 
-### Transactions
+## Transactions
 
-Since MongoDB 4.x, transactions for multiple write operations are possible. The [Mongo.Session](https://hexdocs.pm/mongodb_driver/Mongo.Session.html#content) is responsible for the details and you can use a convenient api for transactions:
+Since MongoDB 4.x, transactions for multiple write operations are possible. Transaction uses sessions, which
+just contain a transaction number for each transaction. The `Mongo.Session` is responsible for the
+details, and you can use a convenient api for transactions:
 
 ```elixir
 
@@ -643,10 +648,10 @@ Since MongoDB 4.x, transactions for multiple write operations are possible. The 
 end, w: 1)
 
 ```
-The transaction/3 function supports nesting. This allows the functions to be called from each other and all write operations 
-are still in the same transaction. The session is stored in the process dictionary under the key `:session`. The surrounding 
-transaction/3 call creates the session and starts the transaction, storing the session in the process dictionary, commits or
-aborts the transaction. All other transaction/3 calls just call the function parameter without other actions.
+The `Mongo.transaction/3` function supports nesting. This allows the functions to be called from each other and all write operations
+are still in the same transaction. The session is stored in the process dictionary under the key `:session`. The surrounding
+`Mongo.transaction/3` call creates the session and starts the transaction, storing the session in the process dictionary, commits or
+aborts the transaction. All other `Mongo.transaction/3` calls just call the function parameter without other actions.
 
 ```elixir
 def insert_dog(top, name) do
@@ -683,10 +688,15 @@ Mongo.insert_one(top, "dogs", %{name: "Tom"}, session: session)
 :ok = Session.commit_transaction(session)
 :ok = Session.end_session(top, session)
 ```
+For more information see `Mongo.Session` and have a look at the test units as well.
 
-For more information see [Mongo.Session](https://hexdocs.pm/mongodb_driver/Mongo.Session.html#content) and have a look at the test units as well.
+### Aborting a transaction
 
-### Command Monitoring
+You have some options to abort a transaction. The simplest possibility is to return an `:error`. For nested
+function calls, the `Mongo.abort_transaction/1` function call that throws an exception is suitable.
+That means, you can just generate a `raise :should_not_happen` exception as well.
+
+## Command Monitoring
 
 You can watch all events that are triggered while the driver send requests and processes responses. You can use the
 `Mongo.EventHandler` as a starting point. It logs the events from the topic `:commands` (by ignoring the `:isMaster` command)
@@ -696,9 +706,9 @@ to `Logger.info`:
 iex> Mongo.EventHandler.start()
 iex> {:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/test")
 {:ok, #PID<0.226.0>}
-iex> Mongo.find_one(conn, "test", %{})
-[info] Received command: %Mongo.Events.CommandStartedEvent{command: [find: "test", ...
-[info] Received command: %Mongo.Events.CommandSucceededEvent{command_name: :find, ...
+ iex> Mongo.find_one(conn, "test", %{})
+                                      [info] Received command: %Mongo.Events.CommandStartedEvent{command: [find: "test", ...
+                                                                                                                 [info] Received command: %Mongo.Events.CommandSucceededEvent{command_name: :find, ...
 ```
 
 ## Testing

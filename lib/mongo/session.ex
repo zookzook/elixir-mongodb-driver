@@ -33,15 +33,15 @@ defmodule Mongo.Session do
 
   ## Example
 
-      {:ok, ids} = Session.with_transaction(top, fn opts ->
-        {:ok, %InsertOneResult{:inserted_id => id1}} = Mongo.insert_one(top, "dogs", %{name: "Greta"}, opts)
-        {:ok, %InsertOneResult{:inserted_id => id2}} = Mongo.insert_one(top, "dogs", %{name: "Waldo"}, opts)
-        {:ok, %InsertOneResult{:inserted_id => id3}} = Mongo.insert_one(top, "dogs", %{name: "Tom"}, opts)
+      {:ok, ids} = Mongo.transaction(top, fn ->
+        {:ok, %InsertOneResult{:inserted_id => id1}} = Mongo.insert_one(top, "dogs", %{name: "Greta"})
+        {:ok, %InsertOneResult{:inserted_id => id2}} = Mongo.insert_one(top, "dogs", %{name: "Waldo"})
+        {:ok, %InsertOneResult{:inserted_id => id3}} = Mongo.insert_one(top, "dogs", %{name: "Tom"})
         {:ok, [id1, id2, id3]}
-      end, w: 1)
+      end, w: 3)
 
   If the callback is successful then it returns a tuple with the keyword `:ok` and a used defined result like `{:ok, [id1, id2, id3]}`. In this example we use
-  the write concern `w: 1`. The write concern used in the insert operation will be removed by the driver. It is applied in the commit transaction command.
+  the write concern `w: 3`. The write concern used in the insert operation will be removed by the driver. It is applied in the commit transaction command.
 
   ## Implicit vs explicit sessions
 
@@ -55,8 +55,8 @@ defmodule Mongo.Session do
 
       {:ok, session} = Session.start_session(top, :write, causal_consistency: true)
 
-      Mongo.delete_many(top, "dogs", %{"Greta"}, session: session)
-      {:ok, 0} = Mongo.count(top, "dogs", %{name: "Greta"}, session: session)
+      Mongo.delete_many(top, "dogs", %{"Greta"}, session: session, w: :majority)
+      {:ok, 0} = Mongo.count(top, "dogs", %{name: "Greta"}, session: session, read_concern: %{level: :majority})
 
       :ok = Session.end_session(top, session)
 
@@ -78,12 +78,10 @@ defmodule Mongo.Session do
 
   You can shorten this code by using the `with_transaction` function:
 
-      alias Mongo.Session
-
-      {:ok, ids} = Session.with_transaction(top, fn opts ->
-        {:ok, %InsertOneResult{:inserted_id => id1}} = Mongo.insert_one(top, "dogs", %{name: "Greta"}, opts)
-        {:ok, %InsertOneResult{:inserted_id => id2}} = Mongo.insert_one(top, "dogs", %{name: "Waldo"}, opts)
-        {:ok, %InsertOneResult{:inserted_id => id3}} = Mongo.insert_one(top, "dogs", %{name: "Tom"}, opts)
+      {:ok, ids} = Mongo.transaction(top, fn ->
+        {:ok, %InsertOneResult{:inserted_id => id1}} = Mongo.insert_one(top, "dogs", %{name: "Greta"})
+        {:ok, %InsertOneResult{:inserted_id => id2}} = Mongo.insert_one(top, "dogs", %{name: "Waldo"})
+        {:ok, %InsertOneResult{:inserted_id => id3}} = Mongo.insert_one(top, "dogs", %{name: "Tom"})
         {:ok, [id1, id2, id3]}
       end, w: 1)
 

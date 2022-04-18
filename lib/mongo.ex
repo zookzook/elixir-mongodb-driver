@@ -389,6 +389,55 @@ defmodule Mongo do
   end
 
   @doc """
+  Convenient function to execute write and read operation with a causal consistency session.
+
+  With causally consistent sessions, MongoDB executes causal operations in an order that respect their
+  causal relationships, and clients observe results that are consistent with the causal relationships.
+
+  ## Example
+      {:ok, 0} = Mongo.causal_consistency(top, fn ->
+          Mongo.delete_many(top, "dogs", %{name: "Greta"}, w: :majority)
+          Mongo.count(top, "dogs", %{name: "Greta"}, read_concern: %{level: :majority})
+      end)
+
+  The function creates a causal consistency session and stores it in the process dictionary under
+  the key `:session`. But you need to specify the write and read concerns for each operation to
+  `:majority`
+  """
+  @spec transaction(GenServer.server(), function) :: {:ok, any()} | :error | {:error, term}
+  def causal_consistency(topology_pid, fun, opts \\ []) do
+    :session
+    |> Process.get()
+    |> do_causal_consistency(topology_pid, fun, opts)
+  end
+
+  defp do_causal_consistency(nil, topology_pid, fun, opts) do
+    opts = Keyword.merge(opts, causal_consistency: true)
+
+    with {:ok, session} <- Session.start_session(topology_pid, :write, opts) do
+      Process.put(:session, session)
+
+      try do
+        run_function(fun, Keyword.merge(opts, session: session))
+      rescue
+        error ->
+          {:error, error}
+      after
+        Session.end_session(topology_pid, session)
+        Process.delete(:session)
+      end
+    end
+  end
+
+  defp do_causal_consistency(_session, _topology_pid, fun, _opts) when is_function(fun, 0) do
+    fun.()
+  end
+
+  defp do_causal_consistency(_session, _topology_pid, fun, opts) when is_function(fun, 1) do
+    fun.(opts)
+  end
+
+  @doc """
   Creates a change stream cursor on collections.
 
   `on_resume_token` is function that takes the new resume token, if it changed.
