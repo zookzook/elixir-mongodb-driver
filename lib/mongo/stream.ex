@@ -38,7 +38,6 @@ defmodule Mongo.Stream do
     case Mongo.get_session(opts) do
       nil ->
         with {:ok, session} <- Session.start_session(topology_pid, :read, opts) do
-          Process.put(:session, session)
           {:own, session}
         end
 
@@ -49,7 +48,6 @@ defmodule Mongo.Stream do
 
   def checkin_session(:own, session, topology_pid) do
     Session.end_session(topology_pid, session)
-    Process.delete(:session)
   end
 
   def checkin_session(:borrowed, _session, _topology_pid) do
