@@ -1824,7 +1824,8 @@ defmodule Mongo do
   end
 
   defp to_iodata(doc) do
-    opts = Inspect.Opts.new([])
+    default_inspect_fun = :persistent_term.get({Inspect.Opts, :inspect_fun}, &Inspect.inspect/2)
+    opts = %Inspect.Opts{inspect_fun: default_inspect_fun}
 
     doc =
       doc
