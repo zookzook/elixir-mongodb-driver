@@ -348,6 +348,15 @@ defmodule Mongo.RepoTest do
         |> Map.put(:title, "updated")
         |> MyRepo.update()
     end
+
+    test "updates a document without changes" do
+      {:ok, post} =
+        Post.new()
+        |> Map.put(:title, "test")
+        |> MyRepo.insert()
+
+      {:ok, %Post{title: "test"}} = MyRepo.update(post)
+    end
   end
 
   describe "update!/1" do
@@ -361,6 +370,15 @@ defmodule Mongo.RepoTest do
         post
         |> Map.put(:title, "updated")
         |> MyRepo.update!()
+    end
+
+    test "updates a document without changes" do
+      {:ok, post} =
+        Post.new()
+        |> Map.put(:title, "test")
+        |> MyRepo.insert()
+
+      %Post{title: "test"} = MyRepo.update!(post)
     end
   end
 
@@ -388,6 +406,18 @@ defmodule Mongo.RepoTest do
       assert Map.get(post, :_id) == Map.get(updated, :_id)
       assert updated.title == "updated"
     end
+
+    test "updates a document without changes if it does already exist" do
+      {:ok, post} =
+        Post.new()
+        |> Map.put(:title, "test")
+        |> MyRepo.insert_or_update()
+
+      {:ok, updated} = MyRepo.insert_or_update(post)
+
+      assert Map.get(post, :_id) == Map.get(updated, :_id)
+      assert updated.title == "test"
+    end
   end
 
   describe "insert_or_update!/1" do
@@ -413,6 +443,18 @@ defmodule Mongo.RepoTest do
 
       assert Map.get(post, :_id) == Map.get(updated, :_id)
       assert updated.title == "updated"
+    end
+
+    test "updates a document without changes if it does already exist" do
+      post =
+        Post.new()
+        |> Map.put(:title, "test")
+        |> MyRepo.insert_or_update!()
+
+      updated = MyRepo.insert_or_update!(post)
+
+      assert Map.get(post, :_id) == Map.get(updated, :_id)
+      assert updated.title == "test"
     end
   end
 

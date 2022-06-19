@@ -75,7 +75,7 @@ defmodule Mongo.Repo do
 
           case Mongo.update_one(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, []) do
             {:error, reason} -> {:error, reason}
-            {:ok, %{modified_count: 1}} -> {:ok, doc}
+            {:ok, %{modified_count: _}} -> {:ok, doc}
           end
         end
 
@@ -85,7 +85,7 @@ defmodule Mongo.Repo do
           case Mongo.update_one(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, upsert: true) do
             {:error, reason} -> {:error, reason}
             {:ok, %{upserted_ids: [id]}} -> {:ok, %{doc | _id: id}}
-            {:ok, %{modified_count: 1}} -> {:ok, doc}
+            {:ok, %{modified_count: _}} -> {:ok, doc}
           end
         end
 
@@ -117,7 +117,7 @@ defmodule Mongo.Repo do
 
           case update_one_result do
             %{upserted_ids: [id]} -> %{doc | _id: id}
-            %{modified_count: 1} -> doc
+            %{modified_count: _} -> doc
           end
         end
 
