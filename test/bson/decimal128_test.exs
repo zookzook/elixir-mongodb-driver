@@ -18,7 +18,7 @@ defmodule BSON.Decimal128Test do
 
   @tag :mongo_3_4
   test "BSON.Decimal128.decode/1" do
-    assert_decimal(@nan_binaries, %Decimal{coef: :qNaN})
+    assert_decimal(@nan_binaries, %Decimal{coef: :NaN})
     assert_decimal(@inf_binaries, %Decimal{coef: :inf})
     assert_decimal(@neg_inf_binaries, %Decimal{sign: -1, coef: :inf})
     assert_decimal(@binaries_0, %Decimal{coef: 0})
@@ -45,8 +45,7 @@ defmodule BSON.Decimal128Test do
 
   @tag :mongo_3_4
   test "BSON.Decimal128.encode/1" do
-    assert_decimal(%Decimal{coef: :qNaN})
-    assert_decimal(%Decimal{coef: :sNaN})
+    assert_decimal(%Decimal{coef: :NaN})
     assert_decimal(%Decimal{sign: -1, coef: :inf})
     assert_decimal(%Decimal{coef: :inf})
     assert_decimal(%Decimal{coef: 0, exp: -611})

@@ -13,7 +13,6 @@ defmodule BSON.Decimal128 do
   @exponent_bias 6176
   @max_exponent 6111
   @min_exponent -6176
-  @s_nan_mask 0x1 <<< 57
   @significand_mask (0x1 <<< 49) - 1
   @low_mask 0xFFFFFFFFFFFFFFFF
 
@@ -22,14 +21,7 @@ defmodule BSON.Decimal128 do
     combination = high >>> 58 &&& @combination_mask
     two_highest_bits_set = combination >>> 3 == 3
     is_infinity = two_highest_bits_set && combination == @combintation_infinity
-
-    is_nan =
-      case {(two_highest_bits_set && combination) == @combintation_nan, (high &&& @s_nan_mask) == @s_nan_mask} do
-        {true, true} -> :sNan
-        {true, false} -> :qNan
-        _ -> false
-      end
-
+    is_nan = two_highest_bits_set && combination == @combintation_nan
     exponent = exponent(high, two_highest_bits_set)
 
     value(
@@ -56,15 +48,9 @@ defmodule BSON.Decimal128 do
     <<low::little-64, high::little-64>>
   end
 
-  def encode(%Decimal{coef: :qNaN}) do
+  def encode(%Decimal{coef: :NaN}) do
     low = 0
     high = 0x1F <<< 58
-    <<low::little-64, high::little-64>>
-  end
-
-  def encode(%Decimal{coef: :sNaN}) do
-    low = 0
-    high = 0x3F <<< 57
     <<low::little-64, high::little-64>>
   end
 
@@ -107,12 +93,8 @@ defmodule BSON.Decimal128 do
     %Decimal{coef: :inf}
   end
 
-  defp value(%{is_nan: :qNan}, _, _) do
-    %Decimal{coef: :qNaN}
-  end
-
-  defp value(%{is_nan: :sNan}, _, _) do
-    %Decimal{coef: :sNaN}
+  defp value(%{is_nan: true}, _, _) do
+    %Decimal{coef: :NaN}
   end
 
   defp value(%{two_highest_bits_set: true}, _, _) do
