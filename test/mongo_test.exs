@@ -537,8 +537,7 @@ defmodule Mongo.Test do
 
     values =
       [
-        %Decimal{coef: :qNaN},
-        %Decimal{coef: :sNaN},
+        %Decimal{coef: :NaN},
         %Decimal{sign: -1, coef: :inf},
         %Decimal{coef: :inf},
         %Decimal{coef: 0, exp: -611},
