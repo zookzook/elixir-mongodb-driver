@@ -10,7 +10,7 @@
 
 ## Features
 
-- supports MongoDB versions 3.2, 3.4, 3.6, 4.x, 5.x
+- supports MongoDB versions 3.2, 3.4, 3.6, 4.x, 5.x, 6.x
 - connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
 - streaming cursors
 - performant ObjectID generation
@@ -37,7 +37,7 @@ Add `mongodb_driver` to your mix.exs `deps`.
 
 ```elixir
 defp deps do
-  [{:mongodb_driver, "~> 0.9.0"}]
+  [{:mongodb_driver, "~> 0.9.1"}]
 end
 ```
 
