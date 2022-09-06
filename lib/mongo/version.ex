@@ -35,7 +35,15 @@ defmodule Mongo.Version do
     # Supports features available from 5.0 and onwards.
     wire_version_50: 13,
     # Supports features available from 5.1 and onwards.
-    wire_version_51: 14
+    wire_version_51: 14,
+    # Supports features available from 5.2 and onwards.
+    wire_version_52: 15,
+    # Supports features available from 5.3 and onwards.
+    wire_version_53: 16,
+    # Supports features available from 6.0 and onwards.
+    wire_version_60: 17,
+    # Supports features available from 6.1 and onwards.
+    wire_version_61: 18
   ]
 
   for {key, value} <- values do

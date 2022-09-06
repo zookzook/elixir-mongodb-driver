@@ -12,6 +12,8 @@ defmodule Mongo.MongoDBConnection.Utils do
   # currently not used @reply_shard_config_stale 0x4
   # currently not used @reply_await_capable      0x8
 
+  @header_size 4 * 4
+
   @doc """
     Sends a request id and waits for the response with the same id
   """
@@ -97,7 +99,7 @@ defmodule Mongo.MongoDBConnection.Utils do
   end
 
   defp recv_data(nil, "", %{connection: {mod, socket}} = state) do
-    case mod.recv(socket, 0, state.timeout) do
+    case mod.recv(socket, @header_size, state.timeout) do
       {:ok, tail} -> recv_data(nil, tail, state)
       {:error, reason} -> recv_error(reason, state)
     end
@@ -105,14 +107,16 @@ defmodule Mongo.MongoDBConnection.Utils do
 
   defp recv_data(nil, data, %{connection: {mod, socket}} = state) do
     case decode_header(data) do
-      {:ok, header, rest} ->
-        recv_data(header, rest, state)
+      {:ok, header} ->
+        msg_header(length: length) = header
 
-      :error ->
-        case mod.recv(socket, 0, state.timeout) do
-          {:ok, tail} -> recv_data(nil, [data | tail], state)
+        case mod.recv(socket, length, state.timeout) do
+          {:ok, data} -> recv_data(header, data, state)
           {:error, reason} -> recv_error(reason, state)
         end
+
+      :error ->
+        recv_error(:header_not_found, state)
     end
   end
 
@@ -122,6 +126,7 @@ defmodule Mongo.MongoDBConnection.Utils do
         {:ok, id, reply}
 
       :error ->
+        ## todo
         case mod.recv(socket, 0, state.timeout) do
           {:ok, tail} -> recv_data(header, [data | tail], state)
           {:error, reason} -> recv_error(reason, state)

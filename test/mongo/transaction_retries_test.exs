@@ -165,6 +165,6 @@ defmodule Mongo.TransactionRetriesTest do
     catcher
     |> EventCatcher.succeeded_events()
     |> Enum.map(fn event -> event.command_name end)
-    |> Enum.reject(fn event -> event == :isMaster end)
+    |> Enum.reject(fn event -> event == :isMaster || event == :more_to_come end)
   end
 end
