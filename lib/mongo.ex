@@ -1535,18 +1535,6 @@ defmodule Mongo do
     end
   end
 
-  def exec_hello(conn, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:exec_hello, []}}, [], defaults(opts)) do
-      check_for_error(response, [hello: 1], opts)
-    end
-  end
-
-  def exec_hello(conn, cmd, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:exec_hello, cmd}}, [], defaults(opts)) do
-      check_for_error(response, cmd, opts)
-    end
-  end
-
   def exec_more_to_come(conn, opts) do
     with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :more_to_come}, [], defaults(opts)) do
       check_for_error(response, [:more_to_come], opts)
