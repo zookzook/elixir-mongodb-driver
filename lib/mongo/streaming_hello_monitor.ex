@@ -78,7 +78,7 @@ defmodule Mongo.StreamingHelloMonitor do
   end
 
   @doc """
-  Time to update the topology. Calling `isMaster` and updating the server description
+  Time to update the topology. Calling `hello` and updating the server description
   """
   def handle_cast(:update, state) do
     handle_info(:update, state)

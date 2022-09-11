@@ -5,7 +5,7 @@ defmodule Mongo.Monitor do
   If the network connection is working, then the monitor process reports this and the topology process starts the
   connection pool. Per server we get 1 + pool size connections to each server.
 
-  After waiting for `heartbeat_frequency_ms` milliseconds, the monitor process calls `isMaster` command and
+  After waiting for `heartbeat_frequency_ms` milliseconds, the monitor process calls `hello` command and
   reports the result to the topology process.
 
   The result of the hello command is mapped the `ServerDescription` structure and sent to the topology process, which
