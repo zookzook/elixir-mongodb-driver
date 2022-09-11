@@ -39,7 +39,7 @@ defmodule Mongo.MongoDBConnection.Utils do
 
     Using op_msg structure to invoke the command
   """
-  def command(id, command, %{wire_version: version} = state) when is_integer(version) and version >= 6 do
+  def command(id, command, %{use_op_msg: true} = state) do
     # In case of authenticate sometimes the namespace has to be modified
     # If using X509 we need to add the keyword $external to use the external database for the client certificates
     db =
@@ -64,8 +64,8 @@ defmodule Mongo.MongoDBConnection.Utils do
         false -> namespace("$cmd", state, nil)
       end
 
-    op_query(coll: ns, query: command, select: "", num_skip: 0, num_return: 1, flags: [])
-    |> post_request(id, state)
+    request = op_query(coll: ns, query: command, select: "", num_skip: 0, num_return: 1, flags: [])
+    post_request(request, id, state)
   end
 
   def get_doc(op_reply() = response) do
@@ -148,12 +148,14 @@ defmodule Mongo.MongoDBConnection.Utils do
   def namespace(coll, _, database), do: [database, ?. | coll]
 
   def digest(nonce, username, password) do
-    :crypto.hash(:md5, [nonce, username, digest_password(username, password, :sha)])
+    :md5
+    |> :crypto.hash([nonce, username, digest_password(username, password, :sha)])
     |> Base.encode16(case: :lower)
   end
 
   def digest_password(username, password, :sha) do
-    :crypto.hash(:md5, [username, ":mongo:", password])
+    :md5
+    |> :crypto.hash([username, ":mongo:", password])
     |> Base.encode16(case: :lower)
   end
 

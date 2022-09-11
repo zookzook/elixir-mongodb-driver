@@ -127,7 +127,8 @@ defmodule Mongo.Auth.SCRAM do
   # It calls isMaster with saslSupportedMechs option to ask for the selected user which mechanism is supported
   #
   defp select_digest(database, username, state) do
-    with {:ok, _flags, doc} <- Utils.command(-2, [isMaster: 1, saslSupportedMechs: database <> "." <> username], state) do
+    ### todo
+    with {:ok, _flags, doc} <- Utils.command(-2, [hello: 1, saslSupportedMechs: database <> "." <> username], state) do
       select_digest(doc)
     end
   end

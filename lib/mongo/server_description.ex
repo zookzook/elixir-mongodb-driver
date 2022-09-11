@@ -151,6 +151,7 @@ defmodule Mongo.ServerDescription do
   defp determine_server_type(%{"setName" => set_name} = is_master_reply) when set_name != nil do
     case is_master_reply do
       %{"ismaster" => true} -> :rs_primary
+      %{"isWritablePrimary" => true} -> :rs_primary
       %{"secondary" => true} -> :rs_secondary
       %{"arbiterOnly" => true} -> :rs_arbiter
       _ -> :rs_other
