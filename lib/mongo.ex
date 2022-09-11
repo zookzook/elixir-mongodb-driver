@@ -1504,7 +1504,7 @@ defmodule Mongo do
           {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
   def exec_command_session(session, cmd, opts) do
     with {:ok, conn, new_cmd} <- Session.bind_session(session, cmd),
-         {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
+         {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:command, new_cmd}}, [], defaults(opts)),
          :ok <- Session.update_session(session, response, opts),
          {:ok, {_flags, doc}} <- check_for_error(response, cmd, opts) do
       {:ok, doc}
@@ -1518,7 +1518,7 @@ defmodule Mongo do
   @spec exec_command(GenServer.server(), BSON.document(), Keyword.t()) ::
           {:ok, {any(), BSON.document()} | nil} | {:error, Mongo.Error.t()}
   def exec_command(conn, cmd, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)) do
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:command, cmd}}, [], defaults(opts)) do
       check_for_error(response, cmd, opts)
     end
   end
@@ -1536,7 +1536,7 @@ defmodule Mongo do
   end
 
   def exec_more_to_come(conn, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [:more_to_come], defaults(opts)) do
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :more_to_come}, [], defaults(opts)) do
       check_for_error(response, [:more_to_come], opts)
     end
   end

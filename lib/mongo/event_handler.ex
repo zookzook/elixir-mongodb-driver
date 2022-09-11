@@ -24,7 +24,7 @@ defmodule Mongo.EventHandler do
 
   def listen(opts) do
     receive do
-      {:broadcast, :commands, %{command_name: cmd} = message} when cmd != :isMaster && cmd != :hello ->
+      {:broadcast, :commands, %{command_name: cmd} = message} when cmd != :isMaster and cmd != :hello ->
         Logger.info("Received command: " <> inspect(message))
         listen(opts)
 

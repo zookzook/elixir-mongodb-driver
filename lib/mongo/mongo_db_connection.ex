@@ -95,10 +95,10 @@ defmodule Mongo.MongoDBConnection do
   end
 
   @impl true
-  def handle_execute(%Mongo.Query{action: action} = query, params, opts, original_state) do
+  def handle_execute(%Mongo.Query{action: action} = query, _params, opts, original_state) do
     tmp_state = %{original_state | database: Keyword.get(opts, :database, original_state.database)}
 
-    with {:ok, reply, tmp_state} <- execute_action(action, params, opts, tmp_state) do
+    with {:ok, reply, tmp_state} <- send_command(action, opts, tmp_state) do
       {:ok, query, reply, Map.put(tmp_state, :database, original_state.database)}
     end
   end
@@ -264,7 +264,7 @@ defmodule Mongo.MongoDBConnection do
   ##
   # Executes a hello or the legacy hello command
   ##
-  defp execute_action({:exec_hello, cmd}, _params, opts, %{use_op_msg: true} = state) do
+  defp send_command({:exec_hello, cmd}, opts, %{use_op_msg: true} = state) do
     db = opts[:database] || state.database
     timeout = Keyword.get(opts, :timeout, state.timeout)
     flags = Keyword.get(opts, :flags, 0x0)
@@ -297,7 +297,7 @@ defmodule Mongo.MongoDBConnection do
   ##
   # Executes a more to come command
   ##
-  defp execute_action(:command, [:more_to_come], opts, %{use_op_msg: true} = state) do
+  defp send_command(:more_to_come, opts, %{use_op_msg: true} = state) do
     event = %MoreToComeEvent{command: :more_to_come, command_name: opts[:command_name] || :more_to_come}
 
     timeout = Keyword.get(opts, :timeout, state.timeout)
@@ -313,7 +313,7 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp execute_action(:command, [cmd], opts, %{use_op_msg: true} = state) do
+  defp send_command({:command, cmd}, opts, %{use_op_msg: true} = state) do
     {command_name, data} = provide_cmd_data(cmd)
     db = opts[:database] || state.database
     cmd = cmd ++ ["$db": db]
@@ -350,7 +350,7 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp execute_action(:command, [cmd], opts, state) do
+  defp send_command({:command, cmd}, opts, state) do
     [{command_name, _} | _] = cmd
 
     event = %CommandStartedEvent{
@@ -376,7 +376,7 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp execute_action(:error, _query, _opts, state) do
+  defp send_command(:error, _opts, state) do
     exception = Mongo.Error.exception("Test-case")
     {:disconnect, exception, state}
   end
