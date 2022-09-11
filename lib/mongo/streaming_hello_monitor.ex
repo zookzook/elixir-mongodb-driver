@@ -136,7 +136,6 @@ defmodule Mongo.StreamingHelloMonitor do
           |> Map.put(:error, nil)
 
         notify_success(duration, hello_doc, conn_pid)
-
         {hello_doc["topologyVersion"], flags, server_description}
 
       {:error, error} ->
@@ -155,7 +154,6 @@ defmodule Mongo.StreamingHelloMonitor do
     opts = Keyword.merge(opts, flags: [:exhaust_allowed])
 
     cmd = [
-      isMaster: 1,
       maxAwaitTimeMS: Keyword.get(opts, :max_await_time_ms, 10_000),
       topologyVersion: %{
         counter: %BSON.LongNumber{value: counter},
@@ -163,11 +161,11 @@ defmodule Mongo.StreamingHelloMonitor do
       }
     ]
 
-    Mongo.exec_command(conn_pid, cmd, opts)
+    Mongo.exec_hello(conn_pid, cmd, opts)
   end
 
   defp hello_command(conn_pid, _topology_version, opts) do
-    Mongo.exec_command(conn_pid, [isMaster: 1], opts)
+    Mongo.exec_hello(conn_pid, opts)
   end
 
   defp notify_error(duration, error, conn_pid) do
