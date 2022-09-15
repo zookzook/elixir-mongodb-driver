@@ -126,7 +126,6 @@ defmodule Mongo.MongoDBConnection.Utils do
         {:ok, id, reply}
 
       :error ->
-        ## todo
         case mod.recv(socket, 0, state.timeout) do
           {:ok, tail} -> recv_data(header, [data | tail], state)
           {:error, reason} -> recv_error(reason, state)

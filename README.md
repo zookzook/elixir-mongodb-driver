@@ -488,6 +488,26 @@ you'll want to add this cipher to your `ssl_opts`:
 )
 ```
 
+## Timeout
+
+The `:timeout` option is only used to specify the timeout for receiving data on the tcp layer. The default value is 15 seconds. 
+The connection pool defines separate timeout values. 
+You can use the `:timeout` as a global option to override the default value:
+
+```elixir
+# Starts an pooled connection
+{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/db-name", timeout: 60_000)
+```
+
+Each single connection uses `60_000` (60 seconds) as the timeout value instead of `15_000`. But you can override the default value by
+using the `:timeout` option, when running a single command:
+
+```elixr
+Mongo.find(conn, "dogs", %{}, timeout: 120_000)
+```
+
+Now the driver will use 120 seconds for the timeout.
+
 ## Change Streams
 
 Change streams are available in replica set and sharded cluster deployments

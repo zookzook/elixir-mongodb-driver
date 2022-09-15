@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Bugfix
   * fix a crash in the streaming hello monitor, if the server sends more than one response at once 
   * add support for the new hello handshake
+  * refactor :timeout option (thanks to JD-Robertson for reporting)
 
 ## 0.9.1 (2022-05-27)
 * Bugfix

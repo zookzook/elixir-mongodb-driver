@@ -151,10 +151,15 @@ defmodule Mongo.StreamingHelloMonitor do
   end
 
   defp hello_command(conn_pid, %{"counter" => counter, "processId" => process_id}, opts) do
-    opts = Keyword.merge(opts, flags: [:exhaust_allowed])
+    maxAwaitTimeMS = Keyword.get(opts, :max_await_time_ms, 10_000)
+
+    opts =
+      opts
+      |> Keyword.merge(flags: [:exhaust_allowed])
+      |> Keyword.merge(timeout: maxAwaitTimeMS * 2)
 
     cmd = [
-      maxAwaitTimeMS: Keyword.get(opts, :max_await_time_ms, 10_000),
+      maxAwaitTimeMS: maxAwaitTimeMS,
       topologyVersion: %{
         counter: %BSON.LongNumber{value: counter},
         processId: process_id

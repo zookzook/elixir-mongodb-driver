@@ -14,7 +14,7 @@ defmodule Mongo.MongoDBConnection do
   alias Mongo.Events.MoreToComeEvent
   alias Mongo.StableVersion
 
-  @timeout 5_000
+  @timeout 15_000
   @find_one_flags ~w(slave_ok exhaust partial)a
   @write_concern ~w(w j wtimeout)a
   @insecure_cmds [:authenticate, :saslStart, :saslContinue, :getnonce, :createUser, :updateUser, :copydbgetnonce, :copydbsaslstart, :copydb, :isMaster, :ismaster, :hello]
