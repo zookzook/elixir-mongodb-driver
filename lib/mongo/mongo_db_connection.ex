@@ -406,7 +406,7 @@ defmodule Mongo.MongoDBConnection do
   end
 
   defp handshake_command(%{stable_api: nil}, client) do
-    [ismaster: 1, helloOk: 1, client: client]
+    [ismaster: 1, helloOk: true, client: client]
   end
 
   defp handshake_command(%{stable_api: stable_api}, client) do
@@ -416,7 +416,7 @@ defmodule Mongo.MongoDBConnection do
   defp hello_command(cmd, %{hello_ok: false}) do
     cmd
     |> Keyword.put(:ismaster, 1)
-    |> Keyword.put(:helloOk, 1)
+    |> Keyword.put(:helloOk, true)
   end
 
   defp hello_command(cmd, %{hello_ok: true, stable_api: stable_api}) do
