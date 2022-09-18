@@ -39,7 +39,7 @@ defmodule Mongo.Messages do
 
   @header_size 4 * 4
 
-  defrecordp :msg_header, [:length, :request_id, :response_to, :op_code]
+  defrecord :msg_header, [:length, :request_id, :response_to, :op_code]
   defrecord :op_query, [:flags, :coll, :num_skip, :num_return, :query, :select]
   defrecord :op_reply, [:flags, :cursor_id, :from, :num, :docs]
   defrecord :sequence, [:size, :identifier, :docs]
@@ -51,16 +51,20 @@ defmodule Mongo.Messages do
     Decodes the header from response of a request sent by the mongodb server
   """
   def decode_header(iolist) when is_list(iolist) do
-    case IO.iodata_length(iolist) >= @header_size do
-      true -> iolist |> IO.iodata_to_binary() |> decode_header()
-      false -> :error
+    case IO.iodata_length(iolist) == @header_size do
+      true ->
+        iolist
+        |> IO.iodata_to_binary()
+        |> decode_header()
+
+      false ->
+        :error
     end
   end
 
-  def decode_header(<<length::int32, request_id::int32, response_to::int32, op_code::int32, rest::binary>>) do
-    ## todo don't subtract header-size here
+  def decode_header(<<length::int32, request_id::int32, response_to::int32, op_code::int32>>) do
     header = msg_header(length: length - @header_size, request_id: request_id, response_to: response_to, op_code: op_code)
-    {:ok, header, rest}
+    {:ok, header}
   end
 
   def decode_header(_binary), do: :error

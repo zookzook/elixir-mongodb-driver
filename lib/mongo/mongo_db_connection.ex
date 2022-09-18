@@ -12,11 +12,12 @@ defmodule Mongo.MongoDBConnection do
   alias Mongo.Events.CommandStartedEvent
   alias Mongo.MongoDBConnection.Utils
   alias Mongo.Events.MoreToComeEvent
+  alias Mongo.StableVersion
 
-  @timeout 5_000
+  @timeout 15_000
   @find_one_flags ~w(slave_ok exhaust partial)a
   @write_concern ~w(w j wtimeout)a
-  @insecure_cmds [:authenticate, :saslStart, :saslContinue, :getnonce, :createUser, :updateUser, :copydbgetnonce, :copydbsaslstart, :copydb, :isMaster, :ismaster]
+  @insecure_cmds [:authenticate, :saslStart, :saslContinue, :getnonce, :createUser, :updateUser, :copydbgetnonce, :copydbsaslstart, :copydb, :isMaster, :ismaster, :hello]
 
   @impl true
   def connect(opts) do
@@ -34,10 +35,72 @@ defmodule Mongo.MongoDBConnection do
       auth_mechanism: opts[:auth_mechanism] || nil,
       connection_type: Keyword.fetch!(opts, :connection_type),
       topology_pid: Keyword.fetch!(opts, :topology_pid),
+      stable_api: Keyword.get(opts, :stable_api),
+      use_op_msg: Keyword.get(opts, :stable_api) != nil,
+      hello_ok: Keyword.get(opts, :stable_api) != nil,
       ssl: opts[:ssl] || opts[:tls] || false
     }
 
     connect(opts, state)
+  end
+
+  @impl true
+  def disconnect(_error, %{connection: {mod, socket}, connection_type: type, topology_pid: pid, host: host}) do
+    GenServer.cast(pid, {:disconnect, type, host})
+    mod.close(socket)
+    :ok
+  end
+
+  @impl true
+  def checkout(state), do: {:ok, state}
+  @impl true
+  def handle_begin(_opts, state), do: {:ok, nil, state}
+  @impl true
+  def handle_close(_query, _opts, state), do: {:ok, nil, state}
+  @impl true
+  def handle_commit(_opts, state), do: {:ok, nil, state}
+  @impl true
+  def handle_deallocate(_query, _cursor, _opts, state), do: {:ok, nil, state}
+  @impl true
+  def handle_declare(query, _params, _opts, state), do: {:ok, query, nil, state}
+  @impl true
+  def handle_fetch(_query, _cursor, _opts, state), do: {:halt, nil, state}
+  @impl true
+  def handle_prepare(query, _opts, state), do: {:ok, query, state}
+  @impl true
+  def handle_rollback(_opts, state), do: {:ok, nil, state}
+  @impl true
+  def handle_status(_opts, state), do: {:idle, state}
+
+  @impl true
+  def ping(%{connection_type: :client} = state) do
+    cmd = [ping: 1]
+
+    case Utils.command(-1, cmd, state) do
+      {:ok, _flags, %{"ok" => ok}} when ok == 1 ->
+        {:ok, state}
+
+      {:ok, _flags, %{"ok" => ok, "errmsg" => msg, "code" => code}} when ok == 0 ->
+        err = Mongo.Error.exception(message: msg, code: code)
+        {:disconnect, err, state}
+
+      {:disconnect, _, _} = error ->
+        error
+    end
+  end
+
+  @impl true
+  def ping(state) do
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_execute(%Mongo.Query{action: action} = query, _params, opts, original_state) do
+    tmp_state = %{original_state | database: Keyword.get(opts, :database, original_state.database)}
+
+    with {:ok, reply, tmp_state} <- send_command(action, opts, tmp_state) do
+      {:ok, query, reply, Map.put(tmp_state, :database, original_state.database)}
+    end
   end
 
   defp connect(opts, state) do
@@ -123,12 +186,12 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp post_hello_command(state, client) do
-    cmd = [ismaster: 1, client: client]
+  defp hand_shake(opts, state) do
+    cmd = handshake_command(state, client(opts[:appname] || "elixir-driver"))
 
     case Utils.command(-1, cmd, state) do
-      {:ok, _flags, %{"ok" => ok, "maxWireVersion" => version}} when ok == 1 ->
-        {:ok, %{state | wire_version: version}}
+      {:ok, _flags, %{"ok" => ok, "maxWireVersion" => version} = response} when ok == 1 ->
+        {:ok, %{state | wire_version: version, use_op_msg: version >= 6, hello_ok: Map.get(response, "helloOk", false)}}
 
       {:ok, _flags, %{"ok" => ok}} when ok == 1 ->
         {:ok, %{state | wire_version: 0}}
@@ -142,11 +205,7 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp hand_shake(opts, state) do
-    post_hello_command(state, driver(opts[:appname] || "My killer app"))
-  end
-
-  defp driver(appname) do
+  defp client(app_name) do
     driver_version =
       case :application.get_key(:mongodb_driver, :vsn) do
         {:ok, version} -> to_string(version)
@@ -167,7 +226,7 @@ defmodule Mongo.MongoDBConnection do
 
     %{
       client: %{
-        application: %{name: appname}
+        application: %{name: app_name}
       },
       driver: %{
         name: "mongodb_driver",
@@ -195,65 +254,6 @@ defmodule Mongo.MongoDBConnection do
   defp pretty_name("apple"), do: "Mac OS X"
   defp pretty_name(name), do: name
 
-  @impl true
-  def disconnect(_error, %{connection: {mod, socket}, connection_type: type, topology_pid: pid, host: host}) do
-    GenServer.cast(pid, {:disconnect, type, host})
-    mod.close(socket)
-    :ok
-  end
-
-  @impl true
-  def checkout(state), do: {:ok, state}
-  @impl true
-  def handle_begin(_opts, state), do: {:ok, nil, state}
-  @impl true
-  def handle_close(_query, _opts, state), do: {:ok, nil, state}
-  @impl true
-  def handle_commit(_opts, state), do: {:ok, nil, state}
-  @impl true
-  def handle_deallocate(_query, _cursor, _opts, state), do: {:ok, nil, state}
-  @impl true
-  def handle_declare(query, _params, _opts, state), do: {:ok, query, nil, state}
-  @impl true
-  def handle_fetch(_query, _cursor, _opts, state), do: {:halt, nil, state}
-  @impl true
-  def handle_prepare(query, _opts, state), do: {:ok, query, state}
-  @impl true
-  def handle_rollback(_opts, state), do: {:ok, nil, state}
-  @impl true
-  def handle_status(_opts, state), do: {:idle, state}
-
-  @impl true
-  def ping(%{connection_type: :client} = state) do
-    cmd = [ping: 1]
-
-    case Utils.command(-1, cmd, state) do
-      {:ok, _flags, %{"ok" => ok}} when ok == 1 ->
-        {:ok, state}
-
-      {:ok, _flags, %{"ok" => ok, "errmsg" => msg, "code" => code}} when ok == 0 ->
-        err = Mongo.Error.exception(message: msg, code: code)
-        {:disconnect, err, state}
-
-      {:disconnect, _, _} = error ->
-        error
-    end
-  end
-
-  @impl true
-  def ping(state) do
-    {:ok, state}
-  end
-
-  @impl true
-  def handle_execute(%Mongo.Query{action: action} = query, params, opts, original_state) do
-    tmp_state = %{original_state | database: Keyword.get(opts, :database, original_state.database)}
-
-    with {:ok, reply, tmp_state} <- execute_action(action, params, opts, tmp_state) do
-      {:ok, query, reply, Map.put(tmp_state, :database, original_state.database)}
-    end
-  end
-
   defp provide_cmd_data([{command_name, _} | _] = cmd) do
     case Enum.member?(@insecure_cmds, command_name) do
       true -> {command_name, %{}}
@@ -262,9 +262,42 @@ defmodule Mongo.MongoDBConnection do
   end
 
   ##
+  # Executes a hello or the legacy hello command
+  ##
+  defp send_command({:exec_hello, cmd}, opts, %{use_op_msg: true} = state) do
+    db = opts[:database] || state.database
+    timeout = Keyword.get(opts, :timeout, state.timeout)
+    flags = Keyword.get(opts, :flags, 0x0)
+
+    cmd = hello_command(cmd, state) ++ ["$db": db]
+
+    event = %CommandStartedEvent{
+      command: :hello,
+      command_name: :hello,
+      database_name: db,
+      request_id: state.request_id,
+      operation_id: opts[:operation_id],
+      connection_id: self()
+    }
+
+    Events.notify(event, :commands)
+
+    op = op_msg(flags: flags, sections: [section(payload_type: 0, payload: payload(doc: cmd))])
+
+    case :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end) do
+      {duration, {:ok, flags, doc}} ->
+        state = %{state | request_id: state.request_id + 1}
+        {:ok, {doc, event, flags, duration}, state}
+
+      {_duration, error} ->
+        error
+    end
+  end
+
+  ##
   # Executes a more to come command
   ##
-  defp execute_action(:command, [:more_to_come], opts, %{wire_version: version} = state) when version >= 6 do
+  defp send_command(:more_to_come, opts, %{use_op_msg: true} = state) do
     event = %MoreToComeEvent{command: :more_to_come, command_name: opts[:command_name] || :more_to_come}
 
     timeout = Keyword.get(opts, :timeout, state.timeout)
@@ -280,7 +313,7 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp execute_action(:command, [cmd], opts, %{wire_version: version} = state) when version >= 6 do
+  defp send_command({:command, cmd}, opts, %{use_op_msg: true} = state) do
     {command_name, data} = provide_cmd_data(cmd)
     db = opts[:database] || state.database
     cmd = cmd ++ ["$db": db]
@@ -317,7 +350,7 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp execute_action(:command, [cmd], opts, state) do
+  defp send_command({:command, cmd}, opts, state) do
     [{command_name, _} | _] = cmd
 
     event = %CommandStartedEvent{
@@ -343,7 +376,7 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp execute_action(:error, _query, _opts, state) do
+  defp send_command(:error, _opts, state) do
     exception = Mongo.Error.exception("Test-case")
     {:disconnect, exception, state}
   end
@@ -370,5 +403,25 @@ defmodule Mongo.MongoDBConnection do
       {flag, true}, acc -> [flag | acc]
       {_flag, false}, acc -> acc
     end)
+  end
+
+  defp handshake_command(%{stable_api: nil}, client) do
+    [ismaster: 1, helloOk: true, client: client]
+  end
+
+  defp handshake_command(%{stable_api: stable_api}, client) do
+    StableVersion.merge_stable_api([hello: 1, client: client], stable_api)
+  end
+
+  defp hello_command(cmd, %{hello_ok: false}) do
+    cmd
+    |> Keyword.put(:ismaster, 1)
+    |> Keyword.put(:helloOk, true)
+  end
+
+  defp hello_command(cmd, %{hello_ok: true, stable_api: stable_api}) do
+    cmd
+    |> Keyword.put(:hello, 1)
+    |> StableVersion.merge_stable_api(stable_api)
   end
 end

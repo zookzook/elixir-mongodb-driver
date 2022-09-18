@@ -78,7 +78,7 @@ defmodule Mongo.StreamingHelloMonitor do
   end
 
   @doc """
-  Time to update the topology. Calling `isMaster` and updating the server description
+  Time to update the topology. Calling `hello` and updating the server description
   """
   def handle_cast(:update, state) do
     handle_info(:update, state)
@@ -136,7 +136,6 @@ defmodule Mongo.StreamingHelloMonitor do
           |> Map.put(:error, nil)
 
         notify_success(duration, hello_doc, conn_pid)
-
         {hello_doc["topologyVersion"], flags, server_description}
 
       {:error, error} ->
@@ -152,22 +151,26 @@ defmodule Mongo.StreamingHelloMonitor do
   end
 
   defp hello_command(conn_pid, %{"counter" => counter, "processId" => process_id}, opts) do
-    opts = Keyword.merge(opts, flags: [:exhaust_allowed])
+    max_await_time_ms = Keyword.get(opts, :max_await_time_ms, 10_000)
+
+    opts =
+      opts
+      |> Keyword.merge(flags: [:exhaust_allowed])
+      |> Keyword.merge(timeout: max_await_time_ms * 2)
 
     cmd = [
-      isMaster: 1,
-      maxAwaitTimeMS: Keyword.get(opts, :max_await_time_ms, 10_000),
+      maxAwaitTimeMS: max_await_time_ms,
       topologyVersion: %{
         counter: %BSON.LongNumber{value: counter},
         processId: process_id
       }
     ]
 
-    Mongo.exec_command(conn_pid, cmd, opts)
+    Mongo.exec_hello(conn_pid, cmd, opts)
   end
 
   defp hello_command(conn_pid, _topology_version, opts) do
-    Mongo.exec_command(conn_pid, [isMaster: 1], opts)
+    Mongo.exec_hello(conn_pid, opts)
   end
 
   defp notify_error(duration, error, conn_pid) do

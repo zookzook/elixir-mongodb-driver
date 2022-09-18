@@ -13,14 +13,14 @@ jobs:
 
     strategy:
       matrix:
-        mongodb-version: ["5.0"]
+        mongodb-version: ["5.0", "6.0"]
 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
 
       - name: Start MongoDB
-        uses: supercharge/mongodb-github-action@1.6.0
+        uses: supercharge/mongodb-github-action@1.8.0
         with:
           mongodb-version: ${{ matrix.mongodb-version }}
           mongodb-replica-set: rs_1
@@ -30,7 +30,7 @@ jobs:
         id: versions
 
       - name: Set up Elixir
-        uses: erlef/setup-elixir@v1
+        uses: erlef/setup-beam@v1
         with:
           elixir-version: ${{steps.versions.outputs.elixir}}
           otp-version: ${{ steps.versions.outputs.erlang}}

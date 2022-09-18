@@ -67,7 +67,6 @@ defmodule Mongo do
   alias Mongo.Events.CommandFailedEvent
   alias Mongo.Error
 
-  @timeout 15_000
   @retry_timeout_seconds 120
 
   @type conn :: DbConnection.Conn
@@ -1504,7 +1503,7 @@ defmodule Mongo do
           {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
   def exec_command_session(session, cmd, opts) do
     with {:ok, conn, new_cmd} <- Session.bind_session(session, cmd),
-         {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [new_cmd], defaults(opts)),
+         {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:command, new_cmd}}, [], opts),
          :ok <- Session.update_session(session, response, opts),
          {:ok, {_flags, doc}} <- check_for_error(response, cmd, opts) do
       {:ok, doc}
@@ -1518,13 +1517,25 @@ defmodule Mongo do
   @spec exec_command(GenServer.server(), BSON.document(), Keyword.t()) ::
           {:ok, {any(), BSON.document()} | nil} | {:error, Mongo.Error.t()}
   def exec_command(conn, cmd, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [cmd], defaults(opts)) do
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:command, cmd}}, [], opts) do
+      check_for_error(response, cmd, opts)
+    end
+  end
+
+  def exec_hello(conn, opts) do
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:exec_hello, []}}, [], opts) do
+      check_for_error(response, [hello: 1], opts)
+    end
+  end
+
+  def exec_hello(conn, cmd, opts) do
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:exec_hello, cmd}}, [], opts) do
       check_for_error(response, cmd, opts)
     end
   end
 
   def exec_more_to_come(conn, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :command}, [:more_to_come], defaults(opts)) do
+    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :more_to_come}, [], opts) do
       check_for_error(response, [:more_to_come], opts)
     end
   end
@@ -1735,17 +1746,13 @@ defmodule Mongo do
   defp assert_many_docs!(other),
     do: raise(ArgumentError, "expected list of documents, got: #{inspect(other)}")
 
-  defp defaults(opts) do
-    Keyword.put_new(opts, :timeout, @timeout)
-  end
-
   ## support for logging like Ecto
   defp do_log([:more_to_come], _duration, _opts) do
     :ok
   end
 
   defp do_log(cmd, duration, opts) do
-    case Keyword.has_key?(cmd, :isMaster) || Keyword.has_key?(cmd, :more_to_come) do
+    case Keyword.has_key?(cmd, :isMaster) || Keyword.has_key?(cmd, :more_to_come) || Keyword.has_key?(cmd, :hello) do
       true ->
         :ok
 

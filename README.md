@@ -10,7 +10,7 @@
 
 ## Features
 
-- supports MongoDB versions 3.2, 3.4, 3.6, 4.x, 5.x
+- supports MongoDB versions 4.x, 5.x, 6.x
 - connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
 - streaming cursors
 - performant ObjectID generation
@@ -37,7 +37,7 @@ Add `mongodb_driver` to your mix.exs `deps`.
 
 ```elixir
 defp deps do
-  [{:mongodb_driver, "~> 0.9.0"}]
+  [{:mongodb_driver, "~> 0.9.1"}]
 end
 ```
 
@@ -487,6 +487,26 @@ you'll want to add this cipher to your `ssl_opts`:
       ]
 )
 ```
+
+## Timeout
+
+The `:timeout` option sets the maximum time that the caller is allowed to hold the connection’s state (to send and to receive data). 
+The default value is 15 seconds. The connection pool defines additional timeout values. 
+You can use the `:timeout` as a global option to override the default value:
+
+```elixir
+# Starts an pooled connection
+{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/db-name", timeout: 60_000)
+```
+
+Each single connection uses `60_000` (60 seconds) as the timeout value instead of `15_000`. But you can override the default value by
+using the `:timeout` option, when running a single command:
+
+```elixr
+Mongo.find(conn, "dogs", %{}, timeout: 120_000)
+```
+
+Now the driver will use 120 seconds as the timeout for the single query.
 
 ## Change Streams
 

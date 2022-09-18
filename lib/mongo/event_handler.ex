@@ -24,13 +24,13 @@ defmodule Mongo.EventHandler do
 
   def listen(opts) do
     receive do
-      {:broadcast, :commands, %{command_name: cmd} = message} when cmd != :isMaster ->
+      {:broadcast, :commands, %{command_name: cmd} = message} when cmd != :isMaster and cmd != :hello ->
         Logger.info("Received command: " <> inspect(message))
         listen(opts)
 
-      {:broadcast, :commands, is_master} ->
-        case opts[:is_master] do
-          true -> Logger.info("Received is master:" <> inspect(is_master))
+      {:broadcast, :commands, hello} ->
+        case opts[:is_master] || opts[:hello] do
+          true -> Logger.info("Received hello:" <> inspect(hello))
           _ -> []
         end
 

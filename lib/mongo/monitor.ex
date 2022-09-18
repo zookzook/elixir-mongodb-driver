@@ -5,7 +5,7 @@ defmodule Mongo.Monitor do
   If the network connection is working, then the monitor process reports this and the topology process starts the
   connection pool. Per server we get 1 + pool size connections to each server.
 
-  After waiting for `heartbeat_frequency_ms` milliseconds, the monitor process calls `isMaster` command and
+  After waiting for `heartbeat_frequency_ms` milliseconds, the monitor process calls `hello` command and
   reports the result to the topology process.
 
   The result of the hello command is mapped the `ServerDescription` structure and sent to the topology process, which
@@ -221,7 +221,7 @@ defmodule Mongo.Monitor do
   # Streaming mode: calls hello command and updated the round trip time for the command.
   ##
   defp get_server_description(%{connection_pid: conn_pid, round_trip_time: last_rtt, mode: :streaming_mode, opts: opts}) do
-    {rtt, response} = :timer.tc(fn -> Mongo.exec_command(conn_pid, [isMaster: 1], opts) end)
+    {rtt, response} = :timer.tc(fn -> Mongo.exec_hello(conn_pid, opts) end)
 
     case response do
       {:ok, {_flags, _hello_doc}} ->
@@ -236,7 +236,7 @@ defmodule Mongo.Monitor do
   # Polling mode: updating the server description and the round trip time together
   ##
   defp get_server_description(%{connection_pid: conn_pid, address: address, round_trip_time: last_rtt, opts: opts}) do
-    {rtt, response} = :timer.tc(fn -> Mongo.exec_command(conn_pid, [isMaster: 1], opts) end)
+    {rtt, response} = :timer.tc(fn -> Mongo.exec_hello(conn_pid, opts) end)
 
     case response do
       {:ok, {_flags, hello_doc}} ->
