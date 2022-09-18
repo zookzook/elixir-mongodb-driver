@@ -37,9 +37,8 @@ defmodule Collections.SimpleTest do
 
     collection "cards" do
       attribute :title, String.t(), default: "new title"
-      attribute :created, DateString.t(), default: &DateTime.utc_now/0
-      attribute :modified, DateString.t(), default: &DateTime.utc_now/0
       embeds_one(:label, Label, default: &Label.new/0)
+      timestamps(inserted_at: :created, updated_at: :modified)
     end
 
     def insert_one(%Card{} = card, top) do
