@@ -445,7 +445,7 @@ defmodule Mongo.Collection do
            text: not so useful comment"
          }}
 
-  The `timestamps` macro has some limitations as it does not execute in batch commands like `insert_all` or `update_all`
+  The `timestamps` macro has some limitations as it does not run in batch commands like `insert_all` or `update_all`, nor does it update embedded documents.
 
   """
 
