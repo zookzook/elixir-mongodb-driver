@@ -665,7 +665,7 @@ defmodule Mongo.Collection do
           Enum.map(xs, fn struct -> timestamps(struct) end)
         end
 
-        def timestamps( struct) do
+        def timestamps(struct) do
           updated_at = @timestamps[:updated_at]
           Collection.timestamps(struct, updated_at, @attributes[updated_at])
         end
