@@ -116,6 +116,8 @@ defmodule Mongo.StreamingHelloMonitor do
   defp get_server_description(%{connection_pid: conn_pid, address: address, topology_version: topology_version, max_await_time_ms: max_await_time_ms, opts: opts} = state) do
     Mongo.Events.notify(%ServerHeartbeatStartedEvent{connection_pid: conn_pid})
 
+    opts = Keyword.merge(opts, timeout: max_await_time_ms * 2)
+
     {duration, result} =
       case state do
         %{more_to_come: true} ->

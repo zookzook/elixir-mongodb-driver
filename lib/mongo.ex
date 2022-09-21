@@ -1524,19 +1524,19 @@ defmodule Mongo do
 
   def exec_hello(conn, opts) do
     with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:exec_hello, []}}, [], opts) do
-      check_for_error(response, [hello: 1], opts)
+      check_for_error(response, :exec_hello, opts)
     end
   end
 
   def exec_hello(conn, cmd, opts) do
     with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:exec_hello, cmd}}, [], opts) do
-      check_for_error(response, cmd, opts)
+      check_for_error(response, :exec_hello, opts)
     end
   end
 
   def exec_more_to_come(conn, opts) do
     with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :more_to_come}, [], opts) do
-      check_for_error(response, [:more_to_come], opts)
+      check_for_error(response, :more_to_come, opts)
     end
   end
 
@@ -1747,12 +1747,16 @@ defmodule Mongo do
     do: raise(ArgumentError, "expected list of documents, got: #{inspect(other)}")
 
   ## support for logging like Ecto
-  defp do_log([:more_to_come], _duration, _opts) do
+  defp do_log(:more_to_come, _duration, _opts) do
+    :ok
+  end
+
+  defp do_log(:exec_hello, _duration, _opts) do
     :ok
   end
 
   defp do_log(cmd, duration, opts) do
-    case Keyword.has_key?(cmd, :isMaster) || Keyword.has_key?(cmd, :more_to_come) || Keyword.has_key?(cmd, :hello) do
+    case Keyword.has_key?(cmd, :isMaster) do
       true ->
         :ok
 
