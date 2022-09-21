@@ -10,6 +10,7 @@ on:
 jobs:
   test:
     name: Compile and Test
+    timeout-minutes: 5
 
     strategy:
       matrix:
