@@ -278,7 +278,7 @@ defmodule Mongo.Collection do
 
         defmodule Board do
 
-        use Collection
+          use Collection
 
           collection "boards" do
 
@@ -358,6 +358,94 @@ defmodule Mongo.Collection do
           "modified" : ISODate("2020-05-19T15:15:14.374Z"),
           "title" : "Vega"
         }
+  ## Example `timestamps`
+
+        defmodule Post do
+
+          use Mongo.Collection
+
+          collection "posts" do
+            attribute :title, String.t()
+            timestamps()
+          end
+
+          def new(title) do
+            Map.put(new(), :title, title)
+          end
+
+          def store(post) do
+            MyRepo.insert_or_update(post)
+          end
+        end
+
+  In this example the macro `timestamps` is used to create two DateTime attributes, `inserted_at` and `updated_at`.
+  This macro is intented to use with the Repo module, as it will be responsible for updating the value of `updated_at` attribute before execute the action.
+
+        iex(1)> post = Post.new("lorem ipsum dolor sit amet")
+        %Post{
+          _id: #BSON.ObjectId<6327a7099626f7f61607e179>,
+          inserted_at: ~U[2022-09-18 23:17:29.087092Z],
+          title: "lorem ipsum dolor sit amet",
+          updated_at: ~U[2022-09-18 23:17:29.087070Z]
+        }
+
+        iex(2)> Post.store(post)
+        {:ok,
+         %{
+           _id: #BSON.ObjectId<6327a7099626f7f61607e179>,
+           inserted_at: ~U[2022-09-18 23:17:29.087092Z],
+           title: "lorem ipsum dolor sit amet",
+           updated_at: ~U[2022-09-18 23:19:24.516648Z]
+         }}
+
+  Is possible to change the field names, like Ecto does, and also change the default behaviour:
+
+        defmodule Comment do
+
+          use Mongo.Collection
+
+          collection "comments" do
+            attribute :text, String.t()
+            timestamps(inserted_at: :created, updated_at: :modified, default: &__MODULE__.truncated_date_time/0)
+          end
+
+          def new(text) do
+            Map.put(new(), :text, text)
+          end
+
+          def truncated_date_time() do
+            utc_now = DateTime.utc_now()
+            DateTime.truncate(utc_now, :second)
+          end
+        end
+
+        iex(1)> comment = Comment.new("useful comment")
+        %Comment{
+          _id: #BSON.ObjectId<6327aa979626f7f616ae5b4a>,
+          created: ~U[2022-09-18 23:32:39Z],
+          modified: ~U[2022-09-18 23:32:39Z],
+          text: "useful comment"
+        }
+
+        iex(2)> {:ok, comment} = MyRepo.insert(comment)
+        {:ok,
+         %Comment{
+           _id: #BSON.ObjectId<6327aa979626f7f616ae5b4a>,
+           created: ~U[2022-09-18 23:32:39Z],
+           modified: ~U[2022-09-18 23:32:42Z],
+           text: "useful comment"
+         }}
+
+        iex(3)> {:ok, comment} = MyRepo.update(%{comment | text: "not so useful comment"})
+        {:ok,
+         %Comment{
+           _id: #BSON.ObjectId<6327aa979626f7f616ae5b4a>,
+           created: ~U[2022-09-18 23:32:39Z],
+           modified: ~U[2022-09-18 23:32:46Z],
+           text: not so useful comment"
+         }}
+
+  The `timestamps` macro has some limitations as it does not run in batch commands like `insert_all` or `update_all`, nor does it update embedded documents.
 
   """
 
@@ -376,6 +464,7 @@ defmodule Mongo.Collection do
 
       Module.register_attribute(__MODULE__, :attributes, accumulate: true)
       Module.register_attribute(__MODULE__, :derived, accumulate: true)
+      Module.register_attribute(__MODULE__, :timestamps, accumulate: true)
       Module.register_attribute(__MODULE__, :types, accumulate: true)
       Module.register_attribute(__MODULE__, :embed_ones, accumulate: true)
       Module.register_attribute(__MODULE__, :embed_manys, accumulate: true)
@@ -440,6 +529,7 @@ defmodule Mongo.Collection do
         Collection.__type__(@types)
 
         def __collection__(:attributes), do: unquote(attribute_names)
+        def __collection__(:timestamps), do: unquote(@timestamps)
         def __collection__(:types), do: @types
         def __collection__(:collection), do: unquote(@collection)
         def __collection__(:id), do: unquote(elem(@id_generator, 0))
@@ -565,12 +655,29 @@ defmodule Mongo.Collection do
         end
       end
 
+    timestamps_function =
+      quote unquote: false do
+        def timestamps(nil) do
+          nil
+        end
+
+        def timestamps(xs) when is_list(xs) do
+          Enum.map(xs, fn struct -> timestamps(struct) end)
+        end
+
+        def timestamps(struct) do
+          updated_at = @timestamps[:updated_at]
+          Collection.timestamps(struct, updated_at, @attributes[updated_at])
+        end
+      end
+
     quote do
       unquote(prelude)
       unquote(postlude)
       unquote(new_function)
       unquote(load_function)
       unquote(dump_function)
+      unquote(timestamps_function)
     end
   end
 
@@ -706,6 +813,34 @@ defmodule Mongo.Collection do
 
     Module.put_attribute(mod, :types, {name, type})
     Module.put_attribute(mod, :attributes, {name, opts})
+  end
+
+  @doc """
+  Defines the `timestamps/1` function.
+  """
+  defmacro timestamps(opts \\ []) do
+    quote bind_quoted: [opts: opts] do
+      inserted_at = Keyword.get(opts, :inserted_at, :inserted_at)
+      updated_at = Keyword.get(opts, :updated_at, :updated_at)
+      type = Keyword.get(opts, :type, DateTime)
+
+      new_opts =
+        opts
+        |> Keyword.drop([:inserted_at, :updated_at, :type])
+        |> Keyword.put_new(:default, &DateTime.utc_now/0)
+
+      Module.put_attribute(__MODULE__, :timestamps, {:inserted_at, inserted_at})
+      Module.put_attribute(__MODULE__, :timestamps, {:updated_at, updated_at})
+
+      Collection.__attribute__(__MODULE__, inserted_at, Macro.escape(type), new_opts)
+      Collection.__attribute__(__MODULE__, updated_at, Macro.escape(type), new_opts)
+    end
+  end
+
+  def timestamps(struct, nil, _default), do: struct
+
+  def timestamps(struct, updated_at, opts) do
+    Map.put(struct, updated_at, opts[:default].())
   end
 
   def dump(%{__struct__: _} = struct) do

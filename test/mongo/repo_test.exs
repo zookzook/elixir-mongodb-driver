@@ -12,6 +12,7 @@ defmodule Mongo.RepoTest do
 
     collection "posts" do
       attribute :title, String.t()
+      timestamps()
     end
   end
 
@@ -343,10 +344,12 @@ defmodule Mongo.RepoTest do
         |> Map.put(:title, "test")
         |> MyRepo.insert()
 
-      {:ok, %Post{title: "updated"}} =
+      {:ok, %Post{title: "updated"} = updated} =
         post
         |> Map.put(:title, "updated")
         |> MyRepo.update()
+
+      assert DateTime.compare(post.updated_at, updated.updated_at) == :lt
     end
 
     test "updates a document without changes" do
@@ -366,10 +369,13 @@ defmodule Mongo.RepoTest do
         |> Map.put(:title, "test")
         |> MyRepo.insert()
 
-      %Post{title: "updated"} =
+      updated =
         post
         |> Map.put(:title, "updated")
         |> MyRepo.update!()
+
+      assert updated.title == "updated"
+      assert DateTime.compare(post.updated_at, updated.updated_at) == :lt
     end
 
     test "updates a document without changes" do
@@ -405,6 +411,7 @@ defmodule Mongo.RepoTest do
 
       assert Map.get(post, :_id) == Map.get(updated, :_id)
       assert updated.title == "updated"
+      assert DateTime.compare(post.updated_at, updated.updated_at) == :lt
     end
 
     test "updates a document without changes if it does already exist" do
@@ -443,6 +450,7 @@ defmodule Mongo.RepoTest do
 
       assert Map.get(post, :_id) == Map.get(updated, :_id)
       assert updated.title == "updated"
+      assert DateTime.compare(post.updated_at, updated.updated_at) == :lt
     end
 
     test "updates a document without changes if it does already exist" do

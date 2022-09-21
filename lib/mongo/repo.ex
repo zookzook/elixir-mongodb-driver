@@ -63,6 +63,7 @@ defmodule Mongo.Repo do
       unless @read_only do
         def insert(%{__struct__: module} = doc, opts \\ []) do
           collection = module.__collection__(:collection)
+          doc = module.timestamps(doc)
 
           case Mongo.insert_one(@topology, collection, module.dump(doc), opts) do
             {:error, reason} -> {:error, reason}
@@ -72,6 +73,7 @@ defmodule Mongo.Repo do
 
         def update(%{__struct__: module, _id: id} = doc) do
           collection = module.__collection__(:collection)
+          doc = module.timestamps(doc)
 
           case Mongo.update_one(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, []) do
             {:error, reason} -> {:error, reason}
@@ -81,6 +83,7 @@ defmodule Mongo.Repo do
 
         def insert_or_update(%{__struct__: module, _id: id} = doc) do
           collection = module.__collection__(:collection)
+          doc = module.timestamps(doc)
 
           case Mongo.update_one(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, upsert: true) do
             {:error, reason} -> {:error, reason}
@@ -101,18 +104,21 @@ defmodule Mongo.Repo do
 
         def insert!(%{__struct__: module} = doc, opts \\ []) do
           collection = module.__collection__(:collection)
+          doc = module.timestamps(doc)
           %{inserted_id: id} = Mongo.insert_one!(@topology, collection, module.dump(doc), opts)
           %{doc | _id: id}
         end
 
         def update!(%{__struct__: module, _id: id} = doc) do
           collection = module.__collection__(:collection)
+          doc = module.timestamps(doc)
           Mongo.update_one!(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, [])
           doc
         end
 
         def insert_or_update!(%{__struct__: module, _id: id} = doc) do
           collection = module.__collection__(:collection)
+          doc = module.timestamps(doc)
           update_one_result = Mongo.update_one!(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, upsert: true)
 
           case update_one_result do
