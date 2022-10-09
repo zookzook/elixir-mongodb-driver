@@ -15,6 +15,12 @@ config :logger, :console,
   metadata: [:module, :function, :line]
 
 config :mongodb_driver,
-  log: true
+  log: true,
+  migration: [
+    path: "mongo/migrations",
+    otp_app: :mongodb_driver,
+    topology: :mongo,
+    collection: "migrations"
+  ]
 
 import_config "#{Mix.env()}.exs"

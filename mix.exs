@@ -25,7 +25,7 @@ defmodule Mongodb.Mixfile do
     [
       applications: applications(Mix.env()),
       env: [],
-      extra_applications: [:crypto, :ssl],
+      extra_applications: [:crypto, :ssl, :eex],
       mod: {Mongo.App, []}
     ]
   end
@@ -38,6 +38,7 @@ defmodule Mongodb.Mixfile do
       {:telemetry, "~> 1.0"},
       {:db_connection, "~> 2.4.1"},
       {:decimal, "~> 2.0"},
+      {:patch, "~> 0.12.0", only: [:dev, :test]},
       {:jason, "~> 1.3", only: [:dev, :test]},
       {:credo, "~> 1.6.1", only: [:dev, :test], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
