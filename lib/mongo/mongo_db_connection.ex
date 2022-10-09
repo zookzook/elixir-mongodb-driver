@@ -410,18 +410,20 @@ defmodule Mongo.MongoDBConnection do
   end
 
   defp handshake_command(%{stable_api: stable_api}, client) do
-    StableVersion.merge_stable_api([hello: 1, client: client], stable_api)
+    [client: client]
+    |> StableVersion.merge_stable_api(stable_api)
+    |> Keyword.put(:hello, 1)
   end
 
   defp hello_command(cmd, %{hello_ok: false}) do
     cmd
-    |> Keyword.put(:ismaster, 1)
     |> Keyword.put(:helloOk, true)
+    |> Keyword.put(:ismaster, 1)
   end
 
   defp hello_command(cmd, %{hello_ok: true, stable_api: stable_api}) do
     cmd
-    |> Keyword.put(:hello, 1)
     |> StableVersion.merge_stable_api(stable_api)
+    |> Keyword.put(:hello, 1)
   end
 end
