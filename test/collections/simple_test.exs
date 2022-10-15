@@ -17,7 +17,7 @@ defmodule Collections.SimpleTest do
 
     document do
       attribute :name, String.t(), default: "warning"
-      attribute :color, String.t(), default: :red
+      attribute :color, String.t(), default: :red, name: :c
       after_load &Label.after_load/1
     end
 
@@ -37,6 +37,7 @@ defmodule Collections.SimpleTest do
 
     collection "cards" do
       attribute :title, String.t(), default: "new title"
+      attribute :intro, String.t(), default: "new intro", name: "i"
       embeds_one(:label, Label, default: &Label.new/0)
       timestamps(inserted_at: :created, updated_at: :modified)
     end
@@ -62,11 +63,11 @@ defmodule Collections.SimpleTest do
     new_card = Card.new()
     map_card = Card.dump(new_card)
 
-    assert %{title: "new title", label: %{color: :red, name: "warning"}} = map_card
+    assert %{title: "new title", i: "new intro", label: %{c: :red, name: "warning"}} = map_card
 
     struct_card = Card.load(map_card, true)
 
-    assert %Card{label: %Label{color: :red, name: "warning"}} = struct_card
+    assert %Card{intro: "new intro", label: %Label{color: :red, name: "warning"}} = struct_card
   end
 
   test "save and find", c do
@@ -79,6 +80,6 @@ defmodule Collections.SimpleTest do
 
     card = Card.find_one(new_card._id, c.pid)
 
-    assert %Card{label: %Label{color: :red, name: "warning"}} = card
+    assert %Card{intro: "new intro", label: %Label{color: :red, name: "warning"}} = card
   end
 end

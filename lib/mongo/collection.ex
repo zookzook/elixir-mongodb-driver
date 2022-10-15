@@ -580,17 +580,17 @@ defmodule Mongo.Collection do
               unquote(attribute_names),
               %__MODULE__{},
               fn name, result ->
-                Map.put(result, name, map[Atom.to_string(name)])
+                Map.put(result, name, map[Atom.to_string(@attributes[name][:name] || name)])
               end
             )
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, mod} -> {name, mod.load(map[Atom.to_string(name)])} end)
+            |> Enum.map(fn {name, mod} -> {name, mod.load(map[Atom.to_string(@attributes[name][:name] || name)])} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, mod} -> {name, mod.load(map[Atom.to_string(name)])} end)
+          |> Enum.map(fn {name, mod} -> {name, mod.load(map[Atom.to_string(@attributes[name][:name] || name)])} end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
@@ -601,17 +601,17 @@ defmodule Mongo.Collection do
               unquote(attribute_names),
               %__MODULE__{},
               fn name, result ->
-                Map.put(result, name, map[name])
+                Map.put(result, name, map[@attributes[name][:name] || name])
               end
             )
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, mod} -> {name, mod.load(map[name], true)} end)
+            |> Enum.map(fn {name, mod} -> {name, mod.load(map[@attributes[name][:name] || name], true)} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, mod} -> {name, mod.load(map[name], true)} end)
+          |> Enum.map(fn {name, mod} -> {name, mod.load(map[@attributes[name][:name] || name], true)} end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
@@ -652,6 +652,7 @@ defmodule Mongo.Collection do
           |> Map.drop(unquote(@derived))
           |> @before_dump_fun.()
           |> Collection.dump()
+          |> Enum.into(%{}, fn {name, value} -> {@attributes[name][:name] || name, value} end)
         end
       end
 
@@ -810,6 +811,12 @@ defmodule Mongo.Collection do
       true -> Module.put_attribute(mod, :derived, name)
       _ -> []
     end
+
+    opts =
+      case opts[:name] do
+        name when is_binary(name) -> Keyword.replace(opts, :name, String.to_atom(name))
+        _ -> opts
+      end
 
     Module.put_attribute(mod, :types, {name, type})
     Module.put_attribute(mod, :attributes, {name, opts})
