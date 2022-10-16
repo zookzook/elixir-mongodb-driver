@@ -1,4 +1,4 @@
-# An Alternative Elixir Driver for MongoDB
+# The Elixir Driver for MongoDB
 
 [![Hex.pm](https://img.shields.io/hexpm/v/mongodb_driver.svg)](https://hex.pm/packages/mongodb_driver)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/mongodb_driver/)
