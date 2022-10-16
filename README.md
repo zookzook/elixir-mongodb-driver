@@ -462,11 +462,129 @@ URI, as follows:
 
 Using an SRV URI also discovers all nodes of the deployment automatically.
 
+## Migration
+
+Despite the schema-free approach, migration is still desirable. Migrations are used to maintain the indexes 
+and to drop collections that are no longer needed. Capped collections must be migrated. 
+The driver provides a workflow similar to Ecto that can be used to create migrations.
+
+First we create a migration script:
+```elixir
+
+mix mongo.gen.migration add_indexes
+
+```
+
+In `priv/mongo/migrations` you will find an Elixir script like `20220322173354_add_indexes.exs`:
+
+```elixr
+defmodule Mongo.Migrations.AddIndexes do
+  def up() do
+    indexes = [
+      [key: [email: 1], name: "email_index", unique: true]
+    ]
+
+    Mongo.create_indexes(:my_db, "my_collection", indexes)
+  end
+
+  def down() do
+    Mongo.drop_index(:my_db, "my_collection", "email_index")
+  end
+end
+
+```
+
+After that you can run the migration using a task:
+
+```
+mix mongo.migrate
+
+🔒 migrations locked
+⚡️ Successfully migrated Elixir.Mongo.Migrations.CreateIndex
+🔓 migrations unlocked
+
+```
+
+Or let it run if your application starts:
+
+```elixir
+defmodule MyApp.Release do
+  @moduledoc """
+  Used for executing DB release tasks when run in production without Mix
+  installed.
+  """
+
+  def migrate() do
+    Application.load(:my_app)
+    Application.ensure_all_started(:ssl)
+    Application.ensure_all_started(:mongodb_driver)
+    Mongo.start_link(name: :mongo_db, url: "mongodb://localhost:27017/my-database", timeout: 60_000, pool_size: 1, idle_interval: 10_000)
+
+    Mongo.Migration.migrate()
+  end
+end
+```
+
+With the release features of Elixir you can add an overlay script like this:
+
+```shell
+#!/bin/sh
+cd -P -- "$(dirname -- "$0")"
+exec ./my_app eval MyApp.Release.migrate
+```
+
+```shell
+#!/bin/sh
+cd -P -- "$(dirname -- "$0")"
+PHX_SERVER=true exec ./my_app start
+```
+
+And then you need just to call migrate before you start the server:
+
+```shell
+/app/bin/migrate && /app/bin/server
+```
+
+Or if you use a Dockerfile:
+
+```dockerfile
+ENTRYPOINT /app/bin/migrate && /app/bin/server
+```
+
+The migration module tries to *lock* the migration collection to ensure that only one instance is running the migration. 
+Unfortunately MongoDB does not support collection locks, so need to use a software lock:
+
+```elixir
+Mongo.update_one(topology, 
+  "migrations", 
+  %{_id: "lock", used: false}, 
+  %{"$set": %{used: true}}, 
+  upsert: true)
+```
+You can lock and unlock the migration collection using these functions in case of an error:
+
+1. `Mongo.Migration.lock()` 
+2. `Mongo.Migration.unlock()` or `mix mongo.unlock`
+
+If nothing helps, just delete the document with `{_id: "lock"}` from the migration collection.
+
+For more information see:
+
+- `Mongo.Migration`
+- `Mix.Tasks.Mongo`
+- https://hexdocs.pm/mix/1.14/Mix.Tasks.Release.html
+
 ## Auth Mechanisms
 
 For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM.
-If you'd like to use [MONGODB-X509](https://docs.mongodb.com/manual/tutorial/configure-x509-client-authentication/#authenticate-with-a-x-509-certificate)
-authentication, you can specify that as a `start_link` option.
+If you'd like to use [MONGODB-X509](https://www.mongodb.com/docs/v6.0/tutorial/configure-x509-client-authentication/)
+authentication, you can specify that as a `start_link` option. 
+
+You need roughly three additional configuration steps:
+
+* Deploy with x.509 Authentication
+* Add x.509 Certificate subject as a User
+* Authenticate with an x.509 Certificate
 
 ```elixir
 {:ok, pid} = Mongo.start_link(database: "test", auth_mechanism: :x509)

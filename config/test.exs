@@ -5,4 +5,10 @@ config :mongodb_driver, Mongo.RepoTest.MyRepo,
   show_sensitive_data_on_connection_error: true
 
 config :mongodb_driver,
-  log: false
+  log: false,
+  migration: [
+    path: "mongo/migrations",
+    otp_app: :mongodb_driver,
+    topology: :mongo,
+    collection: "migrations"
+  ]
