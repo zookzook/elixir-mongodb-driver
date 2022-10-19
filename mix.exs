@@ -2,11 +2,12 @@ defmodule Mongodb.Mixfile do
   use Mix.Project
 
   @source_url "https://github.com/zookzook/elixir-mongodb-driver"
+  @version "0.9.2"
 
   def project() do
     [
       app: :mongodb_driver,
-      version: "0.9.2",
+      version: @version,
       elixirc_paths: elixirc_paths(Mix.env()),
       elixir: "~> 1.8",
       name: "mongodb-driver",
@@ -53,7 +54,7 @@ defmodule Mongodb.Mixfile do
       ],
       main: "readme",
       source_url: @source_url,
-      source_ref: "#{project()[:version]}",
+      source_ref: @version,
       formatters: ["html"]
     ]
   end
