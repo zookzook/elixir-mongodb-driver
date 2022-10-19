@@ -814,8 +814,9 @@ defmodule Mongo.Collection do
 
     opts =
       case opts[:name] do
+        name when is_atom(name) -> opts
         name when is_binary(name) -> Keyword.replace(opts, :name, String.to_atom(name))
-        _ -> opts
+        _ -> raise ArgumentError, "name must be an atom or a binary"
       end
 
     Module.put_attribute(mod, :types, {name, type})
