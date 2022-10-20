@@ -545,7 +545,7 @@ defmodule Mongo.Collection do
           |> Enum.map(fn {name, opts} -> {name, opts[:default]} end)
           |> Enum.filter(fn {_name, fun} -> is_function(fun) end)
 
-        def new() do
+        def new do
           %__MODULE__{unquote_splicing(Collection.struct_args(args))}
         end
       end
@@ -580,17 +580,23 @@ defmodule Mongo.Collection do
               unquote(attribute_names),
               %__MODULE__{},
               fn name, result ->
-                Map.put(result, name, map[Atom.to_string(@attributes[name][:name] || name)])
+                Map.put(result, name, map[Atom.to_string(@attributes[name][:name])])
               end
             )
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, mod} -> {name, mod.load(map[Atom.to_string(@attributes[name][:name] || name)])} end)
+            |> Enum.map(fn {name, mod} ->
+              {_, _, opts} = List.keyfind(@embed_ones, name, 0)
+              {name, mod.load(map[Atom.to_string(opts[:name])])}
+            end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, mod} -> {name, mod.load(map[Atom.to_string(@attributes[name][:name] || name)])} end)
+          |> Enum.map(fn {name, mod} ->
+            {_, _, opts} = List.keyfind(@embed_manys, name, 0)
+            {name, mod.load(map[Atom.to_string(opts[:name])])}
+          end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
@@ -601,17 +607,23 @@ defmodule Mongo.Collection do
               unquote(attribute_names),
               %__MODULE__{},
               fn name, result ->
-                Map.put(result, name, map[@attributes[name][:name] || name])
+                Map.put(result, name, map[@attributes[name][:name]])
               end
             )
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, mod} -> {name, mod.load(map[@attributes[name][:name] || name], true)} end)
+            |> Enum.map(fn {name, mod} ->
+              {_, _, opts} = List.keyfind(@embed_ones, name, 0)
+              {name, mod.load(map[opts[:name]], true)}
+            end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, mod} -> {name, mod.load(map[@attributes[name][:name] || name], true)} end)
+          |> Enum.map(fn {name, mod} ->
+            {_, _, opts} = List.keyfind(@embed_manys, name, 0)
+            {name, mod.load(map[opts[:name]], true)}
+          end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
@@ -652,7 +664,15 @@ defmodule Mongo.Collection do
           |> Map.drop(unquote(@derived))
           |> @before_dump_fun.()
           |> Collection.dump()
-          |> Enum.into(%{}, fn {name, value} -> {@attributes[name][:name] || name, value} end)
+          |> Enum.into(%{}, fn {name, value} ->
+            opts =
+              case List.keyfind(@embed_ones, name, 0) || List.keyfind(@embed_manys, name, 0) do
+                {_, _, opts} -> opts
+                _ -> @attributes[name]
+              end
+
+            {opts[:name], value}
+          end)
         end
       end
 
@@ -683,6 +703,18 @@ defmodule Mongo.Collection do
   end
 
   @doc """
+  Inserts name option for the attribute, embeds_one and embeds_many.
+  """
+  def add_name(opts, name) do
+    case opts[:name] do
+      nil -> Keyword.put(opts, :name, name)
+      name when is_atom(name) -> opts
+      name when is_binary(name) -> Keyword.replace(opts, :name, String.to_atom(name))
+      _ -> raise ArgumentError, "name must be an atom or a binary"
+    end
+  end
+
+  @doc """
   Inserts the specified `@id_generator` to the list of attributes. Calls `add_id/3`.
   """
   defmacro __id__(id_generator, name) do
@@ -702,7 +734,7 @@ defmodule Mongo.Collection do
 
   def add_id(mod, {id, type, fun}, _name) do
     Module.put_attribute(mod, :types, {id, type})
-    Module.put_attribute(mod, :attributes, {id, default: fun})
+    Module.put_attribute(mod, :attributes, {id, default: fun, name: :_id})
   end
 
   @doc """
@@ -773,7 +805,7 @@ defmodule Mongo.Collection do
   Adds the struct to the `embeds_one` list.
   """
   def __embeds_one__(mod, name, target, opts) do
-    Module.put_attribute(mod, :embed_ones, {name, target, opts})
+    Module.put_attribute(mod, :embed_ones, {name, target, add_name(opts, name)})
   end
 
   @doc """
@@ -791,7 +823,7 @@ defmodule Mongo.Collection do
   """
   def __embeds_many__(mod, name, target, type, opts) do
     Module.put_attribute(mod, :types, {name, type})
-    Module.put_attribute(mod, :embed_manys, {name, target, opts})
+    Module.put_attribute(mod, :embed_manys, {name, target, add_name(opts, name)})
   end
 
   @doc """
@@ -812,15 +844,8 @@ defmodule Mongo.Collection do
       _ -> []
     end
 
-    opts =
-      case opts[:name] do
-        name when is_atom(name) -> opts
-        name when is_binary(name) -> Keyword.replace(opts, :name, String.to_atom(name))
-        _ -> raise ArgumentError, "name must be an atom or a binary"
-      end
-
     Module.put_attribute(mod, :types, {name, type})
-    Module.put_attribute(mod, :attributes, {name, opts})
+    Module.put_attribute(mod, :attributes, {name, add_name(opts, name)})
   end
 
   @doc """

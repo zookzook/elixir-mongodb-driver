@@ -38,7 +38,7 @@ defmodule Collections.SimpleTest do
     collection "cards" do
       attribute :title, String.t(), default: "new title"
       attribute :intro, String.t(), default: "new intro", name: "i"
-      embeds_one(:label, Label, default: &Label.new/0)
+      embeds_one(:label, Label, default: &Label.new/0, name: :l)
       timestamps(inserted_at: :created, updated_at: :modified)
     end
 
@@ -63,7 +63,7 @@ defmodule Collections.SimpleTest do
     new_card = Card.new()
     map_card = Card.dump(new_card)
 
-    assert %{title: "new title", i: "new intro", label: %{c: :red, name: "warning"}} = map_card
+    assert %{title: "new title", i: "new intro", l: %{c: :red, name: "warning"}} = map_card
 
     struct_card = Card.load(map_card, true)
 
