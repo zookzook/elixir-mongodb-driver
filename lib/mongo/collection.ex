@@ -805,6 +805,7 @@ defmodule Mongo.Collection do
   Adds the struct to the `embeds_one` list.
   """
   def __embeds_one__(mod, name, target, opts) do
+    check_for_uniquiness(mod, opts, name)
     Module.put_attribute(mod, :embed_ones, {name, target, add_name(opts, name)})
   end
 
@@ -822,6 +823,7 @@ defmodule Mongo.Collection do
   Adds the struct to the `embeds_many` list.
   """
   def __embeds_many__(mod, name, target, type, opts) do
+    check_for_uniquiness(mod, opts, name)
     Module.put_attribute(mod, :types, {name, type})
     Module.put_attribute(mod, :embed_manys, {name, target, add_name(opts, name)})
   end
@@ -844,8 +846,22 @@ defmodule Mongo.Collection do
       _ -> []
     end
 
+    check_for_uniquiness(mod, opts, name)
     Module.put_attribute(mod, :types, {name, type})
     Module.put_attribute(mod, :attributes, {name, add_name(opts, name)})
+  end
+
+  def check_for_uniquiness(mod, opts, name) do
+    ((Module.get_attribute(mod, :attributes) |> Enum.map(fn {_name, attrs} -> attrs[:name] end)) ++
+       (Module.get_attribute(mod, :embed_ones) |> Enum.map(fn {_name, _mod, attrs} -> attrs[:name] end)) ++
+       (Module.get_attribute(mod, :embed_manys) |> Enum.map(fn {_name, _mod, attrs} -> attrs[:name] end)))
+    |> Enum.any?(fn attr ->
+      attr == (opts[:name] || name)
+    end)
+    |> case do
+      true -> raise ArgumentError, "key name already exist"
+      false -> nil
+    end
   end
 
   @doc """
