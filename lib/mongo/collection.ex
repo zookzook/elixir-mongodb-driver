@@ -705,12 +705,30 @@ defmodule Mongo.Collection do
   @doc """
   Inserts name option for the attribute, embeds_one and embeds_many.
   """
-  def add_name(opts, name) do
+  def add_name(mod, opts, name) do
+    check_for_uniquiness(mod, opts, name)
+
     case opts[:name] do
       nil -> Keyword.put(opts, :name, name)
       name when is_atom(name) -> opts
       name when is_binary(name) -> Keyword.replace(opts, :name, String.to_atom(name))
       _ -> raise ArgumentError, "name must be an atom or a binary"
+    end
+  end
+
+  @doc """
+  Check name option for uniquiness before insert.
+  """
+  def check_for_uniquiness(mod, opts, name) do
+    ((Module.get_attribute(mod, :attributes) |> Enum.map(fn {_name, attrs} -> attrs[:name] end)) ++
+       (Module.get_attribute(mod, :embed_ones) |> Enum.map(fn {_name, _mod, attrs} -> attrs[:name] end)) ++
+       (Module.get_attribute(mod, :embed_manys) |> Enum.map(fn {_name, _mod, attrs} -> attrs[:name] end)))
+    |> Enum.any?(fn attr ->
+      attr == (opts[:name] || name)
+    end)
+    |> case do
+      true -> raise ArgumentError, "key name already exist"
+      false -> nil
     end
   end
 
@@ -805,8 +823,7 @@ defmodule Mongo.Collection do
   Adds the struct to the `embeds_one` list.
   """
   def __embeds_one__(mod, name, target, opts) do
-    check_for_uniquiness(mod, opts, name)
-    Module.put_attribute(mod, :embed_ones, {name, target, add_name(opts, name)})
+    Module.put_attribute(mod, :embed_ones, {name, target, add_name(mod, opts, name)})
   end
 
   @doc """
@@ -823,9 +840,8 @@ defmodule Mongo.Collection do
   Adds the struct to the `embeds_many` list.
   """
   def __embeds_many__(mod, name, target, type, opts) do
-    check_for_uniquiness(mod, opts, name)
     Module.put_attribute(mod, :types, {name, type})
-    Module.put_attribute(mod, :embed_manys, {name, target, add_name(opts, name)})
+    Module.put_attribute(mod, :embed_manys, {name, target, add_name(mod, opts, name)})
   end
 
   @doc """
@@ -846,22 +862,8 @@ defmodule Mongo.Collection do
       _ -> []
     end
 
-    check_for_uniquiness(mod, opts, name)
     Module.put_attribute(mod, :types, {name, type})
-    Module.put_attribute(mod, :attributes, {name, add_name(opts, name)})
-  end
-
-  def check_for_uniquiness(mod, opts, name) do
-    ((Module.get_attribute(mod, :attributes) |> Enum.map(fn {_name, attrs} -> attrs[:name] end)) ++
-       (Module.get_attribute(mod, :embed_ones) |> Enum.map(fn {_name, _mod, attrs} -> attrs[:name] end)) ++
-       (Module.get_attribute(mod, :embed_manys) |> Enum.map(fn {_name, _mod, attrs} -> attrs[:name] end)))
-    |> Enum.any?(fn attr ->
-      attr == (opts[:name] || name)
-    end)
-    |> case do
-      true -> raise ArgumentError, "key name already exist"
-      false -> nil
-    end
+    Module.put_attribute(mod, :attributes, {name, add_name(mod, opts, name)})
   end
 
   @doc """
