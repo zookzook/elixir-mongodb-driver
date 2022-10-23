@@ -38,7 +38,7 @@ defmodule Collections.SimpleTest do
     collection "cards" do
       attribute :title, String.t(), default: "new title"
       embeds_one(:label, Label, default: &Label.new/0)
-      timestamps(inserted_at: :created, updated_at: :modified)
+      timestamps(inserted_at: :created, updated_at: :modified, default: &Card.ts/0)
     end
 
     def insert_one(%Card{} = card, top) do
@@ -53,6 +53,22 @@ defmodule Collections.SimpleTest do
       |> Mongo.find_one(@collection, %{@id => id})
       |> load()
     end
+
+    def ts() do
+      Process.sleep(100)
+      DateTime.utc_now()
+    end
+  end
+
+  test "timestamps", _c do
+    alias Collections.SimpleTest.Card
+    alias Collections.SimpleTest.Label
+
+    new_card = Card.new()
+    map_card = Card.dump(new_card)
+
+    ts = Map.get(new_card, :created)
+    assert %{created: ^ts, modified: ^ts} = map_card
   end
 
   test "load and dump", _c do

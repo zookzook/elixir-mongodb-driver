@@ -545,8 +545,16 @@ defmodule Mongo.Collection do
           |> Enum.map(fn {name, opts} -> {name, opts[:default]} end)
           |> Enum.filter(fn {_name, fun} -> is_function(fun) end)
 
-        def new() do
-          %__MODULE__{unquote_splicing(Collection.struct_args(args))}
+        case @timestamps != [] do
+          true ->
+            def new() do
+              new_timestamps(%__MODULE__{unquote_splicing(Collection.struct_args(args))})
+            end
+
+          false ->
+            def new() do
+              %__MODULE__{unquote_splicing(Collection.struct_args(args))}
+            end
         end
       end
 
@@ -668,6 +676,17 @@ defmodule Mongo.Collection do
         def timestamps(struct) do
           updated_at = @timestamps[:updated_at]
           Collection.timestamps(struct, updated_at, @attributes[updated_at])
+        end
+
+        def new_timestamps(struct) do
+          inserted_at = @timestamps[:inserted_at]
+          opts = @attributes[inserted_at]
+          ts = opts[:default].()
+          updated_at = @timestamps[:updated_at]
+
+          struct
+          |> Map.put(inserted_at, ts)
+          |> Map.put(updated_at, ts)
         end
       end
 
