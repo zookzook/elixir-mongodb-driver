@@ -560,17 +560,17 @@ defmodule Mongo.Collection do
 
     load_function =
       quote unquote: false do
-        attribute_names = Enum.map(@attributes, fn {name, opts} -> {name, to_string(opts[:name])} end)
+        attribute_names = Enum.map(@attributes, fn {name, opts} -> {name, opts[:name]} end)
 
         embed_ones =
           @embed_ones
           |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
-          |> Enum.map(fn {name, mod, opts} -> {name, {to_string(opts[:name]), mod}} end)
+          |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
 
         embed_manys =
           @embed_manys
           |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
-          |> Enum.map(fn {name, mod, opts} -> {name, {to_string(opts[:name]), mod}} end)
+          |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
 
         def load(map, use_atoms \\ false)
 
@@ -581,29 +581,29 @@ defmodule Mongo.Collection do
         end
 
         def load(map, false) when is_map(map) do
-          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[src_name]) end)
+          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[to_string(src_name)]) end)
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name])} end)
+            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[to_string(src_name)])} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name])} end)
+          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[to_string(src_name)])} end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
 
         def load(map, true) when is_map(map) do
-          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[String.to_atom(src_name)]) end)
+          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[src_name]) end)
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[String.to_atom(src_name)], true)} end)
+            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name], true)} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[String.to_atom(src_name)], true)} end)
+          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name], true)} end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
