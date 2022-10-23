@@ -552,78 +552,50 @@ defmodule Mongo.Collection do
 
     load_function =
       quote unquote: false do
-        attribute_names = @attributes |> Enum.map(&elem(&1, 0))
+        attribute_names = Enum.map(@attributes, fn {name, opts} -> {name, to_string(opts[:name])} end)
 
         embed_ones =
           @embed_ones
           |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
-          |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
+          |> Enum.map(fn {name, mod, opts} -> {name, {to_string(opts[:name]), mod}} end)
 
         embed_manys =
           @embed_manys
           |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
-          |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
+          |> Enum.map(fn {name, mod, opts} -> {name, {to_string(opts[:name]), mod}} end)
 
         def load(map, use_atoms \\ false)
 
-        def load(nil, _use_atoms) do
-          nil
-        end
+        def load(nil, _use_atoms), do: nil
 
         def load(xs, use_atoms) when is_list(xs) do
           Enum.map(xs, fn map -> load(map, use_atoms) end)
         end
 
         def load(map, false) when is_map(map) do
-          struct =
-            Enum.reduce(
-              unquote(attribute_names),
-              %__MODULE__{},
-              fn name, result ->
-                Map.put(result, name, map[Atom.to_string(@attributes[name][:name])])
-              end
-            )
+          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[src_name]) end)
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, mod} ->
-              {_, _, opts} = List.keyfind(@embed_ones, name, 0)
-              {name, mod.load(map[Atom.to_string(opts[:name])])}
-            end)
+            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name])} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, mod} ->
-            {_, _, opts} = List.keyfind(@embed_manys, name, 0)
-            {name, mod.load(map[Atom.to_string(opts[:name])])}
-          end)
+          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name])} end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
 
         def load(map, true) when is_map(map) do
-          struct =
-            Enum.reduce(
-              unquote(attribute_names),
-              %__MODULE__{},
-              fn name, result ->
-                Map.put(result, name, map[@attributes[name][:name]])
-              end
-            )
+          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[String.to_atom(src_name)]) end)
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, mod} ->
-              {_, _, opts} = List.keyfind(@embed_ones, name, 0)
-              {name, mod.load(map[opts[:name]], true)}
-            end)
+            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[String.to_atom(src_name)], true)} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, mod} ->
-            {_, _, opts} = List.keyfind(@embed_manys, name, 0)
-            {name, mod.load(map[opts[:name]], true)}
-          end)
+          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[String.to_atom(src_name)], true)} end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
@@ -631,19 +603,19 @@ defmodule Mongo.Collection do
 
     dump_function =
       quote unquote: false do
+        attribute_names = Enum.map(@attributes, fn {name, opts} -> {name, opts[:name]} end)
+
         embed_ones =
           @embed_ones
           |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_dump_function?(mod) end)
-          |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
+          |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
 
         embed_manys =
           @embed_manys
           |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_dump_function?(mod) end)
-          |> Enum.map(fn {name, mod, _opts} -> {name, mod} end)
+          |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
 
-        def dump(nil) do
-          nil
-        end
+        def dump(nil), do: nil
 
         def dump(xs) when is_list(xs) do
           Enum.map(xs, fn struct -> dump(struct) end)
@@ -652,12 +624,12 @@ defmodule Mongo.Collection do
         def dump(%__MODULE__{} = struct) do
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, mod} -> {name, mod.dump(Map.get(struct, name))} end)
+            |> Enum.map(fn {name, {_src_name, mod}} -> {name, mod.dump(Map.get(struct, name))} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           struct =
             unquote(embed_manys)
-            |> Enum.map(fn {name, mod} -> {name, mod.dump(Map.get(struct, name))} end)
+            |> Enum.map(fn {name, {_src_name, mod}} -> {name, mod.dump(Map.get(struct, name))} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           struct
@@ -665,13 +637,10 @@ defmodule Mongo.Collection do
           |> @before_dump_fun.()
           |> Collection.dump()
           |> Enum.into(%{}, fn {name, value} ->
-            opts =
-              case List.keyfind(@embed_ones, name, 0) || List.keyfind(@embed_manys, name, 0) do
-                {_, _, opts} -> opts
-                _ -> @attributes[name]
-              end
-
-            {opts[:name], value}
+            case unquote(attribute_names)[name] || unquote(embed_ones)[name] || unquote(embed_manys)[name] do
+              {src_name, _mod} -> {src_name, value}
+              src_name -> {src_name, value}
+            end
           end)
         end
       end
@@ -726,13 +695,13 @@ defmodule Mongo.Collection do
   defp name_exists?(mod, :attributes, name) do
     mod
     |> Module.get_attribute(:attributes)
-    |> Enum.any?(fn {_name, attrs} -> attrs[:name] == name end)
+    |> Enum.any?(fn {_name, opts} -> opts[:name] == name end)
   end
 
   defp name_exists?(mod, embeds, name) do
     mod
     |> Module.get_attribute(embeds)
-    |> Enum.any?(fn {_name, _mod, attrs} -> attrs[:name] == name end)
+    |> Enum.any?(fn {_name, _mod, opts} -> opts[:name] == name end)
   end
 
   @doc """
