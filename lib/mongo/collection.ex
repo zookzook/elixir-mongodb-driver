@@ -714,13 +714,25 @@ defmodule Mongo.Collection do
         _ -> raise ArgumentError, "name must be an atom or a binary"
       end
 
-    case ((Module.get_attribute(mod, :attributes) |> Enum.map(fn {_name, attrs} -> attrs[:name] end)) ++
-            (Module.get_attribute(mod, :embed_ones) |> Enum.map(fn {_name, _mod, attrs} -> attrs[:name] end)) ++
-            (Module.get_attribute(mod, :embed_manys) |> Enum.map(fn {_name, _mod, attrs} -> attrs[:name] end)))
-         |> Enum.any?(&(&1 == opts[:name])) do
-      true -> raise ArgumentError, "key #{inspect(opts[:name])} name already exist"
-      _ -> opts
-    end
+    if name_exists?(mod, name),
+      do: raise(ArgumentError, "key #{inspect(name)} name already exist"),
+      else: opts
+  end
+
+  defp name_exists?(mod, name) do
+    name_exists?(mod, :attributes, name) || name_exists?(mod, :embed_ones, name) || name_exists?(mod, :embed_manys, name)
+  end
+
+  defp name_exists?(mod, :attributes, name) do
+    mod
+    |> Module.get_attribute(:attributes)
+    |> Enum.any?(fn {_name, attrs} -> attrs[:name] == name end)
+  end
+
+  defp name_exists?(mod, embeds, name) do
+    mod
+    |> Module.get_attribute(embeds)
+    |> Enum.any?(fn {_name, _mod, attrs} -> attrs[:name] == name end)
   end
 
   @doc """
