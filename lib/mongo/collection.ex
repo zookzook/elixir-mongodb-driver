@@ -580,33 +580,22 @@ defmodule Mongo.Collection do
           Enum.map(xs, fn map -> load(map, use_atoms) end)
         end
 
-        def load(map, false) when is_map(map) do
-          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[to_string(src_name)]) end)
+        def load(map, use_atoms) when is_map(map) do
+          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[src_name(src_name, use_atoms)]) end)
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[to_string(src_name)])} end)
+            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name(src_name, use_atoms)], use_atoms)} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[to_string(src_name)])} end)
+          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name(src_name, use_atoms)], use_atoms)} end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
 
-        def load(map, true) when is_map(map) do
-          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[src_name]) end)
-
-          struct =
-            unquote(embed_ones)
-            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name], true)} end)
-            |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
-
-          unquote(embed_manys)
-          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name], true)} end)
-          |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
-          |> @after_load_fun.()
-        end
+        defp src_name(name, true), do: name
+        defp src_name(name, _use_atoms), do: to_string(name)
       end
 
     dump_function =
