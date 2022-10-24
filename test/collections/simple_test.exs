@@ -39,7 +39,7 @@ defmodule Collections.SimpleTest do
       attribute :title, String.t(), default: "new title"
       attribute :intro, String.t(), default: "new intro", name: "i"
       embeds_one(:label, Label, default: &Label.new/0, name: :l)
-      timestamps(inserted_at: :created, updated_at: :modified, default: &Card.ts/0)
+      timestamps(inserted_at: {:created, :c_at}, updated_at: :modified, default: &Card.ts/0)
     end
 
     def insert_one(%Card{} = card, top) do
@@ -69,7 +69,7 @@ defmodule Collections.SimpleTest do
     map_card = Card.dump(new_card)
 
     ts = Map.get(new_card, :created)
-    assert %{created: ^ts, modified: ^ts} = map_card
+    assert %{c_at: ^ts, modified: ^ts} = map_card
   end
 
   test "load and dump", _c do
@@ -79,11 +79,11 @@ defmodule Collections.SimpleTest do
     new_card = Card.new()
     map_card = Card.dump(new_card)
 
-    assert %{title: "new title", i: "new intro", l: %{c: :red, name: "warning"}} = map_card
+    assert %{c_at: _, title: "new title", i: "new intro", l: %{c: :red, name: "warning"}} = map_card
 
     struct_card = Card.load(map_card, true)
 
-    assert %Card{intro: "new intro", label: %Label{color: :red, name: "warning"}} = struct_card
+    assert %Card{created: _, intro: "new intro", label: %Label{color: :red, name: "warning"}} = struct_card
   end
 
   test "save and find", c do

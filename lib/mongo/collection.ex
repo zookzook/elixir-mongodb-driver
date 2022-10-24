@@ -847,15 +847,26 @@ defmodule Mongo.Collection do
   end
 
   @doc """
+  Inserts src_name for the timestamp attribute
+  """
+  def timestamp(opts, name) when is_atom(name) do
+    case Keyword.get(opts, name, {name, name}) do
+      {name, src_name} -> {name, src_name}
+      name -> {name, name}
+    end
+  end
+
+  @doc """
   Defines the `timestamps/1` function.
   """
   defmacro timestamps(opts \\ []) do
     quote bind_quoted: [opts: opts] do
-      inserted_at = Keyword.get(opts, :inserted_at, :inserted_at)
-      updated_at = Keyword.get(opts, :updated_at, :updated_at)
+      {inserted_at, inserted_at_name} = timestamp(opts, :inserted_at)
+      {updated_at, updated_at_name} = timestamp(opts, :updated_at)
+
       type = Keyword.get(opts, :type, DateTime)
 
-      new_opts =
+      ops =
         opts
         |> Keyword.drop([:inserted_at, :updated_at, :type])
         |> Keyword.put_new(:default, &DateTime.utc_now/0)
@@ -863,8 +874,8 @@ defmodule Mongo.Collection do
       Module.put_attribute(__MODULE__, :timestamps, {:inserted_at, inserted_at})
       Module.put_attribute(__MODULE__, :timestamps, {:updated_at, updated_at})
 
-      Collection.__attribute__(__MODULE__, inserted_at, Macro.escape(type), new_opts)
-      Collection.__attribute__(__MODULE__, updated_at, Macro.escape(type), new_opts)
+      Collection.__attribute__(__MODULE__, inserted_at, Macro.escape(type), Keyword.put(ops, :name, inserted_at_name))
+      Collection.__attribute__(__MODULE__, updated_at, Macro.escape(type), Keyword.put(ops, :name, updated_at_name))
     end
   end
 
