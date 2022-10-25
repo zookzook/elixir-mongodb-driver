@@ -618,18 +618,18 @@ defmodule Mongo.Collection do
           Enum.map(xs, fn struct -> dump(struct) end)
         end
 
-        def dump(%__MODULE__{} = struct) do
-          struct =
+        def dump(%{} = map) do
+          map =
             unquote(embed_ones)
-            |> Enum.map(fn {name, {_src_name, mod}} -> {name, mod.dump(Map.get(struct, name))} end)
-            |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
+            |> Enum.map(fn {name, {_src_name, mod}} -> {name, mod.dump(Map.get(map, name))} end)
+            |> Enum.reduce(map, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
-          struct =
+          map =
             unquote(embed_manys)
-            |> Enum.map(fn {name, {_src_name, mod}} -> {name, mod.dump(Map.get(struct, name))} end)
-            |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
+            |> Enum.map(fn {name, {_src_name, mod}} -> {name, mod.dump(Map.get(map, name))} end)
+            |> Enum.reduce(map, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
-          struct
+          map
           |> Map.drop(unquote(@derived))
           |> @before_dump_fun.()
           |> Collection.dump()

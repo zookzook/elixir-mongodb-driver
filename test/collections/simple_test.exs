@@ -76,6 +76,8 @@ defmodule Collections.SimpleTest do
     alias Collections.SimpleTest.Card
     alias Collections.SimpleTest.Label
 
+    assert %{l: %{c: "red"}, title: nil} = Card.dump(%{label: %{color: "red"}, title: nil})
+
     new_card = Card.new()
     map_card = Card.dump(new_card)
 
@@ -83,7 +85,7 @@ defmodule Collections.SimpleTest do
 
     struct_card = Card.load(map_card, true)
 
-    assert %Card{created: _, intro: "new intro", label: %Label{color: :red, name: "warning"}} = struct_card
+    assert %Card{intro: "new intro", label: %Label{color: :red, name: "warning"}} = struct_card
   end
 
   test "save and find", c do
