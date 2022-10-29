@@ -545,16 +545,10 @@ defmodule Mongo.Collection do
           |> Enum.map(fn {name, opts} -> {name, opts[:default]} end)
           |> Enum.filter(fn {_name, fun} -> is_function(fun) end)
 
-        case @timestamps != [] do
-          true ->
-            def new() do
-              new_timestamps(%__MODULE__{unquote_splicing(Collection.struct_args(args))})
-            end
-
-          false ->
-            def new() do
-              %__MODULE__{unquote_splicing(Collection.struct_args(args))}
-            end
+        def new do
+          if @timestamps != [],
+            do: new_timestamps(%__MODULE__{unquote_splicing(Collection.struct_args(args))}),
+            else: %__MODULE__{unquote_splicing(Collection.struct_args(args))}
         end
       end
 
@@ -573,29 +567,23 @@ defmodule Mongo.Collection do
           |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
 
         def load(map, use_atoms \\ false)
-
         def load(nil, _use_atoms), do: nil
-
-        def load(xs, use_atoms) when is_list(xs) do
-          Enum.map(xs, fn map -> load(map, use_atoms) end)
-        end
+        def load(xs, use_atoms) when is_list(xs), do: Enum.map(xs, fn map -> load(map, use_atoms) end)
 
         def load(map, use_atoms) when is_map(map) do
-          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[src_name(src_name, use_atoms)]) end)
+          map = if use_atoms, do: map, else: Enum.into(map, %{}, fn {name, doc} -> {String.to_atom(name), doc} end)
+          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[src_name]) end)
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name(src_name, use_atoms)], use_atoms)} end)
+            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name], use_atoms)} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name(src_name, use_atoms)], use_atoms)} end)
+          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name], use_atoms)} end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
-
-        defp src_name(name, true), do: name
-        defp src_name(name, _use_atoms), do: to_string(name)
       end
 
     dump_function =
@@ -613,10 +601,7 @@ defmodule Mongo.Collection do
           |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
 
         def dump(nil), do: nil
-
-        def dump(xs) when is_list(xs) do
-          Enum.map(xs, fn struct -> dump(struct) end)
-        end
+        def dump(xs) when is_list(xs), do: Enum.map(xs, fn struct -> dump(struct) end)
 
         def dump(%{} = map) do
           map =
@@ -644,13 +629,8 @@ defmodule Mongo.Collection do
 
     timestamps_function =
       quote unquote: false do
-        def timestamps(nil) do
-          nil
-        end
-
-        def timestamps(xs) when is_list(xs) do
-          Enum.map(xs, fn struct -> timestamps(struct) end)
-        end
+        def timestamps(nil), do: nil
+        def timestamps(xs) when is_list(xs), do: Enum.map(xs, fn struct -> timestamps(struct) end)
 
         def timestamps(struct) do
           updated_at = @timestamps[:updated_at]
@@ -837,10 +817,9 @@ defmodule Mongo.Collection do
   Adds the attribute to the attributes list.
   """
   def __attribute__(mod, name, type, opts) do
-    case opts[:derived] do
-      true -> Module.put_attribute(mod, :derived, name)
-      _ -> []
-    end
+    if opts[:derived],
+      do: Module.put_attribute(mod, :derived, name),
+      else: []
 
     Module.put_attribute(mod, :types, {name, type})
     Module.put_attribute(mod, :attributes, {name, add_name(mod, opts, name)})
@@ -886,8 +865,7 @@ defmodule Mongo.Collection do
   end
 
   def dump(%{__struct__: _} = struct) do
-    map = Map.from_struct(struct)
-    :maps.map(&dump/2, map) |> filter_nils()
+    :maps.map(&dump/2, Map.from_struct(struct)) |> filter_nils()
   end
 
   def dump(map), do: :maps.map(&dump/2, map)
@@ -905,8 +883,7 @@ defmodule Mongo.Collection do
   defp ensure_nested_map(%{__struct__: BSON.LongNumber} = data), do: data
 
   defp ensure_nested_map(%{__struct__: _} = struct) do
-    map = Map.from_struct(struct)
-    :maps.map(&dump/2, map) |> filter_nils()
+    :maps.map(&dump/2, Map.from_struct(struct)) |> filter_nils()
   end
 
   defp ensure_nested_map(list) when is_list(list), do: Enum.map(list, &ensure_nested_map/1)
@@ -914,7 +891,8 @@ defmodule Mongo.Collection do
   defp ensure_nested_map(data), do: data
 
   def filter_nils(map) when is_map(map) do
-    Enum.reject(map, fn {_key, value} -> is_nil(value) end)
+    map
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Enum.into(%{})
   end
 
