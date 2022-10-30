@@ -673,8 +673,10 @@ defmodule Mongo.Collection do
         _ -> raise ArgumentError, "name must be an atom or a binary"
       end
 
-    if name_exists?(mod, name),
-      do: raise(ArgumentError, "key #{inspect(name)} name already exist"),
+    {src_name, _} = opts[:name]
+
+    if name_exists?(mod, src_name),
+      do: raise(ArgumentError, "attribute #{inspect(name)} has duplicate name option key\n\n    [name: #{inspect(src_name)}] already exist\n"),
       else: opts
   end
 
@@ -685,13 +687,13 @@ defmodule Mongo.Collection do
   defp name_exists?(mod, :attributes, name) do
     mod
     |> Module.get_attribute(:attributes)
-    |> Enum.any?(fn {_name, opts} -> opts[:name] == name end)
+    |> Enum.any?(fn {_name, opts} -> elem(opts[:name], 0) == name end)
   end
 
   defp name_exists?(mod, embeds, name) do
     mod
     |> Module.get_attribute(embeds)
-    |> Enum.any?(fn {_name, _mod, opts} -> opts[:name] == name end)
+    |> Enum.any?(fn {_name, _mod, opts} -> elem(opts[:name], 0) == name end)
   end
 
   @doc """
