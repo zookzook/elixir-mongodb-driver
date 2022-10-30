@@ -566,24 +566,26 @@ defmodule Mongo.Collection do
           |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
           |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
 
-        def load(map, use_atoms \\ false)
+        def load(_map, _use_atoms \\ false)
         def load(nil, _use_atoms), do: nil
         def load(xs, use_atoms) when is_list(xs), do: Enum.map(xs, fn map -> load(map, use_atoms) end)
 
         def load(map, use_atoms) when is_map(map) do
-          map = if use_atoms, do: map, else: Enum.into(map, %{}, fn {name, doc} -> {String.to_atom(name), doc} end)
-          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[src_name]) end)
+          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[src_name(src_name, use_atoms)]) end)
 
           struct =
             unquote(embed_ones)
-            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name], use_atoms)} end)
+            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name(src_name, use_atoms)], use_atoms)} end)
             |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
 
           unquote(embed_manys)
-          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name], use_atoms)} end)
+          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name(src_name, use_atoms)], use_atoms)} end)
           |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
           |> @after_load_fun.()
         end
+
+        defp src_name({src_name, _}, true), do: src_name
+        defp src_name({_, src_name}, _), do: src_name
       end
 
     dump_function =
@@ -620,8 +622,8 @@ defmodule Mongo.Collection do
           |> Collection.dump()
           |> Enum.into(%{}, fn {name, value} ->
             case unquote(attribute_names)[name] || unquote(embed_ones)[name] || unquote(embed_manys)[name] do
-              {src_name, _mod} -> {src_name, value}
-              src_name -> {src_name, value}
+              {{src_name, _}, _mod} -> {src_name, value}
+              {src_name, _} -> {src_name, value}
             end
           end)
         end
@@ -665,9 +667,9 @@ defmodule Mongo.Collection do
   def add_name(mod, opts, name) do
     opts =
       case opts[:name] do
-        nil -> Keyword.put(opts, :name, name)
-        name when is_atom(name) -> opts
-        name when is_binary(name) -> Keyword.replace(opts, :name, String.to_atom(name))
+        nil -> Keyword.put(opts, :name, {name, to_string(name)})
+        name when is_atom(name) -> Keyword.replace(opts, :name, {name, to_string(name)})
+        name when is_binary(name) -> Keyword.replace(opts, :name, {String.to_atom(name), name})
         _ -> raise ArgumentError, "name must be an atom or a binary"
       end
 
@@ -712,7 +714,7 @@ defmodule Mongo.Collection do
 
   def add_id(mod, {id, type, fun}, _name) do
     Module.put_attribute(mod, :types, {id, type})
-    Module.put_attribute(mod, :attributes, {id, default: fun, name: :_id})
+    Module.put_attribute(mod, :attributes, {id, default: fun, name: {:_id, "_id"}})
   end
 
   @doc """
