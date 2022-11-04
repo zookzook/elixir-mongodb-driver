@@ -105,7 +105,7 @@ defmodule Mongo.Repo do
         def delete_by(module, filter \\ %{}, opts \\ []) do
           collection = module.__collection__(:collection)
 
-          case Mongo.delete_one(@topology, collection, module.dump(filter), opts) do
+          case Mongo.delete_one(@topology, collection, module.dump_part(filter), opts) do
             {:ok, %{deleted_count: 1}} -> {:ok, filter}
             {:ok, %{deleted_count: 0}} -> {:error, :not_found}
             {:error, reason} -> {:error, reason}
@@ -158,12 +158,12 @@ defmodule Mongo.Repo do
 
         def update_all(module, filter \\ %{}, update, opts \\ []) do
           collection = module.__collection__(:collection)
-          Mongo.update_many(@topology, collection, module.dump(filter), update, opts)
+          Mongo.update_many(@topology, collection, module.dump_part(filter), update, opts)
         end
 
         def delete_all(module, filter \\ %{}, opts \\ []) do
           collection = module.__collection__(:collection)
-          Mongo.delete_many(@topology, collection, module.dump(filter), opts)
+          Mongo.delete_many(@topology, collection, module.dump_part(filter), opts)
         end
       end
 
@@ -183,7 +183,7 @@ defmodule Mongo.Repo do
         collection = module.__collection__(:collection)
 
         @topology
-        |> Mongo.find(collection, module.dump(filter), opts)
+        |> Mongo.find(collection, module.dump_part(filter), opts)
         |> Stream.map(&module.load/1)
       end
 
@@ -207,7 +207,7 @@ defmodule Mongo.Repo do
         collection = module.__collection__(:collection)
 
         @topology
-        |> Mongo.find_one(collection, module.dump(filter), opts)
+        |> Mongo.find_one(collection, module.dump_part(filter), opts)
         |> module.load()
       end
 
@@ -219,7 +219,7 @@ defmodule Mongo.Repo do
       end
 
       def fetch_by(module, filter \\ %{}, opts \\ []) do
-        case get_by(module, module.dump(filter), opts) do
+        case get_by(module, module.dump_part(filter), opts) do
           nil -> {:error, :not_found}
           doc -> {:ok, doc}
         end
@@ -227,11 +227,11 @@ defmodule Mongo.Repo do
 
       def count(module, filter \\ %{}, opts \\ []) do
         collection = module.__collection__(:collection)
-        Mongo.count_documents(@topology, collection, module.dump(filter), opts)
+        Mongo.count_documents(@topology, collection, filter, opts)
       end
 
       def exists?(module, filter \\ %{}) do
-        with {:ok, count} <- count(module, module.dump(filter), limit: 1) do
+        with {:ok, count} <- count(module, filter, limit: 1) do
           count > 0
         end
       end

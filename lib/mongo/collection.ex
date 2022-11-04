@@ -16,7 +16,7 @@ defmodule Mongo.Collection do
 
   When using the MongoDB driver only maps and keyword lists are used to
   represent documents.
-  If you would prefer to use structs instead of the maps to give the document a stronger meaning or to emphasize
+  If you prefer to use structs instead of the maps to give the document a stronger meaning or to emphasize
   its importance, you have to create a `defstruct` and fill it from the map manually:
 
       defmodule Label do
@@ -93,7 +93,7 @@ defmodule Mongo.Collection do
       iex(3)> Label.load(m, true)
       %Label{color: :red, name: "warning"}
 
-  The `load/2` function distinguishes between keys of type binarys `load(map, false)` and keys of type atoms `load(map, true)`.
+  The `load/2` function distinguishes between keys of type binaries `load(map, false)` and keys of type atoms `load(map, true)`.
   The default is `load(map, false)`:
 
       iex(1)> m = %{"color" => :red, "name" => "warning"}
@@ -105,7 +105,64 @@ defmodule Mongo.Collection do
       iex(3)> Label.load(m, true)
       %Label{color: nil, name: nil}
 
-  The background is that MongoDB always returns binarys as keys and structs use atoms as keys.
+  The background is that MongoDB always returns binaries as keys and structs use atoms as keys.
+
+  ## Dump and load function
+  Using the collection modules increases the cpu usage because we need to
+  serialize the map into the struct if we load the document from the database.
+  And if we want to save the struct to the database, the dump function is called,
+  that serializes the struct into a map. Both functions take care about the key
+  mapping as well. What do the generated functions look like in detail?
+
+  Assuming we have the following collections defined:
+
+      defmodule Label do
+        use Collection
+        document do
+          attribute :name, String.t(), default: "warning"
+        end
+      end
+
+      defmodule User do
+        use Collection
+        document do
+          attribute :first_name, String.t()
+          attribute :last_name, String.t()
+          attribute :email, String.t()
+          embeds_one :label, Label
+        end
+      end
+
+  The collection module creates the load function like this:
+
+     Map.put(%{
+       first_name: Map.get(user, "first_name"),
+       last_name: Map.get(user, "last_name"),
+       email: Map.get(user, "email"),
+       label: Label.load(Map.get(user, "label"))
+     }, :__struct__, User)
+
+  The performance depends on the number of attributes and embedded structs. It seems, that
+  using a map first is the fasted way to create a new struct. A few variations were tried out:
+
+    new quoted load                            2.43 M
+    load manually created using Map.get        2.25 M - 1.08x slower +32.91 ns
+    load manually created using []             2.12 M - 1.15x slower +60.34 ns
+    original load                              0.82 M - 2.96x slower +805.70 ns
+
+  The dump function looks like this:
+
+      [
+        {"first_name", user.first_name},
+        {"last_name", user.last_name},
+        {"email", user.email},
+        {"label", Label.dump(user.label)}
+      ]
+      |> Enum.filter(fn {_key, value} -> value != nil end)
+      |> Map.new()
+
+  The load and dump function uses only the defined attributes and embedded structs.
+  Unknown attributes are ignored.
 
   ## Default and derived values
 
@@ -125,6 +182,33 @@ defmodule Mongo.Collection do
 
         attribute :id, String.t(), derived: true
 
+  ## Key mapping
+
+  It is possible to define a different name for the keys. The name of the key is defined by using the `:name` option.
+
+    attribute :very_long_name, String.t(), name: v
+
+  The dump and load functions will use the name `v` instead of `very_long_name`:
+
+      defmodule Label do
+        use Mongo.Collection
+        document do
+          attribute :very_long_attribute, String.t(), name: :v
+        end
+      end
+
+      iex > l = %Label{very_long_attribute: "Hello"}
+      %Label{very_long_attribute: "Hello"}
+      iex > Label.dump(l)
+      %{"v" => "Hello"}
+      iex > dumped_l = Label.dump(l)
+      %{"v" => "Hello"}
+      iex > Label.load(dumped_l)
+      %Label{very_long_attribute: "Hello"}
+
+  You can reduce the size of the collection by using short attribute-names or use the `:name` option to import the
+  documents for a migration.
+
   ## Collections
 
   In MongoDB, documents are written in collections. We can use the `collection/2` macro to create
@@ -134,8 +218,6 @@ defmodule Mongo.Collection do
 
           use Collection
 
-          @collection nil
-
           collection "cards" do
             attribute :title, String.t(), default: "new title"
           end
@@ -143,7 +225,7 @@ defmodule Mongo.Collection do
         end
 
   The `collection/2` macro creates a collection that is basically similar to a document, where
-  an attribute for the ID is added automatically. Additionally the attribute `@collection` is assigned and
+  an attribute for the ID is added automatically. Additionally, the attribute `@collection` is assigned and
   can be used as a constant in other functions.
 
   In the example above we only suppress a warning of the editor by `@collection`. The macro creates the following
@@ -204,7 +286,7 @@ defmodule Mongo.Collection do
       iex(2)> Card.find_one(card._id)
       %XCard{_id: #BSON.ObjectId<5ec3ecbf306a5f3779a5edaa>, title: "new title"}
 
-  ## Id generator
+  ## ID generator
 
   In MongoDB it is common to use the attribute `_id` as id. The value is
   uses an ObjectId generated by the mongodb driver. This behavior can be specified by
@@ -545,87 +627,94 @@ defmodule Mongo.Collection do
           |> Enum.map(fn {name, opts} -> {name, opts[:default]} end)
           |> Enum.filter(fn {_name, fun} -> is_function(fun) end)
 
-        def new do
-          if @timestamps != [],
-            do: new_timestamps(%__MODULE__{unquote_splicing(Collection.struct_args(args))}),
-            else: %__MODULE__{unquote_splicing(Collection.struct_args(args))}
+        def new() do
+          case @timestamps != [] do
+            true ->
+              new_timestamps(%__MODULE__{unquote_splicing(Collection.struct_args(args))})
+
+            false ->
+              %__MODULE__{unquote_splicing(Collection.struct_args(args))}
+          end
         end
       end
 
     load_function =
       quote unquote: false do
-        attribute_names = Enum.map(@attributes, fn {name, opts} -> {name, opts[:name]} end)
+        attrs_mapping =
+          @attributes
+          |> Enum.map(fn {name, opts} -> {name, opts[:name]} end)
+          |> Enum.map(fn {name, {_, src_name}} -> {name, src_name} end)
 
-        embed_ones =
-          @embed_ones
+        embeds_mapping =
+          (@embed_ones ++ @embed_manys)
           |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
-          |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
+          |> Enum.map(fn {name, mod, opts} -> {name, mod, opts[:name]} end)
+          |> Enum.map(fn {name, mod, {_, src_name}} -> {mod, name, src_name} end)
 
-        embed_manys =
-          @embed_manys
+        load_quoted_binaries = Collection.compile_load_steps(attrs_mapping ++ embeds_mapping, __MODULE__, false)
+
+        attrs_mapping =
+          @attributes
+          |> Enum.map(fn {name, opts} -> {name, opts[:name]} end)
+          |> Enum.map(fn {name, {src_name, _}} -> {name, src_name} end)
+
+        embeds_mapping =
+          (@embed_ones ++ @embed_manys)
           |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
-          |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
+          |> Enum.map(fn {name, mod, opts} -> {name, mod, opts[:name]} end)
+          |> Enum.map(fn {name, mod, {src_name, _}} -> {mod, name, src_name} end)
 
-        def load(_map, _use_atoms \\ false)
-        def load(nil, _use_atoms), do: nil
-        def load(xs, use_atoms) when is_list(xs), do: Enum.map(xs, fn map -> load(map, use_atoms) end)
+        load_quoted_atoms = Collection.compile_load_steps(attrs_mapping ++ embeds_mapping, __MODULE__, true)
 
-        def load(map, use_atoms) when is_map(map) do
-          struct = Enum.reduce(unquote(attribute_names), %__MODULE__{}, fn {name, src_name}, result -> Map.put(result, name, map[src_name(src_name, use_atoms)]) end)
+        def load(_src_doc, _use_atoms \\ false)
 
-          struct =
-            unquote(embed_ones)
-            |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name(src_name, use_atoms)], use_atoms)} end)
-            |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
-
-          unquote(embed_manys)
-          |> Enum.map(fn {name, {src_name, mod}} -> {name, mod.load(map[src_name(src_name, use_atoms)], use_atoms)} end)
-          |> Enum.reduce(struct, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
-          |> @after_load_fun.()
+        def load(nil, _use_atoms) do
+          nil
         end
 
-        defp src_name({src_name, _}, true), do: src_name
-        defp src_name({_, src_name}, _), do: src_name
+        def load(xs, use_atoms) when is_list(xs) do
+          Enum.map(xs, fn src_doc -> load(src_doc, use_atoms) end)
+        end
+
+        def load(var!(src_doc), false) do
+          @after_load_fun.(unquote(load_quoted_binaries))
+        end
+
+        def load(var!(src_doc), true) do
+          @after_load_fun.(unquote(load_quoted_atoms))
+        end
       end
 
     dump_function =
       quote unquote: false do
-        attribute_names = Enum.map(@attributes, fn {name, opts} -> {name, opts[:name]} end)
+        attrs_mapping =
+          @attributes
+          |> Enum.map(fn {name, opts} -> {name, opts[:name]} end)
+          |> Enum.map(fn {name, {_, src_name}} -> {name, src_name} end)
 
-        embed_ones =
-          @embed_ones
-          |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_dump_function?(mod) end)
-          |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
+        embeds_mapping =
+          (@embed_ones ++ @embed_manys)
+          |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
+          |> Enum.map(fn {name, mod, opts} -> {name, mod, opts[:name]} end)
+          |> Enum.map(fn {name, mod, {_, src_name}} -> {mod, name, src_name} end)
 
-        embed_manys =
-          @embed_manys
-          |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_dump_function?(mod) end)
-          |> Enum.map(fn {name, mod, opts} -> {name, {opts[:name], mod}} end)
+        dump_quoted_binaries = Collection.compile_dump_steps(attrs_mapping ++ embeds_mapping)
 
-        def dump(nil), do: nil
-        def dump(xs) when is_list(xs), do: Enum.map(xs, fn struct -> dump(struct) end)
+        def dump(nil) do
+          nil
+        end
 
-        def dump(%{} = map) do
-          map =
-            unquote(embed_ones)
-            |> Enum.map(fn {name, {_src_name, mod}} -> {name, mod.dump(Map.get(map, name))} end)
-            |> Enum.reduce(map, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
+        def dump(xs) when is_list(xs) do
+          Enum.map(xs, fn struct -> dump(struct) end)
+        end
 
-          map =
-            unquote(embed_manys)
-            |> Enum.map(fn {name, {_src_name, mod}} -> {name, mod.dump(Map.get(map, name))} end)
-            |> Enum.reduce(map, fn {name, doc}, acc -> Map.put(acc, name, doc) end)
+        def dump(map) do
+          var!(src_doc) = @before_dump_fun.(map)
+          unquote(dump_quoted_binaries)
+        end
 
+        def dump_part(map) do
           map
-          |> Map.drop(unquote(@derived))
-          |> @before_dump_fun.()
-          |> Collection.dump()
-          |> Enum.into(%{}, fn {name, value} ->
-            case unquote(attribute_names)[name] || unquote(embed_ones)[name] || unquote(embed_manys)[name] do
-              {{src_name, _}, _mod} -> {src_name, value}
-              {src_name, _} -> {src_name, value}
-            end
-          end)
         end
       end
 
@@ -667,17 +756,28 @@ defmodule Mongo.Collection do
   def add_name(mod, opts, name) do
     opts =
       case opts[:name] do
-        nil -> Keyword.put(opts, :name, {name, to_string(name)})
-        name when is_atom(name) -> Keyword.replace(opts, :name, {name, to_string(name)})
-        name when is_binary(name) -> Keyword.replace(opts, :name, {String.to_atom(name), name})
-        _ -> raise ArgumentError, "name must be an atom or a binary"
+        nil ->
+          Keyword.put(opts, :name, {name, to_string(name)})
+
+        name when is_atom(name) ->
+          Keyword.replace(opts, :name, {name, to_string(name)})
+
+        name when is_binary(name) ->
+          Keyword.replace(opts, :name, {String.to_atom(name), name})
+
+        _ ->
+          raise ArgumentError, "name must be an atom or a binary"
       end
 
     {src_name, _} = opts[:name]
 
-    if name_exists?(mod, src_name),
-      do: raise(ArgumentError, "attribute #{inspect(name)} has duplicate name option key\n\n    [name: #{inspect(src_name)}] already exist\n"),
-      else: opts
+    case name_exists?(mod, src_name) do
+      true ->
+        raise(ArgumentError, "attribute #{inspect(name)} has duplicate name option key\n\n    [name: #{inspect(src_name)}] already exist\n")
+
+      false ->
+        opts
+    end
   end
 
   defp name_exists?(mod, name) do
@@ -821,9 +921,9 @@ defmodule Mongo.Collection do
   Adds the attribute to the attributes list.
   """
   def __attribute__(mod, name, type, opts) do
-    if opts[:derived],
-      do: Module.put_attribute(mod, :derived, name),
-      else: []
+    if opts[:derived] do
+      Module.put_attribute(mod, :derived, name)
+    end
 
     Module.put_attribute(mod, :types, {name, type})
     Module.put_attribute(mod, :attributes, {name, add_name(mod, opts, name)})
@@ -890,9 +990,13 @@ defmodule Mongo.Collection do
     :maps.map(&dump/2, Map.from_struct(struct)) |> filter_nils()
   end
 
-  defp ensure_nested_map(list) when is_list(list), do: Enum.map(list, &ensure_nested_map/1)
+  defp ensure_nested_map(list) when is_list(list) do
+    Enum.map(list, &ensure_nested_map/1)
+  end
 
-  defp ensure_nested_map(data), do: data
+  defp ensure_nested_map(data) do
+    data
+  end
 
   def filter_nils(map) when is_map(map) do
     map
@@ -902,5 +1006,76 @@ defmodule Mongo.Collection do
 
   def filter_nils(keyword) when is_list(keyword) do
     Enum.reject(keyword, fn {_key, value} -> is_nil(value) end)
+  end
+
+  ##
+  # this function constructs a new struct with the specified attributes like this:
+  #
+  # in case of use_atoms = false:
+  #
+  # Map.put(%{
+  #   first_name: Map.get(src_doc, "first_name"),
+  #   last_name: Map.get(src_doc, "last_name"),
+  #   email: Map.get(src_doc, "email"),
+  #   labels: Label.load(Map.get(src_doc, "labels"), false)
+  # }, :__struct__, __MODULE__)
+  #
+  # in case of use_atoms = true:
+  #  Map.put(%{
+  #   first_name: Map.get(src_doc, :first_name),
+  #   last_name: Map.get(src_doc, :last_name),
+  #   email: Map.get(src_doc, :email),
+  #   labels: Label.load(Map.get(src_doc, :labels), true)
+  #  }, :__struct__, __MODULE__)
+  #
+  # It seems, this is the fastest way to construct a new struct:
+  #
+  # new quoted load                            2.43 M
+  # load manually created using Map.get        2.25 M - 1.08x slower +32.91 ns
+  # load manually created using []             2.12 M - 1.15x slower +60.34 ns
+  # original load                              0.82 M - 2.96x slower +805.70 ns
+  ##
+  def compile_load_steps(attributes, mod, use_atoms) do
+    args =
+      attributes
+      |> Enum.reverse()
+      |> Enum.map(fn
+        {dest_key, src_key} ->
+          quote do
+            {unquote(dest_key), Map.get(var!(src_doc), unquote(src_key))}
+          end
+
+        {mod, dest_key, src_key} ->
+          quote do
+            {unquote(dest_key), unquote(mod).load(Map.get(var!(src_doc), unquote(src_key)), unquote(use_atoms))}
+          end
+      end)
+
+    quote do
+      Map.put(%{unquote_splicing(args)}, :__struct__, unquote(mod))
+    end
+  end
+
+  def compile_dump_steps(attributes) do
+    args =
+      attributes
+      |> Enum.reverse()
+      |> Enum.map(fn
+        {dest_key, src_key} ->
+          quote do
+            {unquote(src_key), var!(src_doc).unquote(dest_key)}
+          end
+
+        {mod, dest_key, src_key} ->
+          quote do
+            {unquote(src_key), unquote(mod).dump(var!(src_doc).unquote(dest_key))}
+          end
+      end)
+
+    quote do
+      unquote(args)
+      |> Enum.filter(fn {_key, value} -> value != nil end)
+      |> Map.new()
+    end
   end
 end
