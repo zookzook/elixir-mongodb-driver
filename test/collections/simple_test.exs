@@ -69,21 +69,22 @@ defmodule Collections.SimpleTest do
     map_card = Card.dump(new_card)
 
     ts = Map.get(new_card, :created)
-    assert %{c_at: ^ts, modified: ^ts} = map_card
+    assert %{"c_at" => ^ts, "modified" => ^ts} = map_card
   end
 
   test "load and dump", _c do
     alias Collections.SimpleTest.Card
     alias Collections.SimpleTest.Label
 
-    assert %{l: %{c: "red"}, title: nil} = Card.dump(%{label: %{color: "red"}, title: nil})
+    new_card = %{Card.new() | label: %{color: "red", name: "red"}, title: nil}
+    assert %{"l" => %{"c" => "red", "name" => "red"}} = Card.dump(new_card)
 
     new_card = Card.new()
     map_card = Card.dump(new_card)
 
-    assert %{c_at: _, title: "new title", i: "new intro", l: %{c: :red, name: "warning"}} = map_card
+    assert %{"c_at" => _, "title" => "new title", "i" => "new intro", "l" => %{"c" => :red, "name" => "warning"}} = map_card
 
-    struct_card = Card.load(map_card, true)
+    struct_card = Card.load(map_card, false)
 
     assert %Card{intro: "new intro", label: %Label{color: :red, name: "warning"}} = struct_card
   end
