@@ -78,6 +78,11 @@ defmodule Mongo.Migration do
       _other ->
         :noop
     end
+  rescue
+    e ->
+      IO.puts("🚨 Error when migrating #{mod}:")
+      IO.puts(Exception.format(:error, e, __STACKTRACE__))
+      reraise e, __STACKTRACE__
   end
 
   defp run_down(version, mod) do
@@ -85,7 +90,7 @@ defmodule Mongo.Migration do
     collection = get_config()[:collection]
 
     case Mongo.find_one(topology, collection, %{version: version}) do
-      %{version: _version} ->
+      %{"version" => _version} ->
         mod.down()
         Mongo.delete_one(topology, collection, %{version: version})
         IO.puts("💥 Successfully dropped #{mod}")
@@ -93,6 +98,11 @@ defmodule Mongo.Migration do
       _other ->
         :noop
     end
+  rescue
+    e ->
+      IO.puts("🚨 Error when dropping #{mod}:")
+      IO.puts(Exception.format(:error, e, __STACKTRACE__))
+      reraise e, __STACKTRACE__
   end
 
   def get_config() do
