@@ -689,11 +689,13 @@ defmodule Mongo.Collection do
       quote unquote: false do
         attrs_mapping =
           @attributes
+          |> Enum.reject(fn {name, _opts} -> Enum.member?(@derived, name) end)
           |> Enum.map(fn {name, opts} -> {name, opts[:name]} end)
           |> Enum.map(fn {name, {_, src_name}} -> {name, src_name} end)
 
         embeds_mapping =
           (@embed_ones ++ @embed_manys)
+          |> Enum.reject(fn {name, _mod, _opts} -> Enum.member?(@derived, name) end)
           |> Enum.filter(fn {_name, mod, _opts} -> Collection.has_load_function?(mod) end)
           |> Enum.map(fn {name, mod, opts} -> {name, mod, opts[:name]} end)
           |> Enum.map(fn {name, mod, {_, src_name}} -> {mod, name, src_name} end)

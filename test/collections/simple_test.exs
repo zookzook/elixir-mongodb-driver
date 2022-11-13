@@ -12,6 +12,33 @@ defmodule Collections.SimpleTest do
     {:ok, [pid: pid]}
   end
 
+  defmodule Task do
+    use Collection
+
+    collection "tasks" do
+      attribute :name, String.t(), default: "Fix errors"
+      attribute :status, integer(), derived: true
+      after_load &Task.after_load/1
+    end
+
+    def after_load(task) do
+      %Task{task | status: :loaded}
+    end
+
+    def insert_one(task, top) do
+      with map <- dump(task),
+           {:ok, _} <- Mongo.insert_one(top, @collection, map) do
+        :ok
+      end
+    end
+
+    def find_one(id, top) do
+      top
+      |> Mongo.find_one(@collection, %{@id => id})
+      |> load()
+    end
+  end
+
   defmodule Label do
     use Collection
 
@@ -87,6 +114,21 @@ defmodule Collections.SimpleTest do
     struct_card = Card.load(map_card, false)
 
     assert %Card{intro: "new intro", label: %Label{color: :red, name: "warning"}} = struct_card
+  end
+
+  test "dump derived attributes", c do
+    alias Collections.SimpleTest.Task
+    task = %Task{Task.new() | status: :red}
+    assert Map.has_key?(Task.dump(task), "status") == false
+
+    assert :ok = Task.insert_one(task, c.pid)
+
+    task = Task.find_one(task._id, c.pid)
+
+    assert %Task{status: :loaded} = task
+
+    task = Mongo.find_one(c.pid, "tasks", %{_id: task._id})
+    assert Map.has_key?(task, "status") == false
   end
 
   test "save and find", c do
