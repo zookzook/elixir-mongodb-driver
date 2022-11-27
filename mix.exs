@@ -2,7 +2,7 @@ defmodule Mongodb.Mixfile do
   use Mix.Project
 
   @source_url "https://github.com/zookzook/elixir-mongodb-driver"
-  @version "0.9.2"
+  @version "1.0.0"
 
   def project() do
     [
