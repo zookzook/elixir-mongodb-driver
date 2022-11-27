@@ -372,11 +372,11 @@ For more information check out the `Mongo.Repo` module documentation and the `Mo
 
 ## Breaking changes
 
-Prior to version 0.9.2 some Repo functions use the `dump/1` function for the query (and update) parameter. This worked only
-for some query that used only the attributes of the document. In the case of nested documents, it didn't work, so
-it is changed to be more consistent. The Repo module is very simple without any query rewriting like Ecto does. In the case
-you want to use the `:name` option, you need to specify the query and updates in the Repo following
-the specification in the MongoDB. Example:
+Prior to version 0.9.2 some `Mongo.Repo` functions use the `dump/1` function for the query (and update) parameter. 
+This worked only for some query that used only the attributes of the document. In the case of nested documents, 
+it didn't work, so it is changed to be more consistent. The `Mongo.Repo` module is very simple without any query 
+rewriting like Ecto does. In the case you want to use the `:name` option, you need to specify the query and update 
+documents in the `Mongo.Repo` functions following the specification in the MongoDB. Example:
 
     defmodule MyApp.Session do
         @moduledoc false
@@ -389,7 +389,7 @@ the specification in the MongoDB. Example:
         end
     end
 
-If you use the Repo module and want to fetch a specific session document, this won't work:
+If you use the `Mongo.Repo` module and want to fetch a specific session document, this won't work:
 
     MyApp.Repo.get_by(MyApp.Session, %{uuid: session_uuid})
 
