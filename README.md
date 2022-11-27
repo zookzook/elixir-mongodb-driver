@@ -214,6 +214,10 @@ While using the `Mongo.Encoder` protocol give you the possibility to encode your
 - support for id generation
 - support for default values
 - support for derived values
+- support for alias attribute names
+
+But in the case of queries and updates, a rewrite of the attribute names does not take place. It is still up to you
+to use the correct attribute names.
 
 When using the MongoDB driver only maps and keyword lists are used to represent documents.
 If you prefer to use structs instead of the maps to give the document a stronger meaning or to emphasize
@@ -313,11 +317,18 @@ iex(3)> Label.load(m, true)
 ```
 
 The background is that MongoDB always returns binarys as keys and structs use atoms as keys.
-
 For more information look at the module documentation `Mongo.Collection`.
-
 Of course, using the `Mongo.Collection` is not free. When loading and saving, the maps are converted into structures, which increases CPU usage somewhat. When it comes to speed, it is better to use the maps directly.
 
+## Breaking changes
+
+Prior to version 0.9.2 the dump function returns atoms as key. Since the dump function is the inverse function of load,
+which uses binary keys as default, the dump function should return binary keys as well. This increases the consistency and
+you can do:
+
+    l = Label.load(doc)
+    doc = Label.dump(l)
+    assert l == Label.load(doc)
 
 ## Using the Repo Module
 
@@ -357,6 +368,35 @@ In addition, the convenient configuration, the `Mongo.Repo` module will also inc
 `Mongo.Collection` modules.
 
 For more information check out the `Mongo.Repo` module documentation and the `Mongo` module documentation.
+
+## Breaking changes
+
+Prior to version 0.9.2 some Repo functions use the dump function for the query parameter. This worked only
+for some query that used only the attributes of the document. In the case of nested documents, it didn't work, so
+it is changed to be more consistent. The Repo module is very simple without any query rewriting like Ecto does. In the case
+you want to use the `:name` option, you need to specify the query and updates in the Repo following
+the specification in the MongoDB. Example:
+
+    defmodule MyApp.Session do
+        @moduledoc false
+        use Mongo.Collection
+        
+        alias BSON.Binary
+        
+        collection :s do
+            attribute :uuid, Binary.t(), name: :u 
+        end
+    end
+
+If you use the Repo module and want to fetch a specific session document, this won't work
+
+    MyApp.Repo.get_by(MyApp.Session, %{uuid: session_uuid})
+
+because the `get_by/2` function uses the query parameter without any rewriting. You need to change the query:
+
+    MyApp.Repo.get_by(MyApp.Session, %{u: session_uuid})
+
+A rewriting is too complex for now, because the MongoDB has a lot of options. 
 
 ## Logging
 
@@ -605,6 +645,8 @@ you'll want to add this cipher to your `ssl_opts`:
       ]
 )
 ```
+
+See the example `AWSX509.Example` as well.
 
 ## Timeout
 

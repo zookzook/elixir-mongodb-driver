@@ -6,11 +6,13 @@ defmodule Mix.Tasks.Mongo.Gen.Migration do
   import Macro, only: [camelize: 1, underscore: 1]
   import Mix.Generator
 
+  alias Mongo.Migration
+
   @shortdoc "Generates a new migration for Mongo"
 
   @spec run([String.t()]) :: integer()
   def run(args) do
-    migrations_path = migration_file_path()
+    migrations_path = Migration.migration_file_path()
     name = List.first(args)
     base_name = "#{underscore(name)}.exs"
     current_timestamp = timestamp()
@@ -34,11 +36,6 @@ defmodule Mix.Tasks.Mongo.Gen.Migration do
 
   defp pad(i) when i < 10, do: <<?0, ?0 + i>>
   defp pad(i), do: to_string(i)
-
-  def migration_file_path() do
-    path = Mongo.Migration.get_config()[:path]
-    Path.join(["priv", path])
-  end
 
   embed_template(:migration, """
   defmodule <%= inspect @mod %> do

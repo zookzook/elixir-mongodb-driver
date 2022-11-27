@@ -11,7 +11,8 @@ defmodule Mongo.Migration do
       unlock()
     end
   rescue
-    _ ->
+    error ->
+      IO.puts("🚨 Error when migrating: #{inspect(error)}")
       unlock()
   end
 
@@ -25,7 +26,8 @@ defmodule Mongo.Migration do
       unlock()
     end
   rescue
-    _ ->
+    error ->
+      IO.puts("🚨 Error when dropping: #{inspect(error)}")
       unlock()
   end
 
@@ -117,9 +119,11 @@ defmodule Mongo.Migration do
   end
 
   defp migration_files!() do
+    file_path = migration_file_path()
+
     case File.ls(migration_file_path()) do
       {:ok, files} -> Enum.sort(files)
-      {:error, _} -> raise "Could not find migrations file path"
+      {:error, _error} -> raise "Could not find migrations file path #{inspect(file_path)}"
     end
   end
 
