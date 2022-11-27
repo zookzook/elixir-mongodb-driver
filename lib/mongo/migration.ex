@@ -118,7 +118,7 @@ defmodule Mongo.Migration do
 
   defp migration_files!() do
     case File.ls(migration_file_path()) do
-      {:ok, files} -> files
+      {:ok, files} -> Enum.sort(files)
       {:error, _} -> raise "Could not find migrations file path"
     end
   end
