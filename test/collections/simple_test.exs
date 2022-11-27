@@ -18,6 +18,7 @@ defmodule Collections.SimpleTest do
     collection "tasks" do
       attribute :name, String.t(), default: "Fix errors"
       attribute :status, integer(), derived: true
+      attribute :sequence_id, BSON.Decimal128.t(), default: Decimal.new(0)
       after_load &Task.after_load/1
     end
 
@@ -114,6 +115,17 @@ defmodule Collections.SimpleTest do
     struct_card = Card.load(map_card, false)
 
     assert %Card{intro: "new intro", label: %Label{color: :red, name: "warning"}} = struct_card
+  end
+
+  test "dump decimal attributes", c do
+    alias Collections.SimpleTest.Task
+
+    task = %Task{Task.new() | sequence_id: Decimal.new(123)}
+    assert :ok = Task.insert_one(task, c.pid)
+
+    task = Task.find_one(task._id, c.pid)
+    assert task.sequence_id != Decimal.new(0)
+    assert task.sequence_id == Decimal.new(123)
   end
 
   test "dump derived attributes", c do
