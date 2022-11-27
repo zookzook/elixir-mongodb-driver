@@ -37,7 +37,7 @@ Add `mongodb_driver` to your mix.exs `deps`.
 
 ```elixir
 defp deps do
-  [{:mongodb_driver, "~> 0.9.2"}]
+  [{:mongodb_driver, "~> 1.0.0"}]
 end
 ```
 
@@ -322,8 +322,8 @@ Of course, using the `Mongo.Collection` is not free. When loading and saving, th
 
 ## Breaking changes
 
-Prior to version 0.9.2 the dump function returns atoms as key. Since the dump function is the inverse function of load,
-which uses binary keys as default, the dump function should return binary keys as well. This increases the consistency and
+Prior to version 0.9.2 the dump function returns atoms as key. Since the `dump/1` function is the inverse function of `load/1`,
+which uses binary keys as default, the `dump/1` function should return binary keys as well. This increases the consistency and
 you can do:
 
     l = Label.load(doc)
@@ -371,7 +371,7 @@ For more information check out the `Mongo.Repo` module documentation and the `Mo
 
 ## Breaking changes
 
-Prior to version 0.9.2 some Repo functions use the dump function for the query parameter. This worked only
+Prior to version 0.9.2 some Repo functions use the `dump/1` function for the query (and update) parameter. This worked only
 for some query that used only the attributes of the document. In the case of nested documents, it didn't work, so
 it is changed to be more consistent. The Repo module is very simple without any query rewriting like Ecto does. In the case
 you want to use the `:name` option, you need to specify the query and updates in the Repo following
@@ -388,7 +388,7 @@ the specification in the MongoDB. Example:
         end
     end
 
-If you use the Repo module and want to fetch a specific session document, this won't work
+If you use the Repo module and want to fetch a specific session document, this won't work:
 
     MyApp.Repo.get_by(MyApp.Session, %{uuid: session_uuid})
 
@@ -396,7 +396,7 @@ because the `get_by/2` function uses the query parameter without any rewriting. 
 
     MyApp.Repo.get_by(MyApp.Session, %{u: session_uuid})
 
-A rewriting is too complex for now, because the MongoDB has a lot of options. 
+A rewriting is too complex for now because MongoDB has a lot of options. 
 
 ## Logging
 
@@ -613,6 +613,24 @@ For more information see:
 - `Mongo.Migration`
 - `Mix.Tasks.Mongo`
 - https://hexdocs.pm/mix/1.14/Mix.Tasks.Release.html
+
+### Configuration:
+You need to configure the migration module and specify at least the `:otp_app` and `:topology` values:
+
+    config :mongodb_driver,
+        migration:
+            [
+                topology: :mongo,
+                collection: "migrations",
+                path: "mongo/migrations",
+                otp_app: :mongodb_driver
+            ]
+
+The following  options are available:
+* `:collection` - Version numbers of migrations will be saved in a collection named `migrations` by default.
+* `:path` - the priv directory for migrations. `:path` defaults to "mongo/migrations" and migrations should be placed at "priv/mongo/migrations"
+* `:otp_app` - the name of the otp_app to resolve the `priv` folder, defaults to `:mongodb_driver`. In most cases you use your application name.
+* `:topology` - the topology for running the migrations, `:topology` defaults to `:mongo`
 
 ## Auth Mechanisms
 
