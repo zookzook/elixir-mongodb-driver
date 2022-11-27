@@ -28,5 +28,5 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
       - run: mix hex.build
         if: ${{ steps.release.outputs.release_created }}
-      #- run: mix hex.publish --yes --replace
-      #  if: ${{ steps.release.outputs.release_created }}
+      - run: mix hex.publish --yes --replace
+        if: ${{ steps.release.outputs.release_created }}
