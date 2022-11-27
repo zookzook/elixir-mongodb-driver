@@ -615,7 +615,8 @@ For more information see:
 - https://hexdocs.pm/mix/1.14/Mix.Tasks.Release.html
 
 ### Configuration:
-You need to configure the migration module and specify at least the `:otp_app` and `:topology` values:
+You need to configure the migration module and specify at least the `:otp_app` and `:topology` values. Here are the
+default values:
 
     config :mongodb_driver,
         migration:
@@ -628,7 +629,7 @@ You need to configure the migration module and specify at least the `:otp_app` a
 
 The following  options are available:
 * `:collection` - Version numbers of migrations will be saved in a collection named `migrations` by default.
-* `:path` - the priv directory for migrations. `:path` defaults to "mongo/migrations" and migrations should be placed at "priv/mongo/migrations"
+* `:path` - the `priv` directory for migrations. `:path` defaults to "mongo/migrations" and migrations should be placed at "priv/mongo/migrations"
 * `:otp_app` - the name of the otp_app to resolve the `priv` folder, defaults to `:mongodb_driver`. In most cases you use your application name.
 * `:topology` - the topology for running the migrations, `:topology` defaults to `:mongo`
 
@@ -948,7 +949,7 @@ Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-dri
 ## Copyright and License
 
 Copyright 2015 Eric Meadows-Jönsson and Justin Wood \
-Copyright 2019 - 2022 Michael Maier
+Copyright 2019 - present Michael Maier
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
