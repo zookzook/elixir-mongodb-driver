@@ -12,7 +12,7 @@ defmodule Mix.Tasks.Mongo.Gen.Migration do
 
   @spec run([String.t()]) :: integer()
   def run(args) do
-    migrations_path = Migration.migration_file_path()
+    migrations_path = migration_file_path()
     name = List.first(args)
     base_name = "#{underscore(name)}.exs"
     current_timestamp = timestamp()
@@ -27,6 +27,15 @@ defmodule Mix.Tasks.Mongo.Gen.Migration do
     assigns = [mod: Module.concat([Mongo, Migrations, camelize(name)])]
     create_file(file, migration_template(assigns))
     String.to_integer(current_timestamp)
+  end
+
+  @doc """
+  Returns the private repository path relative to the source.
+  """
+  def migration_file_path() do
+    path = "priv/" <> Migration.get_config()[:path]
+    otp_app = Migration.get_config()[:otp_app]
+    Path.join(Mix.Project.deps_paths()[otp_app] || File.cwd!(), path)
   end
 
   defp timestamp do
