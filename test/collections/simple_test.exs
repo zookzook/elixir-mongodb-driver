@@ -66,7 +66,7 @@ defmodule Collections.SimpleTest do
     collection "cards" do
       attribute :title, String.t(), default: "new title"
       attribute :intro, String.t(), default: "new intro", name: "i"
-      embeds_one(:label, Label, default: &Label.new/0, name: :l)
+      embeds_one :label, Label, default: &Label.new/0, name: :l
       timestamps(inserted_at: {:created, :c_at}, updated_at: :modified, default: &Card.ts/0)
     end
 
