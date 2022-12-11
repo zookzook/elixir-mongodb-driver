@@ -6,7 +6,7 @@ defmodule Mongo.MigrationTest do
 
   test "test lock and unlock", %{pid: top} do
     Mongo.drop_collection(top, "migrations")
-    Patch.patch(Mongo.Migration, :get_config, fn -> [topology: top, collection: "migrations", path: "mongo/migrations", otp_app: :mongodb_driver] end)
+    Patch.patch(Mongo.Migration, :get_config, fn _ -> [topology: top, collection: "migrations", path: "mongo/migrations", otp_app: :mongodb_driver] end)
     assert :locked == Migration.lock()
     assert {:error, :already_locked} == Migration.lock()
     assert :unlocked == Migration.unlock()
