@@ -12,8 +12,20 @@ defmodule Mix.Tasks.Mongo.Gen.Migration do
 
   @spec run([String.t()]) :: integer()
   def run(args) do
-    migrations_path = migration_file_path()
-    name = List.first(args)
+    {name, topology} =
+      case args do
+        [name | [topology | _xs]] ->
+          {name, topology}
+
+        [name | _xs] ->
+          {name, Migration.get_config()[:topology]}
+
+        _other ->
+          Mix.raise("Filename is missing")
+      end
+
+    migrations_path = migration_file_path(topology)
+
     base_name = "#{underscore(name)}.exs"
     current_timestamp = timestamp()
     file = Path.join(migrations_path, "#{current_timestamp}_#{base_name}")
@@ -24,7 +36,7 @@ defmodule Mix.Tasks.Mongo.Gen.Migration do
       Mix.raise("Migration can't be created, there is already a migration file with name #{name}.")
     end
 
-    assigns = [mod: Module.concat([Mongo, Migrations, camelize(name)])]
+    assigns = [mod: Module.concat([Mongo, Migrations, camelize(to_string(topology)), camelize(name)])]
     create_file(file, migration_template(assigns))
     String.to_integer(current_timestamp)
   end
@@ -32,8 +44,8 @@ defmodule Mix.Tasks.Mongo.Gen.Migration do
   @doc """
   Returns the private repository path relative to the source.
   """
-  def migration_file_path() do
-    path = "priv/" <> Migration.get_config()[:path]
+  def migration_file_path(topology) do
+    path = "priv/#{topology}/#{Migration.get_config()[:path]}"
     otp_app = Migration.get_config()[:otp_app]
     Path.join(Mix.Project.deps_paths()[otp_app] || File.cwd!(), path)
   end

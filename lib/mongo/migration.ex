@@ -2,38 +2,39 @@ defmodule Mongo.Migration do
   @moduledoc false
   use Mongo.Collection
 
-  def migrate() do
-    with :locked <- lock() do
-      migration_files!()
+  def migrate(opts \\ []) do
+    with :locked <- lock(opts) do
+      migration_files!(opts)
       |> compile_migrations()
-      |> Enum.each(fn {mod, version} -> run_up(version, mod) end)
+      |> Enum.each(fn {mod, version} -> run_up(version, mod, opts) end)
 
-      unlock()
+      unlock(opts)
     end
   rescue
     error ->
       IO.puts("🚨 Error when migrating: #{inspect(error)}")
-      unlock()
+      unlock(opts)
   end
 
-  def drop() do
-    with :locked <- lock() do
-      migration_files!()
+  def drop(opts \\ []) do
+    with :locked <- lock(opts) do
+      migration_files!(opts)
       |> compile_migrations()
       |> Enum.reverse()
-      |> Enum.each(fn {mod, version} -> run_down(version, mod) end)
+      |> Enum.each(fn {mod, version} -> run_down(version, mod, opts) end)
 
-      unlock()
+      unlock(opts)
     end
   rescue
     error ->
       IO.puts("🚨 Error when dropping: #{inspect(error)}")
-      unlock()
+      unlock(opts)
   end
 
-  def lock() do
-    topology = get_config()[:topology]
-    collection = get_config()[:collection]
+  def lock(opts \\ []) do
+    topology = get_config(opts)[:topology]
+    collection = get_config(opts)[:collection]
+
     query = %{_id: "lock", used: false}
     set = %{"$set": %{used: true}}
 
@@ -51,9 +52,9 @@ defmodule Mongo.Migration do
     end
   end
 
-  def unlock() do
-    topology = get_config()[:topology]
-    collection = get_config()[:collection]
+  def unlock(opts \\ []) do
+    topology = get_config(opts)[:topology]
+    collection = get_config(opts)[:collection]
     query = %{_id: "lock", used: true}
     set = %{"$set": %{used: false}}
 
@@ -67,13 +68,25 @@ defmodule Mongo.Migration do
     end
   end
 
-  defp run_up(version, mod) do
-    topology = get_config()[:topology]
-    collection = get_config()[:collection]
+  defp run_up(version, mod, opts) do
+    topology = get_config(opts)[:topology]
+    collection = get_config(opts)[:collection]
 
     case Mongo.find_one(topology, collection, %{version: version}) do
       nil ->
-        mod.up()
+        ## check, if the function supports options
+
+        cond do
+          function_exported?(mod, :up, 1) ->
+            apply(mod, :up, [opts])
+
+          function_exported?(mod, :up, 0) ->
+            apply(mod, :up, [])
+
+          true ->
+            raise "The module does not export the up function!"
+        end
+
         Mongo.insert_one(topology, collection, %{version: version})
         IO.puts("⚡️ Successfully migrated #{mod}")
 
@@ -87,13 +100,24 @@ defmodule Mongo.Migration do
       reraise e, __STACKTRACE__
   end
 
-  defp run_down(version, mod) do
-    topology = get_config()[:topology]
-    collection = get_config()[:collection]
+  defp run_down(version, mod, opts) do
+    topology = get_config(opts)[:topology]
+    collection = get_config(opts)[:collection]
 
     case Mongo.find_one(topology, collection, %{version: version}) do
       %{"version" => _version} ->
-        mod.down()
+        ## check, if the function supports options
+        cond do
+          function_exported?(mod, :down, 1) ->
+            apply(mod, :down, [opts])
+
+          function_exported?(mod, :down, 0) ->
+            apply(mod, :down, [])
+
+          true ->
+            raise "The module does not export the down function!"
+        end
+
         Mongo.delete_one(topology, collection, %{version: version})
         IO.puts("💥 Successfully dropped #{mod}")
 
@@ -107,30 +131,39 @@ defmodule Mongo.Migration do
       reraise e, __STACKTRACE__
   end
 
-  def get_config() do
+  def get_config(opts \\ []) do
     defaults = [topology: :mongo, collection: "migrations", path: "mongo/migrations", otp_app: :mongodb_driver]
-    Keyword.merge(defaults, Application.get_env(:mongodb_driver, :migration, []))
+
+    defaults
+    |> Keyword.merge(Application.get_env(:mongodb_driver, :migration, []))
+    |> Keyword.merge(opts)
   end
 
-  def migration_file_path() do
-    path = get_config()[:path]
-    otp_app = get_config()[:otp_app]
-    Path.join([:code.priv_dir(otp_app), path])
+  def migration_file_path(opts \\ []) do
+    path = get_config(opts)[:path]
+    topology = get_config(opts)[:topology]
+    otp_app = get_config(opts)[:otp_app]
+    Path.join([:code.priv_dir(otp_app), to_string(topology), path])
   end
 
-  defp migration_files!() do
-    file_path = migration_file_path()
+  def migration_files!(opts) do
+    file_path = migration_file_path(opts)
 
-    case File.ls(migration_file_path()) do
-      {:ok, files} -> Enum.sort(files)
-      {:error, _error} -> raise "Could not find migrations file path #{inspect(file_path)}"
+    case File.ls(file_path) do
+      {:ok, files} ->
+        files
+        |> Enum.sort()
+        |> Enum.map(fn file_name -> file_path <> "/" <> file_name end)
+
+      {:error, _error} ->
+        raise "Could not find migrations file path #{inspect(file_path)}"
     end
   end
 
   defp compile_migrations(files) do
     Enum.map(files, fn file ->
       mod =
-        (migration_file_path() <> "/" <> file)
+        file
         |> Code.compile_file()
         |> Enum.map(&elem(&1, 0))
         |> List.first()

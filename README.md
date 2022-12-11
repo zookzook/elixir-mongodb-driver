@@ -634,6 +634,64 @@ The following  options are available:
 * `:otp_app` - the name of the otp_app to resolve the `priv` folder, defaults to `:mongodb_driver`. In most cases you use your application name.
 * `:topology` - the topology for running the migrations, `:topology` defaults to `:mongo`
 
+### Supporting multiple topologies:
+
+Each function `lock/1, unlock/1, migrate/1, drop/1` accepts a keyword list (options) to override the default config having 
+full control of the migration process. The options are passed through the migration scripts. 
+
+That means you can support multiple topologies, databases and migration collections. Example
+
+    Mongo.start_link(name: :topology_1, url: "mongodb://localhost:27017/mig_test_1", timeout: 60_000, pool_size: 5, idle_interval: 10_000)
+    Mongo.start_link(name: :topology_2, url: "mongodb://localhost:27017/mig_test_2", timeout: 60_000, pool_size: 5, idle_interval: 10_000)
+
+    IO.puts("running default migration")
+    Mongo.Migration.migrate() ## default values specified in the configs
+
+    IO.puts("running topology_2 migration")
+    Mongo.Migration.migrate([topology: :topology_2]) ## override the topology 
+
+Adding the options parameter in the `up/1` and `down/1` function of the migration script is supported as well. It is
+possible to pass additional parameters to the migration scripts.
+
+    defmodule Mongo.Migrations.Topology.CreateIndex do
+        def up(opts) do 
+            IO.inspect(opts)
+            ...
+        end
+        
+        def down(opts) do
+            IO.inspect(opts)
+            ...
+        end
+    end
+
+The topology is part of the namespace and of the migration path as well. The default value is defined in the configuration.
+You can specify the topology in the case of creating a new migration script by appending the name to the script call:
+```elixir
+
+mix mongo.gen.migration add_indexes topology_2
+
+```
+
+In `priv/topology_2/mongo/migrations` you will find an Elixir script like `20220322173354_add_indexes.exs`:
+
+```elixr
+defmodule Mongo.Migrations.Topology2.AddIndexes do
+    ...
+end
+
+```
+
+By using the `:topology` keyword, you can organise the migration scripts in different sub-folders. The migration path is prefixed with the `priv` folder of the application and the topology name.
+
+If you call
+
+    Mongo.Migration.migrate([topology: :topology_2])
+
+then the migration scripts under `/priv/topology_2/` are used and the options keyword list is passed through
+to the `up/1` function if it is implemented. That means you can create migration scripts for multiple topologies
+separated in sub folders and module namespaces.
+
 ## Auth Mechanisms
 
 For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM.
