@@ -51,7 +51,7 @@ defmodule Mix.Tasks.Mongo do
 
         config :mongodb_driver,
           migration: [
-            path: "mongo/migrations",
+            path: "migrations",
             otp_app: :mongodb_driver,
             topology: :mongo,
             collection: "migrations"
@@ -64,7 +64,7 @@ defmodule Mix.Tasks.Mongo do
 
         config :mongodb_driver, :migration, collection: "my_migrations"
 
-    * `:path` - the priv directory for migrations. :path defaults to "mongo/migrations" and migrations should be placed at "priv/mongo/migrations"
+    * `:path` - the `priv` sub-directory for migrations. `:path` defaults to "migrations" and migrations should be placed at "priv/mongo/migrations"
     * `:otp_app` - the name of the otp_app to resolve the priv folder, defaults to :mongodb_driver. In most cases you use your application name.
     * `:topology` - the topology for running the migrations, :topology defaults to :mongo
   """

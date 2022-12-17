@@ -132,7 +132,7 @@ defmodule Mongo.Migration do
   end
 
   def get_config(opts \\ []) do
-    defaults = [topology: :mongo, collection: "migrations", path: "mongo/migrations", otp_app: :mongodb_driver]
+    defaults = [topology: :mongo, collection: "migrations", path: "migrations", otp_app: :mongodb_driver]
 
     defaults
     |> Keyword.merge(Application.get_env(:mongodb_driver, :migration, []))
@@ -153,7 +153,7 @@ defmodule Mongo.Migration do
       {:ok, files} ->
         files
         |> Enum.sort()
-        |> Enum.map(fn file_name -> file_path <> "/" <> file_name end)
+        |> Enum.map(fn file_name -> Path.join([file_path, file_name]) end)
 
       {:error, _error} ->
         raise "Could not find migrations file path #{inspect(file_path)}"

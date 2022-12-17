@@ -421,11 +421,11 @@ for each command. The event name is `[:mongodb_driver, :execution]` and the driv
 
 ```elixir
 metadata = %{
-type: :mongodb_driver,
-command: command,
-params: parameters,
-collection: collection,
-options: Keyword.get(opts, :telemetry_options, [])
+    type: :mongodb_driver,
+    command: command,
+    params: parameters,
+    collection: collection,
+    options: Keyword.get(opts, :telemetry_options, [])
 }
 
 :telemetry.execute([:mongodb_driver, :execution], %{duration: duration}, metadata)
@@ -551,7 +551,7 @@ Or let it run if your application starts:
 ```elixir
 defmodule MyApp.Release do
   @moduledoc """
-  Used for executing DB release tasks when run in production without Mix
+  Used for executing DB release tasks when run in production without mix
   installed.
   """
 
@@ -624,13 +624,13 @@ default values:
             [
                 topology: :mongo,
                 collection: "migrations",
-                path: "mongo/migrations",
+                path: "migrations",
                 otp_app: :mongodb_driver
             ]
 
 The following  options are available:
 * `:collection` - Version numbers of migrations will be saved in a collection named `migrations` by default.
-* `:path` - the `priv` directory for migrations. `:path` defaults to "mongo/migrations" and migrations should be placed at "priv/mongo/migrations"
+* `:path` - the `priv` directory for migrations. `:path` defaults to "migrations" and migrations should be placed at "priv/mongo/migrations". The pattern to build the path is `:priv/:topology/:path`
 * `:otp_app` - the name of the otp_app to resolve the `priv` folder, defaults to `:mongodb_driver`. In most cases you use your application name.
 * `:topology` - the topology for running the migrations, `:topology` defaults to `:mongo`
 
@@ -673,7 +673,7 @@ mix mongo.gen.migration add_indexes topology_2
 
 ```
 
-In `priv/topology_2/mongo/migrations` you will find an Elixir script like `20220322173354_add_indexes.exs`:
+In `priv/topology_2/migrations` you will find an Elixir script like `20220322173354_add_indexes.exs`:
 
 ```elixr
 defmodule Mongo.Migrations.Topology2.AddIndexes do
