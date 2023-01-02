@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.0.1...v1.0.2) (2023-01-02)
+
+
+### Bug Fixes
+
+* deprecated 'use Bitwise' ([#168](https://github.com/zookzook/elixir-mongodb-driver/issues/168)) ([a980d57](https://github.com/zookzook/elixir-mongodb-driver/commit/a980d5782a56a0a8168c5229fe22b7a935c433b3))
+* use the basename of the file path ([3a10c56](https://github.com/zookzook/elixir-mongodb-driver/commit/3a10c5604a2cbc5d284a17578280e96c93f61e63))
+
 ## [1.0.1](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.0.0...v1.0.1) (2022-12-17)
 
 
