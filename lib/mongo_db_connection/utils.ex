@@ -5,7 +5,6 @@ defmodule Mongo.MongoDBConnection.Utils do
 
   import Kernel, except: [send: 2]
   import Mongo.Messages
-  use Bitwise
 
   # @reply_cursor_not_found   0x1
   # @reply_query_failure      0x2

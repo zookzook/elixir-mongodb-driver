@@ -54,7 +54,6 @@ defmodule Mongo do
 
   require Logger
 
-  use Bitwise
   use Mongo.Messages
 
   import Mongo.Session, only: [in_read_session: 3, in_write_session: 3]

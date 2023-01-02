@@ -3,7 +3,7 @@ defmodule BSON.Decimal128 do
     see https://en.wikipedia.org/wiki/Decimal128_floating-point_format
   """
 
-  use Bitwise
+  import Bitwise
 
   @signed_bit_mask 1 <<< 63
   @combination_mask 0x1F
