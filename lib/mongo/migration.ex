@@ -170,7 +170,7 @@ defmodule Mongo.Migration do
 
       version =
         ~r/[0-9]/
-        |> Regex.scan(file)
+        |> Regex.scan(Path.basename(file))
         |> Enum.join()
         |> String.to_integer()
 
