@@ -12,7 +12,7 @@ defmodule Mongo.StreamingHelloMonitor do
   require Logger
 
   use GenServer
-  use Bitwise
+  import Bitwise
 
   alias Mongo.Events.ServerHeartbeatFailedEvent
   alias Mongo.Events.ServerHeartbeatStartedEvent

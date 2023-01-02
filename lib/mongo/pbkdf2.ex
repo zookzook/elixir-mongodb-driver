@@ -11,7 +11,7 @@ defmodule Mongo.PBKDF2 do
   see http://tools.ietf.org/html/rfc2898#section-5.2
   """
 
-  use Bitwise
+  import Bitwise
   @max_length bsl(1, 32) - 1
 
   @doc """
