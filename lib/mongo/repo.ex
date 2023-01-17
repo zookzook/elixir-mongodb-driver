@@ -84,7 +84,7 @@ defmodule Mongo.Repo do
         def insert_or_update(%{__struct__: module, _id: id} = doc, opts \\ []) do
           collection = module.__collection__(:collection)
           doc = module.timestamps(doc)
-          Keyword.put(opts, :upsert, true)
+          opts = Keyword.put(opts, :upsert, true)
 
           case Mongo.update_one(@topology, collection, %{_id: id}, %{"$set" => module.dump(doc)}, opts) do
             {:error, reason} -> {:error, reason}
