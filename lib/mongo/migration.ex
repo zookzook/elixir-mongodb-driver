@@ -183,6 +183,6 @@ defmodule Mongo.Migration do
   end
 
   defp get_database_opts(opts) do
-    if (opts[:database]), do: [database: opts[:database]], else: []
+    if opts[:database], do: [database: opts[:database]], else: []
   end
 end
