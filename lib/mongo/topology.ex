@@ -544,7 +544,11 @@ defmodule Mongo.Topology do
 
   defp remove_address(address, state) do
     Mongo.Events.notify(%ServerClosedEvent{address: address, topology_pid: self()})
-    GenServer.stop(state.monitors[address])
+
+    case state.monitors[address] do
+      nil -> :ok
+      pid -> GenServer.stop(pid)
+    end
 
     case state.connection_pools[address] do
       nil -> :ok
