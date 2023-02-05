@@ -1109,7 +1109,8 @@ defmodule Mongo do
         upsert: Keyword.get(opts, :upsert),
         multi: multi,
         collation: Keyword.get(opts, :collation),
-        arrayFilters: Keyword.get(opts, :array_filters)
+        arrayFilters: Keyword.get(opts, :array_filters),
+        hint: Keyword.get(opts, :hint)
       }
       |> filter_nils()
 
