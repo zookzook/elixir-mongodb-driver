@@ -34,11 +34,12 @@ defmodule Mongo.Migration do
   def lock(opts \\ []) do
     topology = get_config(opts)[:topology]
     collection = get_config(opts)[:collection]
+    collection_opts = get_database_opts(opts) |> Keyword.put(:upsert, true)
 
     query = %{_id: "lock", used: false}
     set = %{"$set": %{used: true}}
 
-    case Mongo.update_one(topology, collection, query, set, upsert: true) do
+    case Mongo.update_one(topology, collection, query, set, collection_opts) do
       {:ok, %{modified_count: 1}} ->
         IO.puts("🔒 #{collection} locked")
         :locked
@@ -57,8 +58,9 @@ defmodule Mongo.Migration do
     collection = get_config(opts)[:collection]
     query = %{_id: "lock", used: true}
     set = %{"$set": %{used: false}}
+    collection_opts = get_database_opts(opts)
 
-    case Mongo.update_one(topology, collection, query, set) do
+    case Mongo.update_one(topology, collection, query, set, collection_opts) do
       {:ok, %{modified_count: 1}} ->
         IO.puts("🔓 #{collection} unlocked")
         :unlocked
@@ -71,8 +73,9 @@ defmodule Mongo.Migration do
   defp run_up(version, mod, opts) do
     topology = get_config(opts)[:topology]
     collection = get_config(opts)[:collection]
+    collection_opts = get_database_opts(opts)
 
-    case Mongo.find_one(topology, collection, %{version: version}) do
+    case Mongo.find_one(topology, collection, %{version: version}, collection_opts) do
       nil ->
         ## check, if the function supports options
 
@@ -87,7 +90,7 @@ defmodule Mongo.Migration do
             raise "The module does not export the up function!"
         end
 
-        Mongo.insert_one(topology, collection, %{version: version})
+        Mongo.insert_one(topology, collection, %{version: version}, collection_opts)
         IO.puts("⚡️ Successfully migrated #{mod}")
 
       _other ->
@@ -103,8 +106,9 @@ defmodule Mongo.Migration do
   defp run_down(version, mod, opts) do
     topology = get_config(opts)[:topology]
     collection = get_config(opts)[:collection]
+    collection_opts = get_database_opts(opts)
 
-    case Mongo.find_one(topology, collection, %{version: version}) do
+    case Mongo.find_one(topology, collection, %{version: version}, collection_opts) do
       %{"version" => _version} ->
         ## check, if the function supports options
         cond do
@@ -118,7 +122,7 @@ defmodule Mongo.Migration do
             raise "The module does not export the down function!"
         end
 
-        Mongo.delete_one(topology, collection, %{version: version})
+        Mongo.delete_one(topology, collection, %{version: version}, collection_opts)
         IO.puts("💥 Successfully dropped #{mod}")
 
       _other ->
@@ -176,5 +180,9 @@ defmodule Mongo.Migration do
 
       {mod, version}
     end)
+  end
+
+  defp get_database_opts(opts) do
+    if opts[:database], do: [database: opts[:database]], else: []
   end
 end
