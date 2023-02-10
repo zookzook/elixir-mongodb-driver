@@ -340,6 +340,19 @@ defmodule Mongo.MongoDBConnection do
 
     Events.notify(event, :commands)
 
+    metadata = %{
+      type: :mongodb_driver,
+      command: data,
+      command_name: opts[:command_name] || command_name,
+      database_name: db,
+      request_id: state.request_id,
+      operation_id: opts[:operation_id],
+      connection_id: self(),
+      options: Keyword.get(opts, :telemetry_options, [])
+    }
+
+    :telemetry.execute([:mongodb_driver, :start], %{}, metadata)
+
     case :timer.tc(fn -> Utils.post_request(op, state.request_id, %{state | timeout: timeout}) end) do
       {duration, {:ok, flags, doc}} ->
         state = %{state | request_id: state.request_id + 1}
