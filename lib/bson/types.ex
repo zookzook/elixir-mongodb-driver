@@ -74,10 +74,8 @@ defmodule BSON.ObjectId do
   @doc """
   Converts string representation of ObjectId to a BSON.ObjectId struct
 
-  ## Example
-  ```elixir
-
-    {:ok, id} <- BSON.ObjectId.decode(bson_id)
+  ## Examples
+      {:ok, id} <- BSON.ObjectId.decode(bson_id)
   """
   def decode(id) do
     try do
@@ -105,10 +103,8 @@ defmodule BSON.ObjectId do
   @doc """
   Converts BSON.ObjectId struct to a string representation
 
-  ## Example
-  ```elixir
-
-    {:ok, bson_id} <- BSON.ObjectId.encode(id)
+  ## Examples
+      {:ok, bson_id} <- BSON.ObjectId.encode(id)
   """
   def encode(object_id) do
     try do

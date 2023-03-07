@@ -431,7 +431,7 @@ defmodule Mongo.Repo do
   @callback insert(doc :: Mongo.Collection.t(), opts :: Keyword.t()) :: {:ok, Mongo.Collection.t()} | {:error, any()}
 
   @doc """
-  Same as `Mongo.Repo.insert/2` but raises an error.
+  Same as `c:insert/2` but raises an error.
   """
   @callback insert!(doc :: Mongo.Collection.t(), opts :: Keyword.t()) :: Mongo.Collection.t()
 
@@ -446,7 +446,7 @@ defmodule Mongo.Repo do
   @callback update(doc :: Mongo.Collection.t()) :: {:ok, Mongo.Collection.t()} | {:error, any()}
 
   @doc """
-  Same as `Mongo.Repo.update/1` but raises an error.
+  Same as `c:update/1` but raises an error.
   """
   @callback update!(doc :: Mongo.Collection.t()) :: Mongo.Collection.t()
 
@@ -460,7 +460,7 @@ defmodule Mongo.Repo do
   @callback insert_or_update(doc :: Mongo.Collection.t()) :: {:ok, Mongo.Collection.t()} | {:error, any()}
 
   @doc """
-  Same as `Mongo.Repo.insert_or_update/1` but raises an error.
+  Same as `c:insert_or_update/1` but raises an error.
   """
   @callback insert_or_update!(doc :: Mongo.Collection.t()) :: Mongo.Collection.t()
 
@@ -476,7 +476,7 @@ defmodule Mongo.Repo do
   @callback delete(doc :: Mongo.Collection.t(), opts :: Keyword.t()) :: {:ok, Mongo.Collection.t()} | {:error, any()}
 
   @doc """
-  Same as `Mongo.Repo.delete/2` but raises an error.
+  Same as `c:delete/2` but raises an error.
   """
   @callback delete!(doc :: Mongo.Collection.t(), opts :: Keyword.t()) :: Mongo.Collection.t()
 

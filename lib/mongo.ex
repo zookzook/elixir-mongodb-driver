@@ -13,7 +13,7 @@ defmodule Mongo do
     * `:checkout_timeout` - The maximum time for checking out a new session and connection (default: `60_000`).
       When the connection pool exhausted then the function call times out after :checkout_timeout.
     * `:pool` - The pooling behaviour module to use, this option is required
-      unless the default `DBConnection.Connection` pool is used
+      unless the default `DBConnection` pool is used
     * `:pool_timeout` - The maximum time to wait for a reply when making a
       synchronous call to the pool (default: `5_000`)
     * `:queue` - Whether to block waiting in an internal queue for the
