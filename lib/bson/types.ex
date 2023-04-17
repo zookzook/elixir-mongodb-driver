@@ -138,6 +138,10 @@ defmodule BSON.ObjectId do
       "#BSON.ObjectId<#{encoded}>"
     end
   end
+
+  defimpl String.Chars do
+    def to_string(id), do: BSON.ObjectId.encode!(id)
+  end
 end
 
 defmodule BSON.Regex do

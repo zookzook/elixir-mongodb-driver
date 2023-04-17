@@ -42,6 +42,10 @@ defmodule BSON.TypesTest do
     assert BSON.ObjectId.decode("") == :error
   end
 
+  test "to_string BSON.ObjectId" do
+    assert to_string(@objectid) == @string
+  end
+
   test "inspect BSON.Regex" do
     value = %BSON.Regex{pattern: "abc"}
     assert inspect(value) == "#BSON.Regex<\"abc\", \"\">"
