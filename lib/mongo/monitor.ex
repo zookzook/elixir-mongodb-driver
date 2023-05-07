@@ -107,7 +107,7 @@ defmodule Mongo.Monitor do
   end
 
   def terminate(reason, %{connection_pid: connection_pid, streaming_pid: streaming_pid}) do
-    ## debug info("Terminating monitor for reason #{inspect reason}")
+    ## debug info("Terminating monitor for reason #{inspect reason}, #{inspect self()}, #{inspect streaming_pid}")
 
     GenServer.stop(connection_pid, reason)
     GenServer.stop(streaming_pid, reason)
@@ -208,7 +208,7 @@ defmodule Mongo.Monitor do
 
     case StreamingHelloMonitor.start_link(args) do
       {:ok, pid} ->
-        ## debug info("Starting streaming mode")
+        ## debug info("Starting streaming mode: #{inspect self()}")
         %{state | mode: :streaming_mode, streaming_pid: pid, heartbeat_frequency_ms: 10_000}
 
       error ->

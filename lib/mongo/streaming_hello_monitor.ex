@@ -54,7 +54,6 @@ defmodule Mongo.StreamingHelloMonitor do
          heartbeat_frequency_ms: heartbeat_frequency_ms,
          max_await_time_ms: heartbeat_frequency_ms,
          more_to_come: false,
-         # {processId: <ObjectId>, counter: <int64>},
          topology_version: nil,
          ## options
          opts: opts
@@ -84,8 +83,23 @@ defmodule Mongo.StreamingHelloMonitor do
     handle_info(:update, state)
   end
 
+  def handle_info({:EXIT, _pid, reason}, state) do
+    ## debug Logger.warn("Stopped with reason #{inspect reason}")
+    {:stop, reason, state}
+  end
+
   def handle_info(:update, state) do
-    {:noreply, update_server_description(state)}
+    state = update_server_description(state)
+
+    case state.more_to_come do
+      true ->
+        send(self(), :update)
+
+      false ->
+        :noop
+    end
+
+    {:noreply, state}
   end
 
   ##
@@ -99,8 +113,8 @@ defmodule Mongo.StreamingHelloMonitor do
 
       case flags &&& @more_to_come_mask do
         @more_to_come_mask ->
-          state = %{state | more_to_come: true}
-          update_server_description(state)
+          ## debug info("More to come...")
+          %{state | more_to_come: true}
 
         _other ->
           Process.send_after(self(), :update, state.heartbeat_frequency_ms)
