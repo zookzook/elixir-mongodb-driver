@@ -204,11 +204,11 @@ defmodule BSONTest do
 
   test "mixing atoms with binaries" do
     document = 1..33 |> Enum.reduce(%{}, fn x, acc -> Map.put(acc, to_string(x), x) end) |> Map.put(:a, 10)
-    assert_raise ArgumentError, fn -> encode(document) end
+    assert_raise Mongo.Error, fn -> encode(document) end
     document = %{:key => "value", "id" => 10}
-    assert_raise ArgumentError, fn -> encode(document) end
+    assert_raise Mongo.Error, fn -> encode(document) end
     document = 1..33 |> Enum.reduce(%{}, fn x, acc -> Map.put(acc, to_string(x), x) end) |> Map.put(:__struct__, TestUser)
-    assert_raise ArgumentError, fn -> encode(document) end
+    assert_raise Mongo.Error, fn -> encode(document) end
   end
 
   defp encode(value) do

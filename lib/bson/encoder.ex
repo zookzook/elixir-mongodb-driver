@@ -64,7 +64,8 @@ defmodule BSON.Encoder do
   end
 
   def encode(value) when is_list(value) do
-    array(value, 0)
+    value
+    |> array(0)
     |> document
   end
 
@@ -94,6 +95,10 @@ defmodule BSON.Encoder do
 
   def encode(value) when is_int64(value),
     do: <<value::int64>>
+
+  def encode(value) do
+    raise Mongo.Error.exception("invalid document: #{inspect(value)}")
+  end
 
   def document(doc) do
     {_, iodata} =
@@ -141,8 +146,7 @@ defmodule BSON.Encoder do
     do: [{Integer.to_string(ix), hd} | array(tl, ix + 1)]
 
   defp invalid_doc(doc) do
-    message = "invalid document containing atom and string keys: #{inspect(doc)}"
-    raise ArgumentError, message
+    raise Mongo.Error.exception("invalid document containing atom and string keys: #{inspect(doc)}")
   end
 
   defp type(%BSON.Binary{}), do: @type_binary

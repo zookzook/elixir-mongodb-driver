@@ -21,6 +21,10 @@ defmodule Mongo.MongoDBConnection.Utils do
          {:ok, ^id, response} <- recv_data(nil, "", state) do
       get_doc(response)
     end
+  rescue
+    error ->
+      Logger.error("Unable to send request to database because of #{inspect(error)}")
+      {:error, error, state}
   end
 
   @doc """

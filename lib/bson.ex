@@ -12,8 +12,11 @@ defmodule BSON do
   @spec encode(document) :: iodata
   def encode(map) when is_map(map) do
     case Map.has_key?(map, :__struct__) do
-      true -> BSON.Encoder.encode(Map.to_list(map))
-      false -> BSON.Encoder.encode(map)
+      true ->
+        BSON.Encoder.encode(Map.to_list(map))
+
+      false ->
+        BSON.Encoder.encode(map)
     end
   end
 
@@ -26,7 +29,8 @@ defmodule BSON do
   """
   @spec decode(iodata) :: document
   def decode(iodata) do
-    IO.iodata_to_binary(iodata)
+    iodata
+    |> IO.iodata_to_binary()
     |> BSON.Decoder.decode()
   end
 end

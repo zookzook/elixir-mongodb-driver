@@ -37,6 +37,11 @@ defmodule Mongo.EncoderTest do
     end
   end
 
+  test "invalid document test", c do
+    coll = unique_collection()
+    assert {:error, %Mongo.Error{message: "invalid document: {:error, \"some error\"}"}} = Mongo.insert_one(c.pid, coll, %{"field" => {:error, "some error"}})
+  end
+
   test "insert encoded date with protocol", c do
     coll = unique_collection()
 
