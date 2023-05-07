@@ -492,7 +492,8 @@ defmodule Mongo do
         bypassDocumentValidation: opts[:bypass_document_validation],
         writeConcern: write_concern(opts),
         maxTimeMS: opts[:max_time],
-        collation: opts[:collation]
+        collation: opts[:collation],
+        comment: opts[:comment]
       ]
       |> filter_nils()
 
