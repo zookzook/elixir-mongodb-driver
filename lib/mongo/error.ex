@@ -1,7 +1,7 @@
 defmodule Mongo.Error do
   alias Mongo.Events
 
-  defexception [:message, :code, :host, :fail_command, :error_labels, :resumable, :retryable_reads, :retryable_writes, :not_writable_primary_or_recovering]
+  defexception [:message, :code, :host, :fail_command, :error_labels, :resumable, :retryable_reads, :retryable_writes, :not_writable_primary_or_recovering, :error_info]
 
   @exceeded_time_limit 262
   @failed_to_satisfy_read_preference 133
@@ -90,7 +90,8 @@ defmodule Mongo.Error do
           resumable: boolean,
           retryable_reads: boolean,
           retryable_writes: boolean,
-          not_writable_primary_or_recovering: boolean
+          not_writable_primary_or_recovering: boolean,
+          error_info: map()
         }
 
   def message(e) do
@@ -125,6 +126,7 @@ defmodule Mongo.Error do
       retryable_writes: retryable_writes,
       not_writable_primary_or_recovering: not_writable_primary_or_recovering
     }
+    |> maybe_add_error_info(doc)
   end
 
   def exception(message: message, code: code) do
@@ -212,6 +214,13 @@ defmodule Mongo.Error do
   def fail_command?(%Mongo.Error{fail_command: fail_command}) do
     fail_command
   end
+
+  defp maybe_add_error_info(error, %{"errInfo" => info}) do
+    error
+    |> Map.put_new(:error_info, info)
+  end
+
+  defp maybe_add_error_info(error, _), do: error
 end
 
 defmodule Mongo.WriteError do
