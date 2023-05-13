@@ -75,4 +75,36 @@ defmodule Mongo.ErrorsTest do
     assert false == Error.not_writable_primary_or_recovering?(the_error, [])
     assert false == Error.should_retry_read(the_error, [ping: 1], [])
   end
+
+  test "error info", %{pid: top} do
+    cmd = [
+      collMod: "validated",
+      validator: [
+        "$jsonSchema": %{
+          "bsonType" => "object",
+          "properties" => %{
+            "_id" => %{
+              "bsonType" => "objectId"
+            },
+            "text" => %{
+              "bsonType" => "string"
+            },
+            "isDone" => %{
+              "bsonType" => "bool"
+            }
+          },
+          "required" => ["text", "isDone"],
+          "additionalProperties" => false
+        }
+      ]
+    ]
+
+    # Let's play safe
+    Mongo.drop_collection(top, "validated")
+    Mongo.create(top, "validated")
+
+    Mongo.command!(top, cmd)
+
+    assert match?({:error, %Mongo.WriteError{write_errors: [%{"code" => 121, "errInfo" => %{"details" => _}}]}}, Mongo.insert_one(top, "validated", %{"text" => 11}))
+  end
 end
