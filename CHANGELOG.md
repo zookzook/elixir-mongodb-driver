@@ -10,9 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bug Fixes
 
+* check if monitor pid exists before stopping ([6e0c8b2](https://github.com/zookzook/elixir-mongodb-driver/commit/6e0c8b2625d0c424d194a0efcd799177a4c916f1))
+
+### Enhancements
+
+* Add support of errInfo ([#187](https://github.com/zookzook/elixir-mongodb-driver/pull/187))
 * add support for the hint option ([#175](https://github.com/zookzook/elixir-mongodb-driver/issues/175)) ([4c817b7](https://github.com/zookzook/elixir-mongodb-driver/commit/4c817b721eb5430dc20eaae754a24d671cb52a62))
 * add telemetry start event to fix [#174](https://github.com/zookzook/elixir-mongodb-driver/issues/174) ([e79db9e](https://github.com/zookzook/elixir-mongodb-driver/commit/e79db9e0faedf3b37dcaf8fab6a9aa98dba3b43b))
-* check if monitor pid exists before stopping ([6e0c8b2](https://github.com/zookzook/elixir-mongodb-driver/commit/6e0c8b2625d0c424d194a0efcd799177a4c916f1))
 
 ## [1.0.2](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.0.1...v1.0.2) (2023-01-02)
 
