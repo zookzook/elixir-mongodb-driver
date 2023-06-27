@@ -1819,9 +1819,7 @@ defmodule Mongo do
 
     :telemetry.execute([:mongodb_driver, :execution], %{duration: duration}, metadata)
 
-    log = Application.get_env(:mongodb_driver, :log, false)
-
-    case Keyword.get(opts, :log, log) do
+    case Application.get_env(:mongodb_driver, :log, false) do
       true ->
         Logger.log(:info, fn -> log_iodata(command, collection, params, duration) end, ansi_color: command_color(command))
 
