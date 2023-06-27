@@ -223,7 +223,7 @@ defmodule Mongo.Test do
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 42, bar: 1})
 
     # defaults
-    assert {:ok, value} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 42}, %{"$set" => %{bar: 2}})
+    assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 42}, %{"$set" => %{bar: 2}})
     assert %{"bar" => 1} = value, "Should return original document by default"
 
     # should raise if we don't have atomic operators
@@ -232,26 +232,26 @@ defmodule Mongo.Test do
     end
 
     # return_document = :after
-    assert {:ok, value} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 42}, %{"$set" => %{bar: 3}}, return_document: :after)
+    assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 42}, %{"$set" => %{bar: 3}}, return_document: :after)
     assert %{"bar" => 3} = value, "Should return modified doc"
 
     # projection
-    assert {:ok, value} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 42}, %{"$set" => %{bar: 3}}, projection: %{"bar" => 1})
+    assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 42}, %{"$set" => %{bar: 3}}, projection: %{"bar" => 1})
     assert Map.get(value, "foo") == nil, "Should respect the projection"
 
     # sort
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 42, bar: 10})
-    assert {:ok, value} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 42}, %{"$set" => %{baz: 1}}, sort: %{"bar" => -1}, return_document: :after)
+    assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 42}, %{"$set" => %{baz: 1}}, sort: %{"bar" => -1}, return_document: :after)
     assert %{"bar" => 10, "baz" => 1} = value, "Should respect the sort"
 
     # upsert
-    assert {:ok, value} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 43}, %{"$set" => %{baz: 1}}, upsert: true, return_document: :after)
+    assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 43}, %{"$set" => %{baz: 1}}, upsert: true, return_document: :after)
     assert %{"foo" => 43, "baz" => 1} = value, "Should upsert"
 
     # don't find return {:ok, nil}
-    assert {:ok, nil} == Mongo.find_one_and_update(c.pid, coll, %{"number" => 666}, %{"$set" => %{title: "the number of the beast"}})
+    assert {:ok, %Mongo.FindAndModifyResult{matched_count: 0, updated_existing: false, value: nil}} == Mongo.find_one_and_update(c.pid, coll, %{"number" => 666}, %{"$set" => %{title: "the number of the beast"}})
 
-    assert {:ok, nil} == Mongo.find_one_and_update(c.pid, "coll_that_doesnt_exist", %{"number" => 666}, %{"$set" => %{title: "the number of the beast"}})
+    assert {:ok, %Mongo.FindAndModifyResult{matched_count: 0, updated_existing: false, value: nil}} == Mongo.find_one_and_update(c.pid, "coll_that_doesnt_exist", %{"number" => 666}, %{"$set" => %{title: "the number of the beast"}})
 
     # wrong parameter
     assert {:error, %Mongo.Error{}} = Mongo.find_one_and_update(c.pid, 2, %{"number" => 666}, %{"$set" => %{title: "the number of the beast"}})
@@ -267,18 +267,18 @@ defmodule Mongo.Test do
     end
 
     # defaults
-    assert {:ok, value} = Mongo.find_one_and_replace(c.pid, coll, %{"foo" => 42}, %{bar: 2})
+    assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_replace(c.pid, coll, %{"foo" => 42}, %{bar: 2})
     assert %{"foo" => 42, "bar" => 1} = value, "Should return original document by default"
 
     # return_document = :after
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 43, bar: 1})
-    assert {:ok, value} = Mongo.find_one_and_replace(c.pid, coll, %{"foo" => 43}, %{bar: 3}, return_document: :after)
+    assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_replace(c.pid, coll, %{"foo" => 43}, %{bar: 3}, return_document: :after)
     assert %{"bar" => 3} = value, "Should return modified doc"
     assert match?(%{"foo" => 43}, value) == false, "Should replace document"
 
     # projection
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 44, bar: 1})
-    assert {:ok, value} = Mongo.find_one_and_replace(c.pid, coll, %{"foo" => 44}, %{foo: 44, bar: 3}, return_document: :after, projection: %{bar: 1})
+    assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_replace(c.pid, coll, %{"foo" => 44}, %{foo: 44, bar: 3}, return_document: :after, projection: %{bar: 1})
     assert Map.get(value, "foo") == nil, "Should respect the projection"
 
     # sort
@@ -290,7 +290,7 @@ defmodule Mongo.Test do
 
     # upsert
     assert [] = Mongo.find(c.pid, coll, %{upsertedDocument: true}) |> Enum.to_list()
-    assert {:ok, value} = Mongo.find_one_and_replace(c.pid, coll, %{"upsertedDocument" => true}, %{"upsertedDocument" => true}, upsert: true, return_document: :after)
+    assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_replace(c.pid, coll, %{"upsertedDocument" => true}, %{"upsertedDocument" => true}, upsert: true, return_document: :after)
     assert %{"upsertedDocument" => true} = value, "Should upsert"
     assert [%{"upsertedDocument" => true}] = Mongo.find(c.pid, coll, %{upsertedDocument: true}) |> Enum.to_list()
   end
