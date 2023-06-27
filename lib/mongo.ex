@@ -504,7 +504,13 @@ defmodule Mongo do
       )
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
-      {:ok, doc["value"]}
+      {:ok,
+       %Mongo.FindAndModifyResult{
+         value: doc["value"],
+         matched_count: doc["lastErrorObject"]["n"],
+         updated_existing: doc["lastErrorObject"]["updatedExisting"],
+         upserted_id: doc["lastErrorObject"]["upserted"]
+       }}
     end
   end
 
@@ -560,7 +566,15 @@ defmodule Mongo do
         ~w(bypass_document_validation max_time projection return_document sort upsert collation)a
       )
 
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts), do: {:ok, doc["value"]}
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+      {:ok,
+       %Mongo.FindAndModifyResult{
+         value: doc["value"],
+         matched_count: doc["lastErrorObject"]["n"],
+         updated_existing: doc["lastErrorObject"]["updatedExisting"],
+         upserted_id: doc["lastErrorObject"]["upserted"]
+       }}
+    end
   end
 
   defp should_return_new(:after), do: true
