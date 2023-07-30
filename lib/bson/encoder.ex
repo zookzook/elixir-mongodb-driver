@@ -20,12 +20,12 @@ defmodule BSON.Encoder do
   def encode(%BSON.Binary{binary: binary, subtype: :binary_old}) do
     subtype = subtype(:binary_old)
     size = IO.iodata_length(binary)
-    [<<size + 4::int32>>, subtype, <<size::int32>>, binary]
+    [<<size + 4::int32()>>, subtype, <<size::int32()>>, binary]
   end
 
   def encode(%BSON.Binary{binary: binary, subtype: subtype}) do
     subtype = subtype(subtype)
-    [<<IO.iodata_length(binary)::int32>>, subtype | binary]
+    [<<IO.iodata_length(binary)::int32()>>, subtype | binary]
   end
 
   def encode(%BSON.ObjectId{value: <<_::binary(12)>> = value}),
@@ -33,7 +33,7 @@ defmodule BSON.Encoder do
 
   def encode(%DateTime{} = datetime) do
     unix_ms = DateTime.to_unix(datetime, :millisecond)
-    <<unix_ms::int64>>
+    <<unix_ms::int64()>>
   end
 
   def encode(%BSON.Regex{pattern: pattern, options: options}),
@@ -45,13 +45,13 @@ defmodule BSON.Encoder do
   def encode(%BSON.JavaScript{code: code, scope: scope}) do
     iodata = [encode(code), document(scope)]
     size = IO.iodata_length(iodata) + 4
-    [<<size::int32>> | iodata]
+    [<<size::int32()>> | iodata]
   end
 
   def encode(%BSON.Timestamp{value: epoch, ordinal: ordinal}),
-    do: <<ordinal::int32, epoch::int32>>
+    do: <<ordinal::int32(), epoch::int32()>>
 
-  def encode(%BSON.LongNumber{value: value}), do: <<value::int64>>
+  def encode(%BSON.LongNumber{value: value}), do: <<value::int64()>>
 
   def encode(%Decimal{} = value), do: BSON.Decimal128.encode(value)
 
@@ -85,16 +85,16 @@ defmodule BSON.Encoder do
     do: encode(Atom.to_string(value))
 
   def encode(value) when is_binary(value),
-    do: [<<byte_size(value) + 1::int32>>, value, 0x00]
+    do: [<<byte_size(value) + 1::int32()>>, value, 0x00]
 
   def encode(value) when is_float(value),
-    do: <<value::little-float64>>
+    do: <<value::little-float64()>>
 
   def encode(value) when is_int32(value),
-    do: <<value::int32>>
+    do: <<value::int32()>>
 
   def encode(value) when is_int64(value),
-    do: <<value::int64>>
+    do: <<value::int64()>>
 
   def encode(value) do
     raise Mongo.Error.exception("invalid document: #{inspect(value)}")
@@ -131,7 +131,7 @@ defmodule BSON.Encoder do
           {key_type, [acc, type, key, value]}
       end)
 
-    [<<IO.iodata_length(iodata) + 5::int32>>, iodata, 0x00]
+    [<<IO.iodata_length(iodata) + 5::int32()>>, iodata, 0x00]
   end
 
   defp cstring(string), do: [string, 0x00]
