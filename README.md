@@ -746,6 +746,27 @@ Mongo.find(conn, "dogs", %{}, timeout: 120_000)
 
 Now the driver will use 120 seconds as the timeout for the single query.
 
+## Read Preferences
+
+The `:read_preference` option sets [read preference](https://www.mongodb.com/docs/manual/core/read-preference/) for the query. The read preference is
+a simple map, supporting the following keys:
+
+* `:mode`, possible values: `:primary`, `:primary_preferred`, `:secondary`, `:secondary_preferred` and `:nearest`
+* `:max_staleness_ms`, the maxStaleness value in milliseconds
+* `:tag_sets`, the set of tags, for example: `[dc: "west", usage: "production"]`
+
+The driver selects the server using the read preference. 
+
+```elixr 
+prefs = %{
+    mode: :secondary,
+    max_staleness_ms: 120_000,
+    tag_sets: [dc: "west", usage: "production"]
+}
+
+Mongo.find_one(top, "dogs", %{name: "Oskar"}, read_preference: prefs)
+```
+
 ## Change Streams
 
 Change streams are available in replica set and sharded cluster deployments
