@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.0.3...v1.1.0) (2023-07-30)
+
+
+### Features
+
+* add support for Elixir 1.15 ([#195](https://github.com/zookzook/elixir-mongodb-driver/issues/195)) ([f621a62](https://github.com/zookzook/elixir-mongodb-driver/commit/f621a62d5bb825cfd77e8f3024d569f23be0376d))
+
 ## [1.0.3](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.0.2...v1.0.3) (2023-05-13)
 
 
