@@ -32,11 +32,11 @@ defmodule BSON.Decoder do
     {:NaN, rest}
   end
 
-  defp type(@type_float, <<float::little-float64, rest::binary>>) do
+  defp type(@type_float, <<float::little-float64(), rest::binary>>) do
     {float, rest}
   end
 
-  defp type(@type_string, <<size::int32, rest::binary>>) do
+  defp type(@type_string, <<size::int32(), rest::binary>>) do
     size = size - 1
     <<string::binary(size), 0x00, rest::binary>> = rest
     {string, rest}
@@ -50,12 +50,12 @@ defmodule BSON.Decoder do
     list(binary)
   end
 
-  defp type(@type_binary, <<_size::int32, subtype, length::int32, binary::binary(length), rest::binary>>) when subtype == 0x02 do
+  defp type(@type_binary, <<_size::int32(), subtype, length::int32(), binary::binary(length), rest::binary>>) when subtype == 0x02 do
     subtype = subtype(subtype)
     {%BSON.Binary{binary: binary, subtype: subtype}, rest}
   end
 
-  defp type(@type_binary, <<size::int32, subtype, binary::binary(size), rest::binary>>) do
+  defp type(@type_binary, <<size::int32(), subtype, binary::binary(size), rest::binary>>) do
     subtype = subtype(subtype)
     {%BSON.Binary{binary: binary, subtype: subtype}, rest}
   end
@@ -72,7 +72,7 @@ defmodule BSON.Decoder do
     {true, rest}
   end
 
-  defp type(@type_datetime, <<unix_ms::int64, rest::binary>>) do
+  defp type(@type_datetime, <<unix_ms::int64(), rest::binary>>) do
     {DateTime.from_unix!(unix_ms, :millisecond), rest}
   end
 
@@ -99,7 +99,7 @@ defmodule BSON.Decoder do
     type(@type_string, binary)
   end
 
-  defp type(@type_js_scope, <<size::int32, binary::binary>>) do
+  defp type(@type_js_scope, <<size::int32(), binary::binary>>) do
     size = size - 4
     <<binary::binary(size), rest::binary>> = binary
     {code, binary} = type(@type_string, binary)
@@ -107,15 +107,15 @@ defmodule BSON.Decoder do
     {%BSON.JavaScript{code: code, scope: scope}, rest}
   end
 
-  defp type(@type_int32, <<int::int32, rest::binary>>) do
+  defp type(@type_int32, <<int::int32(), rest::binary>>) do
     {int, rest}
   end
 
-  defp type(@type_timestamp, <<ordinal::int32, epoch::int32, rest::binary>>) do
+  defp type(@type_timestamp, <<ordinal::int32(), epoch::int32(), rest::binary>>) do
     {%BSON.Timestamp{value: epoch, ordinal: ordinal}, rest}
   end
 
-  defp type(@type_int64, <<int::int64, rest::binary>>) do
+  defp type(@type_int64, <<int::int64(), rest::binary>>) do
     {int, rest}
   end
 
@@ -131,7 +131,7 @@ defmodule BSON.Decoder do
     {:BSON_max, rest}
   end
 
-  def document(<<size::int32, rest::binary>>) do
+  def document(<<size::int32(), rest::binary>>) do
     size = size - 5
     <<doc::binary(size), 0x00, rest::binary>> = rest
 
@@ -149,7 +149,7 @@ defmodule BSON.Decoder do
     acc |> Enum.reverse() |> Enum.into(%{})
   end
 
-  defp list(<<size::int32, rest::binary>>) do
+  defp list(<<size::int32(), rest::binary>>) do
     size = size - 5
     <<list::binary(size), 0x00, rest::binary>> = rest
 

@@ -69,7 +69,7 @@ defmodule Mongo.ConnectionTest do
   end
 
   defp connect_ssl do
-    assert {:ok, pid} = Mongo.start_link(hostname: "localhost", database: "mongodb_test", ssl: true, ssl_opts: [ciphers: ['AES256-GCM-SHA384'], versions: [:"tlsv1.2"]])
+    assert {:ok, pid} = Mongo.start_link(hostname: "localhost", database: "mongodb_test", ssl: true, ssl_opts: [ciphers: [~c"AES256-GCM-SHA384"], versions: [:"tlsv1.2"]])
     pid
   end
 

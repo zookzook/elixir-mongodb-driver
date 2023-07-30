@@ -23,21 +23,17 @@ defmodule Mongodb.Mixfile do
 
   def application do
     [
-      applications: applications(Mix.env()),
       env: [],
-      extra_applications: [:crypto, :ssl, :eex],
+      extra_applications: [:logger, :crypto, :ssl],
       mod: {Mongo.App, []}
     ]
   end
-
-  def applications(:test), do: [:logger, :connection, :db_connection]
-  def applications(_), do: [:logger, :connection, :db_connection]
 
   defp deps do
     [
       {:telemetry, "~> 1.0"},
       {:db_connection, "~> 2.4.1"},
-      {:decimal, "~> 2.0"},
+      {:decimal, "~> 2.1.1"},
       {:patch, "~> 0.12.0", only: [:dev, :test]},
       {:jason, "~> 1.3", only: [:dev, :test]},
       {:credo, "~> 1.6.1", only: [:dev, :test], runtime: false},

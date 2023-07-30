@@ -178,7 +178,7 @@ defmodule Mongo.Monitor do
         end
 
       error ->
-        Logger.warn("Unable to update server description because of #{inspect(error)}")
+        warning("Unable to update server description because of #{inspect(error)}")
         state
     end
   end
@@ -195,7 +195,7 @@ defmodule Mongo.Monitor do
         %{state | round_trip_time: round_trip_time}
 
       error ->
-        Logger.warn("Unable to round trip time because of #{inspect(error)}")
+        warning("Unable to round trip time because of #{inspect(error)}")
         state
     end
   end
@@ -212,7 +212,7 @@ defmodule Mongo.Monitor do
         %{state | mode: :streaming_mode, streaming_pid: pid, heartbeat_frequency_ms: 10_000}
 
       error ->
-        Logger.warn("Unable to start the streaming hello monitor, because of #{inspect(error)}")
+        warning("Unable to start the streaming hello monitor, because of #{inspect(error)}")
         state
     end
   end
@@ -283,5 +283,15 @@ defmodule Mongo.Monitor do
 
   def info(message) do
     Logger.info(IO.ANSI.format([:light_magenta, :bright, message]))
+  end
+
+  if macro_exported?(Logger, :warning, 2) do
+    defp warning(message) do
+      Logger.warning(message)
+    end
+  else
+    defp warning(message) do
+      Logger.warn(message)
+    end
   end
 end
