@@ -704,9 +704,44 @@ You need roughly three additional configuration steps:
 * Add x.509 Certificate subject as a User
 * Authenticate with an x.509 Certificate
 
-```elixir
-{:ok, pid} = Mongo.start_link(database: "test", auth_mechanism: :x509)
+To get the x.509 authentication working you need to prepare the ssl configuration accordingly:
+* you need set the ssl option: `verify_peer`
+* you need to specify the `cacertfile` because Erlang BEAM don't provide any CA certificate store by default
+* you maybe need to customize the hostname check to allow wildcard certificates
+* you need to specify the `username` from the subject entry of the user certificate
+
+If you use a user certificate from Atlas a working configuration looks like this. First we
+use the [castore](https://hex.pm/packages/castore) package as the CA certificate store. After downloading
+the user certificate we extract the username subject entry from the PEM file:
+
+```shell
+openssl x509 -in <pathToClientPEM> -inform PEM -subject -nameopt RFC2253
+
+> CN=cert-user
 ```
+
+The configuration looks now:
+```elixir
+  opts = [
+      url: "mongodb+srv://cluster0.xxx.mongodb.net/myFirstDatabase?authSource=%24external&retryWrites=true&w=majority",
+      ssl: true,
+      username: "CN=cert-user",
+      password: "",
+      auth_mechanism: :x509,
+      ssl_opts: [
+        verify: :verify_peer,
+        cacertfile: to_charlist(CAStore.file_path()),
+        certfile: '/path-to-cert/X509-cert-2227052404946303101.pem',
+        customize_hostname_check: [
+          match_fun:
+            :public_key.pkix_verify_hostname_match_fun(:https)
+        ]
+      ]]
+
+    Mongo.start_link(opts)
+```
+
+Currently, we need to specify *an empty password* to get the x.509 auth module working. This will be changed soon.  
 
 ## AWS, TLS and Erlang SSL Ciphers
 

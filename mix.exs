@@ -9,7 +9,7 @@ defmodule Mongodb.Mixfile do
       app: :mongodb_driver,
       version: @version,
       elixirc_paths: elixirc_paths(Mix.env()),
-      elixir: "~> 1.8",
+      elixir: "~> 1.15",
       name: "mongodb-driver",
       deps: deps(),
       docs: docs(),
