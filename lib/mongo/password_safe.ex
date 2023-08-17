@@ -18,9 +18,9 @@ defmodule Mongo.PasswordSafe do
     GenServer.cast(pid, {:set, password})
   end
 
-  def get_pasword(nil), do: nil
+  def get_password(nil), do: nil
 
-  def get_pasword(pid) do
+  def get_password(pid) do
     GenServer.call(pid, :get)
   end
 
