@@ -491,7 +491,8 @@ defmodule Mongo do
         writeConcern: write_concern(opts),
         maxTimeMS: opts[:max_time],
         collation: opts[:collation],
-        comment: opts[:comment]
+        comment: opts[:comment],
+        arrayFilters: opts[:array_filters]
       ]
       |> filter_nils()
 
