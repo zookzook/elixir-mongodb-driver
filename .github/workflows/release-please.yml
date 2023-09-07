@@ -20,13 +20,13 @@ jobs:
           release-type: elixir
           package-name: mongodb_driver
       - uses: erlef/setup-beam@v1
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.releases_created }}
         with:
           otp-version: 25.0.3
           elixir-version: 1.13.4
       - run: mix do deps.get, deps.compile
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.releases_created }}
       - run: mix hex.build
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.releases_created }}
       - run: mix hex.publish --yes --replace
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.releases_created }}
