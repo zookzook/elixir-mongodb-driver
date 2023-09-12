@@ -135,7 +135,9 @@ Mongo.insert_many(top, "users", [
 
 ## Data Representation
 
-This driver chooses to accept both maps and lists of key-value tuples when encoding BSON documents (1), but will only decode documents into maps. This has the side effect that document field order is lost when decoding. Maps are convenient to work with, but map keys are not ordered, unlike BSON document fields.
+This driver chooses to accept both maps and lists of key-value tuples when encoding BSON documents (1), but will only 
+decode documents into maps. This has the side effect that document field order is lost when decoding. 
+Maps are convenient to work with, but map keys are not ordered, unlike BSON document fields.
 
 Driver users should represent documents using a list of tuples when field order matters, for example when sorting by multiple fields:
 
@@ -143,7 +145,45 @@ Driver users should represent documents using a list of tuples when field order 
 Mongo.find(top, "users", %{}, sort: [last_name: 1, first_name: 1, _id: 1])
 ```
 
-Additionally, the driver accepts both atoms and strings for document keys, but will only decode them into strings. Creating atoms from arbitrary input (such as database documents) is [discouraged](https://elixir-lang.org/getting-started/mix-otp/genserver.html#:~:text=However%2C%20naming%20dynamic,our%20system%20memory!) because atoms are not garbage collected.
+Additionally, the driver accepts both atoms and strings for document keys, but will only decode them into strings. 
+Creating atoms from arbitrary input (such as database documents) is [discouraged](https://elixir-lang.org/getting-started/mix-otp/genserver.html#:~:text=However%2C%20naming%20dynamic,our%20system%20memory!) because atoms are not garbage collected.
+
+## Preserve Order
+If the order of the keys are important it is possible to use a different decoder module. The decoder module will
+preserve the order of the keys by adding an attribute `:order` which contains the list of keys in the original order.
+If you want to change the `:order` key then define a new decoder module:
+
+```elixir
+defmodule MyPreserverOrderDecoder do
+  @moduledoc false
+
+  use BSON.DecoderGenerator, preserve_order: :the_key_order
+end
+```
+
+and configure the driver to use this new decoder:
+```elixir
+config :mongodb_driver,
+  decoder: MyPreserverOrderDecoder
+
+```
+The decode module is defined at compiler time. The driver provides two types of decoder:
+
+```elixir
+defmodule BSON.Decoder do
+  @moduledoc false
+
+  use BSON.DecoderGenerator, preserve_order: false
+end
+
+defmodule BSON.PreserverOrderDecoder do
+  @moduledoc false
+
+  use BSON.DecoderGenerator, preserve_order: :order
+end
+```
+
+The `BSON.Decoder` is the default decoder.
 
 [BSON symbols (deprecated)](https://bsonspec.org/spec.html#:~:text=Symbol.%20%E2%80%94%20Deprecated) can only be decoded (2).
 
