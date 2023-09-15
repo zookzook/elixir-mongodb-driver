@@ -36,7 +36,7 @@ defmodule Mongodb.Mixfile do
       {:decimal, "~> 2.1.1"},
       {:patch, "~> 0.12.0", only: [:dev, :test]},
       {:jason, "~> 1.3", only: [:dev, :test]},
-      {:credo, "~> 1.6.1", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7.0", only: [:dev, :test], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end

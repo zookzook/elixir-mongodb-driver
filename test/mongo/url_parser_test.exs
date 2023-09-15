@@ -9,6 +9,52 @@ defmodule Mongo.UrlParserTest do
       assert UrlParser.parse_url(url: "mongodb://localhost:27017") == [seeds: ["localhost:27017"]]
     end
 
+    test "basic url and trailing slash" do
+      assert UrlParser.parse_url(url: "mongodb://localhost:27017/") == [seeds: ["localhost:27017"]]
+    end
+
+    test "basic url and trailing slash and options" do
+      assert UrlParser.parse_url(url: "mongodb://localhost:27017/?replicaSet=set-name&authSource=admin&maxPoolSize=5") == [
+               pool_size: 5,
+               auth_source: "admin",
+               set_name: "set-name",
+               seeds: ["localhost:27017"]
+             ]
+    end
+
+    test "basic url, trailing slash and options" do
+      assert UrlParser.parse_url(url: "mongodb://localhost:27017/") == [seeds: ["localhost:27017"]]
+    end
+
+    test "Missing delimiting slash between hosts and options" do
+      assert UrlParser.parse_url(url: "mongodb://example.com?w=1") == [url: "mongodb://example.com?w=1"]
+    end
+
+    test "Incomplete key value pair for option" do
+      assert UrlParser.parse_url(url: "mongodb://example.com/test?w") == [url: "mongodb://example.com/test?w"]
+    end
+
+    test "User info for single IPv4 host without database" do
+      assert UrlParser.parse_url(url: "mongodb://alice:foo@127.0.0.1") |> Keyword.drop([:pw_safe]) == [password: "*****", username: "alice", seeds: ["127.0.0.1"]]
+    end
+
+    test "User info for single IPv4 host with database" do
+      assert UrlParser.parse_url(url: "mongodb://alice:foo@127.0.0.1/test") |> Keyword.drop([:pw_safe]) == [
+               password: "*****",
+               username: "alice",
+               database: "test",
+               seeds: ["127.0.0.1"]
+             ]
+    end
+
+    test "User info for single hostname without database" do
+      assert UrlParser.parse_url(url: "mongodb://eve:baz@example.com") |> Keyword.drop([:pw_safe]) == [
+               password: "*****",
+               username: "eve",
+               seeds: ["example.com"]
+             ]
+    end
+
     test "cluster url with ssl" do
       url = "mongodb://user:password@seed1.domain.com:27017,seed2.domain.com:27017,seed3.domain.com:27017/db_name?ssl=true&replicaSet=set-name&authSource=admin&maxPoolSize=5"
 
