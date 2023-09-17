@@ -135,7 +135,17 @@ Mongo.insert_many(top, "users", [
 
 ## Data Representation
 
-Since BSON documents are ordered Elixir maps cannot be used to fully represent them. This driver chose to accept both maps and lists of key-value pairs when encoding but will only decode documents to lists. This has the side-effect that it's impossible to discern empty arrays from empty documents. Additionally, the driver will accept both atoms and strings for document keys but will only decode to strings. BSON symbols can only be decoded.
+This driver chooses to accept both maps and lists of key-value tuples when encoding BSON documents (1), but will only decode documents into maps. This has the side effect that document field order is lost when decoding. Maps are convenient to work with, but map keys are not ordered, unlike BSON document fields.
+
+Driver users should represent documents using a list of tuples when field order matters, for example when sorting by multiple fields:
+
+```elixir
+Mongo.find(top, "users", %{}, sort: [last_name: 1, first_name: 1, _id: 1])
+```
+
+Additionally, the driver accepts both atoms and strings for document keys, but will only decode them into strings. Creating atoms from arbitrary input (such as database documents) is [discouraged](https://elixir-lang.org/getting-started/mix-otp/genserver.html#:~:text=However%2C%20naming%20dynamic,our%20system%20memory!) because atoms are not garbage collected.
+
+[BSON symbols (deprecated)](https://bsonspec.org/spec.html#:~:text=Symbol.%20%E2%80%94%20Deprecated) can only be decoded (2).
 
     BSON                Elixir
     ----------          ------
@@ -788,7 +798,7 @@ a simple map, supporting the following keys:
 
 * `:mode`, possible values: `:primary`, `:primary_preferred`, `:secondary`, `:secondary_preferred` and `:nearest`
 * `:max_staleness_ms`, the maxStaleness value in milliseconds
-* `:tag_sets`, the set of tags, for example: `[dc: "west", usage: "production"]`
+* `:tags`, the set of tags, for example: `[dc: "west", usage: "production"]`
 
 The driver selects the server using the read preference. 
 
@@ -796,7 +806,7 @@ The driver selects the server using the read preference.
 prefs = %{
     mode: :secondary,
     max_staleness_ms: 120_000,
-    tag_sets: [dc: "west", usage: "production"]
+    tags: [dc: "west", usage: "production"]
 }
 
 Mongo.find_one(top, "dogs", %{name: "Oskar"}, read_preference: prefs)
