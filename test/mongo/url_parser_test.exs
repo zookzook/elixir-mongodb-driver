@@ -105,6 +105,34 @@ defmodule Mongo.UrlParserTest do
       end
     end
 
+    test "write read preferences" do
+      assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?readPreference=secondary&readPreferenceTags=dc:ny,rack:r&maxStalenessSeconds=30") == [
+               database: "db_name",
+               read_preference: %{mode: :secondary, tags: [dc: "ny", rack: "r"], max_staleness_ms: 30_000},
+               seeds: [
+                 "seed1.domain.com:27017",
+                 "seed2.domain.com:27017"
+               ]
+             ]
+
+      assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?readPreference=secondary&readPreferenceTags=dc::ny,rack:r&maxStalenessSeconds=30") == [
+               database: "db_name",
+               read_preference: %{mode: :secondary, tags: [rack: "r"], max_staleness_ms: 30_000},
+               seeds: [
+                 "seed1.domain.com:27017",
+                 "seed2.domain.com:27017"
+               ]
+             ]
+
+      assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?readPreference=weird&readPreferenceTags=dc:ny,rack:r&maxStalenessSeconds=30") == [
+               database: "db_name",
+               seeds: [
+                 "seed1.domain.com:27017",
+                 "seed2.domain.com:27017"
+               ]
+             ]
+    end
+
     test "encoded user" do
       real_username = "@:/skøl:@/"
       real_password = "@æœ{}%e()}@"
