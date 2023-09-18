@@ -70,7 +70,7 @@ defmodule Mongo.ReadPreferencesTest do
     prefs = %{
       mode: :secondary,
       max_staleness_ms: 120_000,
-      tag_sets: [dc: "west", usage: "production"]
+      tags: [dc: "west", usage: "production"]
     }
 
     assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
@@ -78,7 +78,7 @@ defmodule Mongo.ReadPreferencesTest do
     prefs = %{
       mode: :nearest,
       max_staleness_ms: 120_000,
-      tag_sets: [dc: "east", usage: "production"]
+      tags: [dc: "east", usage: "production"]
     }
 
     assert %{"name" => "Oskar"} == Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs) |> Map.take(["name"])
@@ -86,7 +86,7 @@ defmodule Mongo.ReadPreferencesTest do
     prefs = %{
       mode: :secondary,
       max_staleness_ms: 120_000,
-      tag_sets: [dc: "east", usage: "production"]
+      tags: [dc: "east", usage: "production"]
     }
 
     assert catch_exit(Mongo.find_one(top, coll, %{name: "Oskar"}, read_preference: prefs, checkout_timeout: 500))

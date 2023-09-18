@@ -7,7 +7,7 @@ defmodule Mongo.TopologyDescriptionTest do
     single_server = "localhost:27017"
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :secondary})
+      read_preference: ReadPreference.merge_defaults(%{mode: :secondary})
     ]
 
     assert {:ok, {^single_server, _}} = TopologyDescription.select_servers(single(), :read, opts)
@@ -15,7 +15,7 @@ defmodule Mongo.TopologyDescriptionTest do
     assert {:ok, {^single_server, _}} = TopologyDescription.select_servers(single(), :write)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :nearest})
+      read_preference: ReadPreference.merge_defaults(%{mode: :nearest})
     ]
 
     assert {:ok, {^single_server, _}} = TopologyDescription.select_servers(single(), :read, opts)
@@ -27,34 +27,34 @@ defmodule Mongo.TopologyDescriptionTest do
     assert {:ok, {^sharded_server, []}} = TopologyDescription.select_servers(sharded(), :write, [])
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :primary})
+      read_preference: ReadPreference.merge_defaults(%{mode: :primary})
     ]
 
     assert {:ok, {^sharded_server, []}} = TopologyDescription.select_servers(sharded(), :read, opts)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :secondary})
+      read_preference: ReadPreference.merge_defaults(%{mode: :secondary})
     ]
 
-    assert {:ok, {^sharded_server, [{:read_preference, [mode: :secondary, tag_sets: [], maxStalenessSeconds: 0]}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
+    assert {:ok, {^sharded_server, [{:read_preference, %{mode: :secondary, maxStalenessSeconds: 0}}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :primary_preferred})
+      read_preference: ReadPreference.merge_defaults(%{mode: :primary_preferred})
     ]
 
-    assert {:ok, {^sharded_server, [{:read_preference, [mode: :primaryPreferred, tag_sets: [], maxStalenessSeconds: 0]}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
+    assert {:ok, {^sharded_server, [{:read_preference, %{mode: :primaryPreferred, maxStalenessSeconds: 0}}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :secondary_preferred})
+      read_preference: ReadPreference.merge_defaults(%{mode: :secondary_preferred})
     ]
 
-    assert {:ok, {^sharded_server, [{:read_preference, [mode: :secondaryPreferred, tag_sets: [], maxStalenessSeconds: 0]}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
+    assert {:ok, {^sharded_server, [{:read_preference, %{mode: :secondaryPreferred, maxStalenessSeconds: 0}}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :nearest})
+      read_preference: ReadPreference.merge_defaults(%{mode: :nearest})
     ]
 
-    assert {:ok, {^sharded_server, [{:read_preference, [mode: :nearest, tag_sets: [], maxStalenessSeconds: 0]}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
+    assert {:ok, {^sharded_server, [{:read_preference, %{mode: :nearest, maxStalenessSeconds: 0}}]}} = TopologyDescription.select_servers(sharded(), :read, opts)
   end
 
   test "replica set server selection" do
@@ -63,7 +63,7 @@ defmodule Mongo.TopologyDescriptionTest do
     seconardaries = List.delete(all_hosts, master)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :secondary})
+      read_preference: ReadPreference.merge_defaults(%{mode: :secondary})
     ]
 
     {:ok, {server, _}} = TopologyDescription.select_servers(repl_set_with_master(), :read, opts)
@@ -71,40 +71,40 @@ defmodule Mongo.TopologyDescriptionTest do
     assert Enum.any?(seconardaries, fn sec -> sec == server end)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :primary})
+      read_preference: ReadPreference.merge_defaults(%{mode: :primary})
     ]
 
     assert {:ok, {_master, _}} = TopologyDescription.select_servers(repl_set_with_master(), :read, opts)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :primary_preferred})
+      read_preference: ReadPreference.merge_defaults(%{mode: :primary_preferred})
     ]
 
     assert {:ok, {_master, _}} = TopologyDescription.select_servers(repl_set_with_master(), :read, opts)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :primary_preferred})
+      read_preference: ReadPreference.merge_defaults(%{mode: :primary_preferred})
     ]
 
     {:ok, {server, _}} = TopologyDescription.select_servers(repl_set_no_master(), :read, opts)
     assert Enum.any?(seconardaries, fn sec -> sec == server end)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :nearest})
+      read_preference: ReadPreference.merge_defaults(%{mode: :nearest})
     ]
 
     {:ok, {server, _}} = TopologyDescription.select_servers(repl_set_with_master(), :read, opts)
     assert Enum.any?(all_hosts, fn sec -> sec == server end)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :secondary})
+      read_preference: ReadPreference.merge_defaults(%{mode: :secondary})
     ]
 
     {:ok, {server, _}} = TopologyDescription.select_servers(repl_set_no_master(), :read, opts)
     assert Enum.any?(seconardaries, fn sec -> sec == server end)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :secondary_preferred})
+      read_preference: ReadPreference.merge_defaults(%{mode: :secondary_preferred})
     ]
 
     {:ok, {server, _}} = TopologyDescription.select_servers(repl_set_with_master(), :read, opts)
@@ -116,7 +116,7 @@ defmodule Mongo.TopologyDescriptionTest do
     assert Enum.any?(seconardaries, fn sec -> sec == server end)
 
     opts = [
-      read_preference: ReadPreference.primary(%{mode: :nearest})
+      read_preference: ReadPreference.merge_defaults(%{mode: :nearest})
     ]
 
     {:ok, {server, _}} = TopologyDescription.select_servers(repl_set_no_master(), :read, opts)
