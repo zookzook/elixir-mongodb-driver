@@ -120,7 +120,7 @@ defmodule Mongo.Messages do
     <<size::int32(), _rest::binary>> = payload
     <<doc::binary(size), rest::binary>> = payload
 
-    with {doc, ""} <- @decode_module.document(doc) do
+    with {doc, ""} <- @decoder_module.document(doc) do
       decode_sections(rest, [section(payload_type: 0, payload: payload(doc: doc)) | acc])
     end
   end
