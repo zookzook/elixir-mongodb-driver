@@ -133,7 +133,7 @@ defmodule Mongo.Messages do
 
   def decode_sequence(<<size::int32(), rest::binary>>) do
     with {identifier, docs} <- cstring(rest) do
-      sequence(size: size, identifier: identifier, docs: @decode_module.documents(docs))
+      sequence(size: size, identifier: identifier, docs: @decoder_module.documents(docs))
     end
   end
 
