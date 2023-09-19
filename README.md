@@ -176,7 +176,7 @@ defmodule BSON.Decoder do
   use BSON.DecoderGenerator, preserve_order: false
 end
 
-defmodule BSON.PreserverOrderDecoder do
+defmodule BSON.OrderPreservingDecoder do
   @moduledoc false
 
   use BSON.DecoderGenerator, preserve_order: :order
