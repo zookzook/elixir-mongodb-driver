@@ -101,7 +101,7 @@ defmodule Mongo.Messages do
     Decodes a reply message from the response
   """
   def decode_reply(<<flags::int32(), cursor_id::int64(), from::int32(), num::int32(), rest::binary>>) do
-    op_reply(flags: flags, cursor_id: cursor_id, from: from, num: num, docs: @decode_module.documents(rest))
+    op_reply(flags: flags, cursor_id: cursor_id, from: from, num: num, docs: @decoder_module.documents(rest))
   end
 
   def decode_msg(<<flags::int32(), rest::binary>>) do
