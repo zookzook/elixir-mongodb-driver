@@ -116,5 +116,24 @@ defmodule Mongo.UrlParserTest do
       username = Keyword.get(opts, :username)
       assert username == real_username
     end
+
+    test "external auth source " do
+      encoded_external_auth_source = URI.encode_www_form("$external")
+      url = "mongodb://user:password@seed1.domain.com:27017,seed2.domain.com:27017,seed3.domain.com:27017/db_name?replicaSet=set-name&authMechanism=PLAIN&authSource=#{encoded_external_auth_source}&tls=true"
+      assert UrlParser.parse_url(url: url) |> Keyword.drop([:pw_safe]) == [
+        password: "*****",
+        username: "user",
+        database: "db_name",
+        tls: true,
+        auth_source: "$external",
+        auth_mechanism: :plain,
+        set_name: "set-name",
+        seeds: [
+          "seed1.domain.com:27017",
+          "seed2.domain.com:27017",
+          "seed3.domain.com:27017"
+        ]
+      ]
+    end
   end
 end
