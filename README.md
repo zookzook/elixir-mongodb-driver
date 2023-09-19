@@ -149,7 +149,7 @@ Additionally, the driver accepts both atoms and strings for document keys, but w
 Creating atoms from arbitrary input (such as database documents) is [discouraged](https://elixir-lang.org/getting-started/mix-otp/genserver.html#:~:text=However%2C%20naming%20dynamic,our%20system%20memory!) because atoms are not garbage collected.
 
 ## Preserve Order
-If the order of the keys are important it is possible to use a different decoder module. The decoder module will
+If the order of the keys is important, it is possible to use a different decoder module. The decoder module will
 preserve the order of the keys by adding an attribute `:order` which contains the list of keys in the original order.
 If you want to change the `:order` key then define a new decoder module:
 
