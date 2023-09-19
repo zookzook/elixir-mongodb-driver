@@ -124,6 +124,15 @@ defmodule Mongo.UrlParserTest do
                ]
              ]
 
+      assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?readPreference=secondary&maxStalenessSeconds=30") == [
+               database: "db_name",
+               read_preference: %{mode: :secondary, max_staleness_ms: 30_000},
+               seeds: [
+                 "seed1.domain.com:27017",
+                 "seed2.domain.com:27017"
+               ]
+             ]
+
       assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?readPreference=weird&readPreferenceTags=dc:ny,rack:r&maxStalenessSeconds=30") == [
                database: "db_name",
                seeds: [

@@ -236,6 +236,10 @@ defmodule Mongo.UrlParser do
     end
   end
 
+  defp parse_tags([]) do
+    []
+  end
+
   defp parse_tags(tags) do
     tags
     |> String.split(",")
