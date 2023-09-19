@@ -47,7 +47,7 @@ defmodule Mongo.Messages do
   defrecord :section, [:payload_type, :payload]
   defrecord :op_msg, [:flags, :sections]
 
-  @decode_module Application.compile_env(:mongodb_driver, :decoder, BSON.Decoder)
+  @decoder_module Application.compile_env(:mongodb_driver, :decoder, BSON.Decoder)
 
   @doc """
     Decodes the header from response of a request sent by the mongodb server
