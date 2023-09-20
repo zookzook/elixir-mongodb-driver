@@ -39,6 +39,10 @@ defmodule Mongo.Auth do
     Mongo.Auth.X509
   end
 
+  defp mechanism(%{wire_version: version, auth_mechanism: :plain}) when version >= 3 do
+    Mongo.Auth.PLAIN
+  end
+
   defp mechanism(%{wire_version: version}) when version >= 3 do
     Mongo.Auth.SCRAM
   end
