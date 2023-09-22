@@ -218,5 +218,5 @@ end
 defmodule BSON.PreserverOrderDecoder do
   @moduledoc false
 
-  use BSON.DecoderGenerator, preserve_order: :order
+  use BSON.DecoderGenerator, preserve_order: :__order__
 end
