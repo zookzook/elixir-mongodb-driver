@@ -8,7 +8,7 @@ defmodule Mongo.UrlParser do
 
   require Logger
 
-  @mongo_url_regex ~r/^mongodb(?<srv>\+srv)?:\/\/((?<username>[^:]+):(?<password>[^@]+)@)?(?<seeds>[^\/]+)(\/(?<database>[^?]+))?(\?(?<options>.*))?$/
+  @mongo_url_regex ~r/^mongodb(?<srv>\+srv)?:\/\/(?:(?<username>[^:]+):(?<password>[^@]+)@)?(?<seeds>[^\/\?]+)(?:\/(?<database>[^?]*)?(?:\?(?<options>(?:[^\s=]+=[^\s&]*)+))?)?$/
 
   # https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options
   @mongo_options %{

@@ -122,6 +122,7 @@ defmodule Mongo.GridFs.BucketTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "explicit sessions", c do
     top = c.pid
     {:ok, session} = Session.start_session(top, :write, [])
