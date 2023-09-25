@@ -383,6 +383,8 @@ defmodule Mongo.Topology do
 
       ## found
       {:ok, {address, opts}} ->
+        opts = merge_timeout(opts, state.opts)
+
         with {:ok, connection} <- get_connection(address, state),
              wire_version <- wire_version(address, topology),
              {server_session, new_state} <- checkout_server_session(state),
@@ -591,6 +593,16 @@ defmodule Mongo.Topology do
 
       read_preference ->
         Keyword.put_new(opts, :read_preference, read_preference)
+    end
+  end
+
+  defp merge_timeout(opts, default_ops) do
+    case Keyword.get(default_ops, :timeout) do
+      nil ->
+        opts
+
+      timeout ->
+        Keyword.put_new(opts, :timeout, timeout)
     end
   end
 end
