@@ -176,45 +176,51 @@ defmodule Mongo.Repo do
       def all(module, filter \\ %{}, opts \\ []) do
         collection = module.__collection__(:collection)
 
-        @topology
-        |> Mongo.find(collection, filter, opts)
-        |> Enum.map(&module.load/1)
+        case Mongo.find(@topology, collection, filter, opts) do
+          {:error, _reason} = error -> error
+          cursor -> Enum.map(cursor, &module.load/1)
+        end
       end
 
       def stream(module, filter \\ %{}, opts \\ []) do
         collection = module.__collection__(:collection)
 
-        @topology
-        |> Mongo.find(collection, module.dump_part(filter), opts)
-        |> Stream.map(&module.load/1)
+        case Mongo.find(@topology, collection, module.dump_part(filter), opts) do
+          {:error, _reason} = error -> error
+          cursor -> Stream.map(cursor, &module.load/1)
+        end
       end
 
       def aggregate(module, pipeline, opts \\ []) do
         collection = module.__collection__(:collection)
 
-        @topology
-        |> Mongo.aggregate(collection, pipeline, opts)
-        |> Enum.map(&module.load/1)
+        case Mongo.aggregate(@topology, collection, pipeline, opts) do
+          {:error, _reason} = error -> error
+          cursor -> Enum.map(cursor, &module.load/1)
+        end
       end
 
       def get(module, id, opts \\ []) do
         collection = module.__collection__(:collection)
 
-        @topology
-        |> Mongo.find_one(collection, %{_id: id}, opts)
-        |> module.load()
+        case Mongo.find_one(@topology, collection, %{_id: id}, opts) do
+          {:error, _reason} = error -> error
+          value -> module.load(value)
+        end
       end
 
       def get_by(module, filter \\ %{}, opts \\ []) do
         collection = module.__collection__(:collection)
 
-        @topology
-        |> Mongo.find_one(collection, module.dump_part(filter), opts)
-        |> module.load()
+        case Mongo.find_one(@topology, collection, module.dump_part(filter), opts) do
+          {:error, _reason} = error -> error
+          value -> module.load(value)
+        end
       end
 
       def fetch(module, id, opts \\ []) do
         case get(module, id, opts) do
+          {:error, _reason} = error -> error
           nil -> {:error, :not_found}
           doc -> {:ok, doc}
         end
@@ -222,6 +228,7 @@ defmodule Mongo.Repo do
 
       def fetch_by(module, filter \\ %{}, opts \\ []) do
         case get_by(module, module.dump_part(filter), opts) do
+          {:error, _reason} = error -> error
           nil -> {:error, :not_found}
           doc -> {:ok, doc}
         end
@@ -297,7 +304,7 @@ defmodule Mongo.Repo do
       MyApp.Repo.all(Post, %{title: title}, batch_size: 2)
   """
   @callback all(module :: module(), filter :: BSON.document(), opts :: Keyword.t()) ::
-              list(Mongo.Collection.t())
+              list(Mongo.Collection.t()) | {:error, any()}
 
   @doc """
   Selects documents for the collection defined in the given module and returns a stream of collection
@@ -311,7 +318,7 @@ defmodule Mongo.Repo do
       MyApp.Repo.stream(Post, %{title: title}, batch_size: 2)
   """
   @callback stream(module :: module(), filter :: BSON.document(), opts :: Keyword.t()) ::
-              Enumerable.t()
+              Enumerable.t() | {:error, any()}
 
   @doc """
   Performs aggregation operation using the aggregation pipeline on the given collection module and returns
@@ -328,7 +335,7 @@ defmodule Mongo.Repo do
       ])
   """
   @callback aggregate(module :: module(), pipeline :: BSON.document(), opts :: Keyword.t()) ::
-              list(Mongo.Collection.t())
+              list(Mongo.Collection.t()) | {:error, any()}
 
   @doc """
   Returns the count of documents in the given collection module for the given filter.
