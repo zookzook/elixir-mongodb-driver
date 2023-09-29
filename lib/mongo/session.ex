@@ -186,14 +186,15 @@ defmodule Mongo.Session do
 
   @doc """
   Merge the session / transaction data into the cmd. There is no need to call this function directly. It is called automatically.
+  The global session timeout is merged to the options as well.
   """
-  @spec bind_session(Session.t(), BSON.document()) :: {:ok, pid, BSON.document()} | {:error, term()}
-  def bind_session(nil, _cmd) do
+  @spec bind_session(Session.t(), BSON.document(), Keyword.t()) :: {:ok, pid, BSON.document(), Keyword.t()} | {:error, term()}
+  def bind_session(nil, _cmd, _opts) do
     {:error, Mongo.Error.exception("No session")}
   end
 
-  def bind_session(pid, cmd) do
-    call(pid, {:bind_session, cmd})
+  def bind_session(pid, cmd, opts) do
+    call(pid, {:bind_session, cmd, opts})
   end
 
   @doc """
@@ -462,13 +463,16 @@ defmodule Mongo.Session do
   ##
   # bind session: only if wire_version >= 6, MongoDB 3.6.x and no transaction is running: only lsid and the transaction-id is added
   #
-  def handle_call_event({:bind_session, cmd}, transaction, %Session{conn: conn, opts: opts, wire_version: wire_version, server_session: %ServerSession{session_id: id, txn_num: txn_num}} = data)
+  def handle_call_event({:bind_session, cmd, client_opts}, transaction, %Session{conn: conn, opts: opts, wire_version: wire_version, server_session: %ServerSession{session_id: id, txn_num: txn_num}} = data)
       when wire_version >= 6 and transaction in [:no_transaction, :transaction_aborted, :transaction_committed] do
     ## only if retryable_writes are enabled!
     options =
       case opts[:retryable_writes] do
-        true -> [lsid: %{id: id}, txnNumber: %BSON.LongNumber{value: txn_num}, readConcern: read_concern(data, Keyword.get(cmd, :readConcern))]
-        _ -> [lsid: %{id: id}, readConcern: read_concern(data, Keyword.get(cmd, :readConcern))]
+        true ->
+          [lsid: %{id: id}, txnNumber: %BSON.LongNumber{value: txn_num}, readConcern: read_concern(data, Keyword.get(cmd, :readConcern))]
+
+        _ ->
+          [lsid: %{id: id}, readConcern: read_concern(data, Keyword.get(cmd, :readConcern))]
       end
 
     cmd =
@@ -477,11 +481,12 @@ defmodule Mongo.Session do
       |> ReadPreference.add_read_preference(opts)
       |> filter_nils()
 
-    {:keep_state_and_data, {:ok, conn, cmd}}
+    client_opts = merge_timeout(client_opts, opts)
+    {:keep_state_and_data, {:ok, conn, cmd, client_opts}}
   end
 
-  def handle_call_event({:bind_session, cmd}, :starting_transaction, %Session{conn: conn, server_session: %ServerSession{session_id: id, txn_num: txn_num}, wire_version: wire_version} = data) when wire_version >= 6 do
-    result =
+  def handle_call_event({:bind_session, cmd, client_opts}, :starting_transaction, %Session{conn: conn, opts: opts, server_session: %ServerSession{session_id: id, txn_num: txn_num}, wire_version: wire_version} = data) when wire_version >= 6 do
+    cmd =
       Keyword.merge(cmd,
         readConcern: read_concern(data, Keyword.get(cmd, :readConcern)),
         lsid: %{id: id},
@@ -492,10 +497,11 @@ defmodule Mongo.Session do
       |> filter_nils()
       |> Keyword.drop(~w(writeConcern)a)
 
-    {:next_state, :transaction_in_progress, {:ok, conn, result}}
+    client_opts = merge_timeout(client_opts, opts)
+    {:next_state, :transaction_in_progress, {:ok, conn, cmd, client_opts}}
   end
 
-  def handle_call_event({:bind_session, cmd}, :transaction_in_progress, %Session{conn: conn, wire_version: wire_version, server_session: %ServerSession{session_id: id, txn_num: txn_num}}) when wire_version >= 6 do
+  def handle_call_event({:bind_session, cmd, client_opts}, :transaction_in_progress, %Session{conn: conn, opts: opts, wire_version: wire_version, server_session: %ServerSession{session_id: id, txn_num: txn_num}}) when wire_version >= 6 do
     result =
       Keyword.merge(cmd,
         lsid: %{id: id},
@@ -504,12 +510,13 @@ defmodule Mongo.Session do
       )
       |> Keyword.drop(~w(writeConcern readConcern)a)
 
-    {:keep_state_and_data, {:ok, conn, result}}
+    client_opts = merge_timeout(client_opts, opts)
+    {:keep_state_and_data, {:ok, conn, result, client_opts}}
   end
 
   # In case of wire_version < 6 we do nothing
-  def handle_call_event({:bind_session, cmd}, _transaction, %Session{conn: conn}) do
-    {:keep_state_and_data, {:ok, conn, cmd}}
+  def handle_call_event({:bind_session, cmd, client_opts}, _transaction, %Session{conn: conn}) do
+    {:keep_state_and_data, {:ok, conn, cmd, client_opts}}
   end
 
   def handle_call_event({:commit_transaction, _start_time}, :starting_transaction, _data) do
@@ -709,5 +716,15 @@ defmodule Mongo.Session do
 
   def in_session(session, _topology_pid, _read_write_type, fun, opts) do
     fun.(session, opts)
+  end
+
+  defp merge_timeout(opts, default_ops) do
+    case Keyword.get(default_ops, :timeout) do
+      nil ->
+        opts
+
+      timeout ->
+        Keyword.put_new(opts, :timeout, timeout)
+    end
   end
 end
