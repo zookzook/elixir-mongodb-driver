@@ -8,7 +8,7 @@ defmodule Mongo.UrlParser do
 
   require Logger
 
-  @mongo_url_regex ~r/^mongodb(?<srv>\+srv)?:\/\/((?<username>[^:]+):(?<password>[^@]+)@)?(?<seeds>[^\/]+)(\/(?<database>[^?]+))?(\?(?<options>.*))?$/
+  @mongo_url_regex ~r/^mongodb(?<srv>\+srv)?:\/\/(?:(?<username>[^:]+):(?<password>[^@]+)@)?(?<seeds>[^\/\?]+)(?:\/(?<database>[^?]*)?(?:\?(?<options>(?:[^\s=]+=[^\s&]*)+))?)?$/
 
   # https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options
   @mongo_options %{
@@ -234,6 +234,10 @@ defmodule Mongo.UrlParser do
       max_staleness_seconds ->
         Map.put(read_preference, :max_staleness_ms, max_staleness_seconds * 1_000)
     end
+  end
+
+  defp parse_tags([]) do
+    []
   end
 
   defp parse_tags(tags) do

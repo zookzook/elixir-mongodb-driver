@@ -174,6 +174,7 @@ defmodule Mongo.ChangeStreamTest do
   end
 
   @tag :mongo_3_6
+  @tag :rs_required
   test "change stream: watch and resume_after", c do
     top = c.pid
     me = self()

@@ -89,6 +89,7 @@ defmodule Mongo.GridFs.UploadTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "upload a text file, check download, length, meta-data and checksum transaction", c do
     src_filename = "./test/data/test.txt"
     chksum = calc_checksum(src_filename)
@@ -114,6 +115,7 @@ defmodule Mongo.GridFs.UploadTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "upload a text file, check download, length, meta-data and checksum abort transaction", c do
     src_filename = "./test/data/test.txt"
     chksum = calc_checksum(src_filename)

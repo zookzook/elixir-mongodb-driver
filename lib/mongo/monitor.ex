@@ -186,18 +186,8 @@ defmodule Mongo.Monitor do
   ##
   # Get a new server description from the server and send it to the Topology process.
   ##
-  defp update_server_description(%{topology_pid: topology_pid, address: address, mode: :streaming_mode} = state) do
-    case get_server_description(state) do
-      %{round_trip_time: round_trip_time} ->
-        ## debug info("Updating round_trip_time: #{inspect round_trip_time}")
-        Topology.update_rrt(topology_pid, address, round_trip_time)
-
-        %{state | round_trip_time: round_trip_time}
-
-      error ->
-        warning("Unable to round trip time because of #{inspect(error)}")
-        state
-    end
+  defp update_server_description(%{mode: :streaming_mode} = state) do
+    state
   end
 
   ##
