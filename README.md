@@ -209,6 +209,40 @@ config :mongodb_driver,
   decoder: {BSON.PreserveOrderDecoder, key: :original_order}
 ```
 
+The resulting maps with annotated key order can be recursively transformed into lists of tuples. That allows for
+preserving the order again when encoding. Here is an example of how to achieve that:
+
+```elixir
+defmodule MapWithOrder do
+  def to_list(doc, order_key \\ :__order__) do
+    do_to_list(doc, order_key)
+  end
+
+  defp do_to_list(%{__struct__: _} = elem, _order_key) do
+    elem
+  end
+
+  defp do_to_list(doc, order_key) when is_map(doc) do
+    doc
+    |> Map.get(order_key, Map.keys(doc))
+    |> Enum.map(fn key -> {key, do_to_list(Map.get(doc, key), order_key)} end)
+  end
+
+  defp do_to_list(xs, order_key) when is_list(xs) do
+    Enum.map(xs, fn elem -> do_to_list(elem, order_key) end)
+  end
+
+  defp do_to_list(elem, _order_key) do
+    elem
+  end
+end
+
+# doc = ...
+MapWithOrder.to_list(doc)
+```
+
+Note that structs are kept as-is, to handle special values such as `BSON.ObjectId`.
+
 The decoder module is defined at compile time. The default decoder is `BSON.Decoder`, which does not preserve document
 key order. As it needs to execute fewer operations when decoding data received from MongoDB, it offers improved
 performance. Therefore, the default decoder is recommended for most use cases of this driver.
