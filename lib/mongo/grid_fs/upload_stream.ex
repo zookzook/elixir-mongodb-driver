@@ -20,9 +20,10 @@ defmodule Mongo.GridFs.UploadStream do
   alias Mongo.GridFs.Bucket
   alias Mongo.GridFs.UploadStream
 
+  @type file_id :: BSON.ObjectId.t() | binary()
   @type t :: %__MODULE__{
           bucket: Bucket.t(),
-          id: BSON.ObjectId.t(),
+          id: file_id(),
           filename: String.t(),
           metadata: {BSON.document() | nil}
         }
@@ -31,9 +32,9 @@ defmodule Mongo.GridFs.UploadStream do
   @doc """
   Creates a new upload stream to insert a file into the grid-fs.
   """
-  @spec new(Bucket.t(), String.t(), BSON.document() | nil) :: UploadStream.t()
-  def new(bucket, filename, metadata \\ nil) do
-    %UploadStream{bucket: bucket, filename: filename, id: Mongo.object_id(), metadata: metadata}
+  @spec new(Bucket.t(), String.t(), BSON.document() | nil, file_id() | nil) :: UploadStream.t()
+  def new(bucket, filename, metadata \\ nil, file_id \\ nil) do
+    %UploadStream{bucket: bucket, filename: filename, id: file_id || Mongo.object_id(), metadata: metadata}
   end
 
   defimpl Collectable, for: UploadStream do
