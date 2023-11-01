@@ -614,6 +614,7 @@ defmodule Mongo.Test do
              end)
   end
 
+  @tag :rs_required
   test "nested transaction", %{pid: top} do
     coll = unique_collection()
     Mongo.drop_collection(top, coll, w: 3)

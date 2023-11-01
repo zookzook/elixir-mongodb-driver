@@ -108,6 +108,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "commit_transaction", %{top: top} do
     coll = "dogs"
 
@@ -137,6 +138,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "commit_transaction on multiple database", %{top: top} do
     coll = "dogs"
 
@@ -180,6 +182,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "abort_transaction", %{top: top} do
     coll = "dogs"
 
@@ -209,6 +212,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "transaction", %{top: top} do
     coll = "dogs_with_commit_transaction"
 
@@ -233,6 +237,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "transaction_causal_consistency", %{top: top} do
     coll = "dogs_with_commit_transaction_causal_consistency"
 
@@ -258,6 +263,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "transaction_abort", %{top: top} do
     coll = "dogs_with_about_transaction"
 
@@ -283,6 +289,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "transaction_abort_exception", %{top: top} do
     coll = "dogs_with_transaction_abort_exception"
 
@@ -309,6 +316,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "check unordered bulk with transaction", %{top: top} do
     coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Wuff"})
@@ -381,6 +389,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "check streaming bulk with transaction", %{top: top} do
     coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Wuff"})
@@ -406,6 +415,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "commit empty transaction", %{top: top} do
     assert :ok =
              Mongo.transaction(
@@ -418,6 +428,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "abort empty transaction", %{top: top} do
     assert :error =
              Mongo.transaction(
@@ -430,6 +441,7 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "check ordered bulk with transaction", %{top: top} do
     coll = unique_collection()
     Mongo.insert_one(top, coll, %{name: "Wuff"})

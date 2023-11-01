@@ -210,12 +210,18 @@ defmodule BSON.DecoderGenerator do
 end
 
 defmodule BSON.Decoder do
+  # This module provides functions for decoding BSON data into Elixir values.
+  # The data type conversions are documented at https://hexdocs.pm/mongodb_driver/readme.html#data-representation.
+
   @moduledoc false
 
   use BSON.DecoderGenerator, preserve_order: false
 end
 
-defmodule BSON.PreserverOrderDecoder do
+defmodule BSON.PreserveOrderDecoder do
+  # This module is like `BSON.Decoder`, but it retains the original order of
+  # document keys in a list.
+
   @moduledoc false
 
   use BSON.DecoderGenerator, preserve_order: :__order__

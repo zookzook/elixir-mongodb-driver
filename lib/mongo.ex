@@ -1502,7 +1502,7 @@ defmodule Mongo do
   @spec exec_command_session(GenServer.server(), BSON.document(), Keyword.t()) ::
           {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
   def exec_command_session(session, cmd, opts) do
-    with {:ok, conn, new_cmd} <- Session.bind_session(session, cmd),
+    with {:ok, conn, new_cmd, opts} <- Session.bind_session(session, cmd, opts),
          {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:command, new_cmd}}, [], opts),
          :ok <- Session.update_session(session, response, opts),
          {:ok, {_flags, doc}} <- check_for_error(response, cmd, opts) do
