@@ -88,7 +88,24 @@ defmodule Mongo.GridFs.UploadTest do
     assert x == chksum
   end
 
+  test "upload a text file with custom id, check download, length, meta-data and checksum", c do
+    src_filename = "./test/data/test.txt"
+    bucket = Bucket.new(c.pid, j: true, w: :majority)
+    chksum = calc_checksum(src_filename)
+    file_id = Mongo.object_id()
+
+    upload_stream = Upload.open_upload_stream(bucket, "my-example-file.txt", %{tag: "checked", chk_sum: chksum}, file_id)
+
+    File.stream!(src_filename, [], 512) |> Stream.into(upload_stream) |> Stream.run()
+
+    assert file_id == upload_stream.id
+
+    %{"metadata" => %{"tag" => "checked", "chk_sum" => x}} = Mongo.find_one(c.pid, Bucket.files_collection_name(bucket), %{_id: file_id})
+    assert x == chksum
+  end
+
   @tag :mongo_4_2
+  @tag :rs_required
   test "upload a text file, check download, length, meta-data and checksum transaction", c do
     src_filename = "./test/data/test.txt"
     chksum = calc_checksum(src_filename)
@@ -114,6 +131,7 @@ defmodule Mongo.GridFs.UploadTest do
   end
 
   @tag :mongo_4_2
+  @tag :rs_required
   test "upload a text file, check download, length, meta-data and checksum abort transaction", c do
     src_filename = "./test/data/test.txt"
     chksum = calc_checksum(src_filename)
