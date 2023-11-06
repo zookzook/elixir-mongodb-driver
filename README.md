@@ -706,8 +706,9 @@ separated in sub folders and module namespaces.
 
 For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM.
 
-If connecting to MongoDB Enterprise Edition, the "PLAIN" auth mechanism is supported for LDAP authentication.
-The "GSSAPI" auth mechanism used for Kerberos authentication is not currently supported.
+If connecting to MongoDB Enterprise Edition or MongoDB Atlas, the [PLAIN](https://www.mongodb.com/docs/manual/tutorial/authenticate-nativeldap-activedirectory/)
+auth mechanism is supported for LDAP authentication. The GSSAPI auth mechanism used for Kerberos authentication
+is not currently supported.
 
 If you'd like to use [MONGODB-X509](https://www.mongodb.com/docs/v6.0/tutorial/configure-x509-client-authentication/)
 authentication, you can specify that as a `start_link` option. 
