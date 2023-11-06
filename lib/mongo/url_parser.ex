@@ -113,6 +113,7 @@ defmodule Mongo.UrlParser do
 
   defp decode_percent(:username, value), do: URI.decode_www_form(value)
   defp decode_percent(:password, value), do: URI.decode_www_form(value)
+  defp decode_percent(:auth_source, value), do: URI.decode_www_form(value)
   defp decode_percent(_other, value), do: value
 
   defp parse_query_options(opts, %{"options" => options}) when is_binary(options) do
