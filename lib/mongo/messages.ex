@@ -47,6 +47,8 @@ defmodule Mongo.Messages do
   defrecord :section, [:payload_type, :payload]
   defrecord :op_msg, [:flags, :sections]
 
+  @decoder_module Application.compile_env(:mongodb_driver, :decoder, BSON.Decoder)
+
   @doc """
     Decodes the header from response of a request sent by the mongodb server
   """
@@ -72,44 +74,53 @@ defmodule Mongo.Messages do
   @doc """
     Decodes the response body of a request sent by the mongodb server
   """
-  def decode_response(msg_header(length: length) = header, iolist) when is_list(iolist) do
-    case IO.iodata_length(iolist) >= length do
-      true -> decode_response(header, IO.iodata_to_binary(iolist))
-      false -> :error
-    end
-  end
-
-  def decode_response(msg_header(length: length, response_to: response_to, op_code: op_code), binary) when byte_size(binary) >= length do
+  def decode_response(msg_header(length: length, response_to: response_to, op_code: op_code), binary) when is_binary(binary) and byte_size(binary) >= length do
     <<response::binary(length), rest::binary>> = binary
 
     case op_code do
-      @op_reply -> {:ok, response_to, decode_reply(response), rest}
-      @op_msg_code -> {:ok, response_to, decode_msg(response), rest}
-      _ -> :error
+      @op_reply ->
+        {:ok, response_to, decode_reply(response), rest}
+
+      @op_msg_code ->
+        {:ok, response_to, decode_msg(response), rest}
+
+      _ ->
+        :error
     end
   end
 
-  def decode_response(_header, _binary), do: :error
+  def decode_response(header, iolist) when is_list(iolist) do
+    decode_response(header, IO.iodata_to_binary(iolist))
+  end
+
+  def decode_response(_header, _binary) do
+    :error
+  end
 
   @doc """
     Decodes a reply message from the response
   """
   def decode_reply(<<flags::int32(), cursor_id::int64(), from::int32(), num::int32(), rest::binary>>) do
-    op_reply(flags: flags, cursor_id: cursor_id, from: from, num: num, docs: BSON.Decoder.documents(rest))
+    op_reply(flags: flags, cursor_id: cursor_id, from: from, num: num, docs: @decoder_module.documents(rest))
   end
 
   def decode_msg(<<flags::int32(), rest::binary>>) do
     op_msg(flags: flags, sections: decode_sections(rest))
   end
 
-  def decode_sections(binary), do: decode_sections(binary, [])
-  def decode_sections("", acc), do: Enum.reverse(acc)
+  def decode_sections(binary) do
+    decode_sections(binary, [])
+  end
+
+  def decode_sections("", acc) do
+    Enum.reverse(acc)
+  end
 
   def decode_sections(<<0x00::int8(), payload::binary>>, acc) do
     <<size::int32(), _rest::binary>> = payload
     <<doc::binary(size), rest::binary>> = payload
 
-    with {doc, ""} <- BSON.Decoder.document(doc) do
+    with {doc, ""} <- @decoder_module.document(doc) do
       decode_sections(rest, [section(payload_type: 0, payload: payload(doc: doc)) | acc])
     end
   end
@@ -122,13 +133,20 @@ defmodule Mongo.Messages do
 
   def decode_sequence(<<size::int32(), rest::binary>>) do
     with {identifier, docs} <- cstring(rest) do
-      sequence(size: size, identifier: identifier, docs: BSON.Decoder.documents(docs))
+      sequence(size: size, identifier: identifier, docs: @decoder_module.documents(docs))
     end
   end
 
   defp cstring(binary) do
-    [string, rest] = :binary.split(binary, <<0x00>>)
-    {string, rest}
+    split(binary, [])
+  end
+
+  defp split(<<0x00, rest::binary>>, acc) do
+    {acc |> Enum.reverse() |> :binary.list_to_bin(), rest}
+  end
+
+  defp split(<<byte, rest::binary>>, acc) do
+    split(rest, [byte | acc])
   end
 
   def encode(request_id, op_query() = op) do
