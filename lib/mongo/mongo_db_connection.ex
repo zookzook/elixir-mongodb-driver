@@ -21,6 +21,9 @@ defmodule Mongo.MongoDBConnection do
 
   @impl true
   def connect(opts) do
+    # Trap exits so that DBConnection calls `disconnect` on unexpected shutdowns
+    Process.flag(:trap_exit, true)
+
     {write_concern, opts} = Keyword.split(opts, @write_concern)
     write_concern = Keyword.put_new(write_concern, :w, 1)
 
