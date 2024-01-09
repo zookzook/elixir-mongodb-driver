@@ -42,7 +42,7 @@ defmodule BSON.Encoder do
       |> DateTime.from_naive!("Etc/UTC")
       |> DateTime.to_unix(:millisecond)
 
-    <<unix_ms::int64>>
+    <<unix_ms::int64()>>
   end
 
   def encode(%NaiveDateTime{} = datetime) do
@@ -51,7 +51,7 @@ defmodule BSON.Encoder do
       |> DateTime.from_naive!("Etc/UTC")
       |> DateTime.to_unix(:millisecond)
 
-    <<unix_ms::int64>>
+    <<unix_ms::int64()>>
   end
 
   def encode(%BSON.Regex{pattern: pattern, options: options}),
