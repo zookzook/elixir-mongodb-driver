@@ -32,6 +32,7 @@ defmodule Mongo.RepoTest do
     end
   end
 
+  @tag :rs_required
   describe "transaction/3" do
     test "returns a single document for the given bson id" do
       assert :error =

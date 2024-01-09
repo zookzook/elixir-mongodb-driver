@@ -104,8 +104,6 @@ defmodule Mongo do
       `:hostname` (optional)
     * `:username` - The User to connect with (optional)
     * `:password` - The password to connect with (optional)
-    * `:auth` - List of additional users to authenticate as a keyword list with
-      `:username` and `:password` keys (optional)
     * `:auth_source` - The database to authenticate against
     * `:appname` - The name of the application used the driver for the MongoDB-Handshake
     * `:set_name` - The name of the replica set to connect to (required if
@@ -493,7 +491,8 @@ defmodule Mongo do
         writeConcern: write_concern(opts),
         maxTimeMS: opts[:max_time],
         collation: opts[:collation],
-        comment: opts[:comment]
+        comment: opts[:comment],
+        arrayFilters: opts[:array_filters]
       ]
       |> filter_nils()
 
@@ -1065,7 +1064,7 @@ defmodule Mongo do
     * `:upsert` - if set to `true` creates a new document when no document
       matches the filter (default: `false`)
   """
-  @spec update_one(GenServer.server(), collection, BSON.document(), BSON.document(), Keyword.t()) ::
+  @spec update_one(GenServer.server(), collection, BSON.document(), [BSON.document()] | BSON.document(), Keyword.t()) ::
           result(Mongo.UpdateResult.t())
   def update_one(topology_pid, coll, filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
@@ -1075,7 +1074,7 @@ defmodule Mongo do
   @doc """
   Similar to `update_one/5` but unwraps the result and raises on error.
   """
-  @spec update_one!(GenServer.server(), collection, BSON.document(), BSON.document(), Keyword.t()) ::
+  @spec update_one!(GenServer.server(), collection, BSON.document(), [BSON.document()] | BSON.document(), Keyword.t()) ::
           result!(Mongo.UpdateResult.t())
   def update_one!(topology_pid, coll, filter, update, opts \\ []) do
     bangify(update_one(topology_pid, coll, filter, update, opts))
@@ -1088,7 +1087,7 @@ defmodule Mongo do
   please refer to the [MongoDB documentation](https://docs.mongodb.com/manual/reference/command/update/#dbcmd.update)
 
   """
-  @spec update_many(GenServer.server(), collection, BSON.document(), BSON.document(), Keyword.t()) ::
+  @spec update_many(GenServer.server(), collection, BSON.document(), [BSON.document()] | BSON.document(), Keyword.t()) ::
           result(Mongo.UpdateResult.t())
   def update_many(topology_pid, coll, filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
@@ -1102,7 +1101,7 @@ defmodule Mongo do
           GenServer.server(),
           collection,
           BSON.document(),
-          BSON.document(),
+          [BSON.document()] | BSON.document(),
           Keyword.t()
         ) :: result!(Mongo.UpdateResult.t())
   def update_many!(topology_pid, coll, filter, update, opts \\ []) do
@@ -1597,7 +1596,7 @@ defmodule Mongo do
   @spec exec_command_session(GenServer.server(), BSON.document(), Keyword.t()) ::
           {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
   def exec_command_session(session, cmd, opts) do
-    with {:ok, conn, new_cmd} <- Session.bind_session(session, cmd),
+    with {:ok, conn, new_cmd, opts} <- Session.bind_session(session, cmd, opts),
          {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:command, new_cmd}}, [], opts),
          :ok <- Session.update_session(session, response, opts),
          {:ok, {_flags, doc}} <- check_for_error(response, cmd, opts) do

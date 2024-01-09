@@ -5,6 +5,10 @@ defmodule Mongo.Auth.SCRAM do
 
   alias Mongo.MongoDBConnection.Utils
 
+  def auth({nil, nil}, _db, _s) do
+    :ok
+  end
+
   def auth({username, password}, db, s) do
     {mechanism, digest} = select_digest(db, username, s)
     nonce = nonce()

@@ -2,14 +2,14 @@ defmodule Mongodb.Mixfile do
   use Mix.Project
 
   @source_url "https://github.com/zookzook/elixir-mongodb-driver"
-  @version "1.0.3"
+  @version "1.2.1"
 
   def project() do
     [
       app: :mongodb_driver,
       version: @version,
       elixirc_paths: elixirc_paths(Mix.env()),
-      elixir: "~> 1.8",
+      elixir: "~> 1.15",
       name: "mongodb-driver",
       deps: deps(),
       docs: docs(),
@@ -23,24 +23,20 @@ defmodule Mongodb.Mixfile do
 
   def application do
     [
-      applications: applications(Mix.env()),
       env: [],
-      extra_applications: [:crypto, :ssl, :eex],
+      extra_applications: [:logger, :crypto, :ssl],
       mod: {Mongo.App, []}
     ]
   end
 
-  def applications(:test), do: [:logger, :connection, :db_connection]
-  def applications(_), do: [:logger, :connection, :db_connection]
-
   defp deps do
     [
       {:telemetry, "~> 1.0"},
-      {:db_connection, "~> 2.4.1"},
-      {:decimal, "~> 2.0"},
+      {:db_connection, "~> 2.6"},
+      {:decimal, "~> 2.1.1"},
       {:patch, "~> 0.12.0", only: [:dev, :test]},
       {:jason, "~> 1.3", only: [:dev, :test]},
-      {:credo, "~> 1.6.1", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7.0", only: [:dev, :test], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end

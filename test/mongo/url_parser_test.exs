@@ -9,6 +9,52 @@ defmodule Mongo.UrlParserTest do
       assert UrlParser.parse_url(url: "mongodb://localhost:27017") == [seeds: ["localhost:27017"]]
     end
 
+    test "basic url and trailing slash" do
+      assert UrlParser.parse_url(url: "mongodb://localhost:27017/") == [seeds: ["localhost:27017"]]
+    end
+
+    test "basic url and trailing slash and options" do
+      assert UrlParser.parse_url(url: "mongodb://localhost:27017/?replicaSet=set-name&authSource=admin&maxPoolSize=5") == [
+               pool_size: 5,
+               auth_source: "admin",
+               set_name: "set-name",
+               seeds: ["localhost:27017"]
+             ]
+    end
+
+    test "basic url, trailing slash and options" do
+      assert UrlParser.parse_url(url: "mongodb://localhost:27017/") == [seeds: ["localhost:27017"]]
+    end
+
+    test "Missing delimiting slash between hosts and options" do
+      assert UrlParser.parse_url(url: "mongodb://example.com?w=1") == [url: "mongodb://example.com?w=1"]
+    end
+
+    test "Incomplete key value pair for option" do
+      assert UrlParser.parse_url(url: "mongodb://example.com/test?w") == [url: "mongodb://example.com/test?w"]
+    end
+
+    test "User info for single IPv4 host without database" do
+      assert UrlParser.parse_url(url: "mongodb://alice:foo@127.0.0.1") |> Keyword.drop([:pw_safe]) == [password: "*****", username: "alice", seeds: ["127.0.0.1"]]
+    end
+
+    test "User info for single IPv4 host with database" do
+      assert UrlParser.parse_url(url: "mongodb://alice:foo@127.0.0.1/test") |> Keyword.drop([:pw_safe]) == [
+               password: "*****",
+               username: "alice",
+               database: "test",
+               seeds: ["127.0.0.1"]
+             ]
+    end
+
+    test "User info for single hostname without database" do
+      assert UrlParser.parse_url(url: "mongodb://eve:baz@example.com") |> Keyword.drop([:pw_safe]) == [
+               password: "*****",
+               username: "eve",
+               seeds: ["example.com"]
+             ]
+    end
+
     test "cluster url with ssl" do
       url = "mongodb://user:password@seed1.domain.com:27017,seed2.domain.com:27017,seed3.domain.com:27017/db_name?ssl=true&replicaSet=set-name&authSource=admin&maxPoolSize=5"
 
@@ -105,6 +151,43 @@ defmodule Mongo.UrlParserTest do
       end
     end
 
+    test "write read preferences" do
+      assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?readPreference=secondary&readPreferenceTags=dc:ny,rack:r&maxStalenessSeconds=30") == [
+               database: "db_name",
+               read_preference: %{mode: :secondary, tags: [dc: "ny", rack: "r"], max_staleness_ms: 30_000},
+               seeds: [
+                 "seed1.domain.com:27017",
+                 "seed2.domain.com:27017"
+               ]
+             ]
+
+      assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?readPreference=secondary&readPreferenceTags=dc::ny,rack:r&maxStalenessSeconds=30") == [
+               database: "db_name",
+               read_preference: %{mode: :secondary, tags: [rack: "r"], max_staleness_ms: 30_000},
+               seeds: [
+                 "seed1.domain.com:27017",
+                 "seed2.domain.com:27017"
+               ]
+             ]
+
+      assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?readPreference=secondary&maxStalenessSeconds=30") == [
+               database: "db_name",
+               read_preference: %{mode: :secondary, max_staleness_ms: 30_000},
+               seeds: [
+                 "seed1.domain.com:27017",
+                 "seed2.domain.com:27017"
+               ]
+             ]
+
+      assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?readPreference=weird&readPreferenceTags=dc:ny,rack:r&maxStalenessSeconds=30") == [
+               database: "db_name",
+               seeds: [
+                 "seed1.domain.com:27017",
+                 "seed2.domain.com:27017"
+               ]
+             ]
+    end
+
     test "encoded user" do
       real_username = "@:/skøl:@/"
       real_password = "@æœ{}%e()}@"
@@ -115,6 +198,26 @@ defmodule Mongo.UrlParserTest do
       opts = UrlParser.parse_url(url: url)
       username = Keyword.get(opts, :username)
       assert username == real_username
+    end
+
+    test "external auth source " do
+      encoded_external_auth_source = URI.encode_www_form("$external")
+      url = "mongodb://user:password@seed1.domain.com:27017,seed2.domain.com:27017,seed3.domain.com:27017/db_name?replicaSet=set-name&authMechanism=PLAIN&authSource=#{encoded_external_auth_source}&tls=true"
+
+      assert UrlParser.parse_url(url: url) |> Keyword.drop([:pw_safe]) == [
+               password: "*****",
+               username: "user",
+               database: "db_name",
+               tls: true,
+               auth_source: "$external",
+               auth_mechanism: :plain,
+               set_name: "set-name",
+               seeds: [
+                 "seed1.domain.com:27017",
+                 "seed2.domain.com:27017",
+                 "seed3.domain.com:27017"
+               ]
+             ]
     end
   end
 end

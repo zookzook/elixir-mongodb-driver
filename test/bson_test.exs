@@ -112,7 +112,7 @@ defmodule BSONTest do
     assert encode(@map_23) == @bin_23
     assert encode(@map_24) == @bin_24
     assert encode(@map_25) == @bin_25
-    assert encode(@map_26) == @bin_26
+    assert @map_26 |> encode() |> decode() == %{"age" => 27, "name" => "John"}
   end
 
   test "decode" do

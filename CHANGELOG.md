@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.2.0...v1.2.1) (2023-11-26)
+
+
+### Bug Fixes
+
+* added support for read preference specified by the URL ([#207](https://github.com/zookzook/elixir-mongodb-driver/issues/207)) ([9e4d569](https://github.com/zookzook/elixir-mongodb-driver/commit/9e4d56957a8bd2605bf50dbe5eea551b4fc2dc40))
+* applies the global timeout value to each query ([#215](https://github.com/zookzook/elixir-mongodb-driver/issues/215)) ([64f8ea1](https://github.com/zookzook/elixir-mongodb-driver/commit/64f8ea16ed47fb724e5fca6d70ef99f3ecef0f51))
+* handle read preferences without tags ([50ea98d](https://github.com/zookzook/elixir-mongodb-driver/commit/50ea98db82217bbd9a2f37ad57f6f271b2bff7c2))
+* preserve the order of the keys ([#211](https://github.com/zookzook/elixir-mongodb-driver/issues/211)) ([b360d87](https://github.com/zookzook/elixir-mongodb-driver/commit/b360d87ad02383e37ad53dafa036abfb9e2bbc53))
+
+## [1.2.0](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.1.0...v1.2.0) (2023-08-30)
+
+
+### Features
+
+* Supports passing arrayFilters option through find_one_and_update ([#201](https://github.com/zookzook/elixir-mongodb-driver/issues/201)) ([082878b](https://github.com/zookzook/elixir-mongodb-driver/commit/082878b121ac02fc763cf5be0b6b197abbcbbe9e))
+
+
+### Bug Fixes
+
+* fixed typo ([e6eff31](https://github.com/zookzook/elixir-mongodb-driver/commit/e6eff31fd1c001074f73aab18d8d88a1cd33005c))
+
+## [1.1.0](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.0.3...v1.1.0) (2023-07-30)
+
+
+### Features
+
+* add support for Elixir 1.15 ([#195](https://github.com/zookzook/elixir-mongodb-driver/issues/195)) ([f621a62](https://github.com/zookzook/elixir-mongodb-driver/commit/f621a62d5bb825cfd77e8f3024d569f23be0376d))
+
 ## [1.0.3](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.0.2...v1.0.3) (2023-05-13)
 
 

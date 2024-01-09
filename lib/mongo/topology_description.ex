@@ -88,10 +88,17 @@ defmodule Mongo.TopologyDescription do
   def select_servers(topology, :write, opts) do
     servers =
       case topology.type do
-        :single -> topology.servers
-        :sharded -> mongos_servers(topology)
-        :replica_set_with_primary -> primary_servers(topology)
-        _ -> []
+        :single ->
+          topology.servers
+
+        :sharded ->
+          mongos_servers(topology)
+
+        :replica_set_with_primary ->
+          primary_servers(topology)
+
+        _other ->
+          []
       end
 
     addr =
@@ -111,31 +118,44 @@ defmodule Mongo.TopologyDescription do
     read_preference =
       opts
       |> Keyword.get(:read_preference)
-      |> ReadPreference.primary()
+      |> ReadPreference.merge_defaults()
 
     {servers, read_prefs} =
       case topology.type do
-        :unknown -> {[], nil}
-        :single -> {topology.servers, nil}
-        :sharded -> {mongos_servers(topology), ReadPreference.mongos(read_preference)}
-        _ -> {select_replica_set_server(topology, read_preference.mode, read_preference), ReadPreference.slave_ok(read_preference)}
+        :unknown ->
+          {[], nil}
+
+        :single ->
+          {topology.servers, nil}
+
+        :sharded ->
+          {mongos_servers(topology), ReadPreference.to_mongos(read_preference)}
+
+        _other ->
+          {select_replica_set_server(topology, read_preference.mode, read_preference), ReadPreference.to_replica_set(read_preference)}
       end
 
     opts =
       case read_prefs do
-        nil -> Keyword.delete(opts, :read_preference)
-        prefs -> Keyword.put(opts, :read_preference, prefs)
+        nil ->
+          Keyword.delete(opts, :read_preference)
+
+        prefs ->
+          Keyword.put(opts, :read_preference, prefs)
       end
 
     addr =
       servers
-      |> Enum.map(fn {server, _} -> server end)
       |> Enum.take_random(1)
+      |> Enum.map(fn {server, _} -> server end)
 
     # check now three possible cases
     case addr do
-      [] -> :empty
-      [result] -> {:ok, {result, opts}}
+      [] ->
+        :empty
+
+      [result] ->
+        {:ok, {result, opts}}
     end
   end
 
@@ -153,7 +173,7 @@ defmodule Mongo.TopologyDescription do
 
   ##
   #
-  # Select the primary without without tag_sets or maxStalenessSeconds
+  # Select the primary without without tags or maxStalenessSeconds
   #
   defp select_replica_set_server(topology, :primary, _read_preference) do
     primary_servers(topology)
@@ -161,13 +181,13 @@ defmodule Mongo.TopologyDescription do
 
   ##
   #
-  # Select the secondary with without tag_sets or maxStalenessSeconds
+  # Select the secondary with without tags or maxStalenessSeconds
   #
   defp select_replica_set_server(topology, :secondary, read_preference) do
     topology
     |> secondary_servers()
     |> filter_out_stale(topology, read_preference.max_staleness_ms)
-    |> select_tag_sets(read_preference.tag_sets)
+    |> select_tag_sets(read_preference.tags)
     |> filter_latency_window(topology.local_threshold_ms)
   end
 
@@ -175,8 +195,8 @@ defmodule Mongo.TopologyDescription do
   # From the specs
   #
   # 'primaryPreferred' is equivalent to selecting a server with read preference mode 'primary'
-  # (without tag_sets or maxStalenessSeconds), or, if that fails, falling back to selecting with read preference mode
-  # 'secondary' (with tag_sets and maxStalenessSeconds, if provided).
+  # (without tags or maxStalenessSeconds), or, if that fails, falling back to selecting with read preference mode
+  # 'secondary' (with tags and maxStalenessSeconds, if provided).
   defp select_replica_set_server(topology, :primary_preferred, read_preference) do
     case primary_servers(topology) do
       [] -> select_replica_set_server(topology, :secondary, read_preference)
@@ -186,8 +206,8 @@ defmodule Mongo.TopologyDescription do
 
   ##
   # From the specs
-  # 'secondaryPreferred' is the inverse: selecting with mode 'secondary' (with tag_sets and maxStalenessSeconds) and
-  # falling back to selecting with mode 'primary' (without tag_sets or maxStalenessSeconds).
+  # 'secondaryPreferred' is the inverse: selecting with mode 'secondary' (with tags and maxStalenessSeconds) and
+  # falling back to selecting with mode 'primary' (without tags or maxStalenessSeconds).
   #
   defp select_replica_set_server(topology, :secondary_preferred, read_preference) do
     case select_replica_set_server(topology, :secondary, read_preference) do
@@ -202,11 +222,11 @@ defmodule Mongo.TopologyDescription do
   # The term 'nearest' is unfortunate, as it implies a choice based on geographic locality or absolute lowest latency, neither of which are true.
   #
   # Instead, and unlike the other read preference modes, 'nearest' does not favor either primaries or secondaries;
-  # instead all servers are candidates and are filtered by tag_sets and maxStalenessSeconds.
+  # instead all servers are candidates and are filtered by tags and maxStalenessSeconds.
   defp select_replica_set_server(%{:servers => servers} = topology, :nearest, read_preference) do
     servers
     |> filter_out_stale(topology, read_preference.max_staleness_ms)
-    |> select_tag_sets(read_preference.tag_sets)
+    |> select_tag_sets(read_preference.tags)
     |> filter_latency_window(topology.local_threshold_ms)
   end
 

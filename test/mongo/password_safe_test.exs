@@ -11,7 +11,7 @@ defmodule Mongo.PasswordSafeTest do
     PasswordSafe.set_password(pid, pw)
     %{key: _key, pw: enc_pw} = :sys.get_state(pid)
     assert enc_pw != pw
-    assert pw == PasswordSafe.get_pasword(pid)
+    assert pw == PasswordSafe.get_password(pid)
   end
 
   #
@@ -22,6 +22,6 @@ defmodule Mongo.PasswordSafeTest do
     url = "mongodb://myDBReader:D1fficultP%40ssw0rd@mongodb0.example.com:27017/admin"
     opts = UrlParser.parse_url(url: url)
     assert "*****" == Keyword.get(opts, :password)
-    assert "D1fficultP@ssw0rd" == PasswordSafe.get_pasword(Keyword.get(opts, :pw_safe))
+    assert "D1fficultP@ssw0rd" == PasswordSafe.get_password(Keyword.get(opts, :pw_safe))
   end
 end

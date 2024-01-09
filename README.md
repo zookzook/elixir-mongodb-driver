@@ -135,7 +135,20 @@ Mongo.insert_many(top, "users", [
 
 ## Data Representation
 
-Since BSON documents are ordered Elixir maps cannot be used to fully represent them. This driver chose to accept both maps and lists of key-value pairs when encoding but will only decode documents to lists. This has the side-effect that it's impossible to discern empty arrays from empty documents. Additionally, the driver will accept both atoms and strings for document keys but will only decode to strings. BSON symbols can only be decoded.
+This driver chooses to accept both maps and lists of key-value tuples when encoding BSON documents (1), but will only
+decode documents into maps. Maps are convenient to work with, but Elixir map keys are not ordered, unlike BSON document
+keys.
+
+That design decision means document key order is lost when encoding Elixir maps to BSON and, conversely, when decoding
+BSON documents to Elixir maps. However, see [Preserve Document Key Order](#preserve-document-key-order) to learn how to
+preserve key order when it matters.
+
+Additionally, the driver accepts both atoms and strings for document keys, but will only decode them into strings.
+Creating atoms from arbitrary input (such as database documents) is
+[discouraged](https://elixir-lang.org/getting-started/mix-otp/genserver.html#:~:text=However%2C%20naming%20dynamic,our%20system%20memory!)
+because atoms are not garbage collected.
+
+[BSON symbols (deprecated)](https://bsonspec.org/spec.html#:~:text=Symbol.%20%E2%80%94%20Deprecated) can only be decoded (2).
 
     BSON                Elixir
     ----------          ------
@@ -158,6 +171,81 @@ Since BSON documents are ordered Elixir maps cannot be used to fully represent t
     min key             :BSON_min
     max key             :BSON_max
     decimal128          Decimal{}
+
+## Preserve Document Key Order
+
+### Encoding from Elixir to BSON
+
+For some MongoDB operations, the order of the keys in a document affect the result. For example, that is the case when
+sorting a query by multiple fields.
+
+In those cases, driver users should represent documents using a list of tuples (or a keyword list) to preserve the
+order. Example:
+
+```elixir
+Mongo.find(top, "users", %{}, sort: [last_name: 1, first_name: 1, _id: 1])
+```
+
+The query above will sort users by last name, then by first name and finally by ID. If an Elixir map had been used to
+specify `:sort`, query results would end up sorted unexpectedly wrong.
+
+### Decoding from BSON to Elixir
+
+Decoded BSON documents are always represented by Elixir maps because the driver depends on that to implement its
+functionality.
+
+If the order of document keys as stored by MongoDB is needed, the driver can be configured to use a BSON decoder module
+that puts a list of keys in the original order under the `:__order__` key (and it works recursively).
+
+```elixir
+config :mongodb_driver,
+  decoder: BSON.PreserveOrderDecoder
+```
+
+It is possible to customize the key. For example, to use `:original_order` instead of the default `:__order__`:
+
+```elixir
+config :mongodb_driver,
+  decoder: {BSON.PreserveOrderDecoder, key: :original_order}
+```
+
+The resulting maps with annotated key order can be recursively transformed into lists of tuples. That allows for
+preserving the order again when encoding. Here is an example of how to achieve that:
+
+```elixir
+defmodule MapWithOrder do
+  def to_list(doc, order_key \\ :__order__) do
+    do_to_list(doc, order_key)
+  end
+
+  defp do_to_list(%{__struct__: _} = elem, _order_key) do
+    elem
+  end
+
+  defp do_to_list(doc, order_key) when is_map(doc) do
+    doc
+    |> Map.get(order_key, Map.keys(doc))
+    |> Enum.map(fn key -> {key, do_to_list(Map.get(doc, key), order_key)} end)
+  end
+
+  defp do_to_list(xs, order_key) when is_list(xs) do
+    Enum.map(xs, fn elem -> do_to_list(elem, order_key) end)
+  end
+
+  defp do_to_list(elem, _order_key) do
+    elem
+  end
+end
+
+# doc = ...
+MapWithOrder.to_list(doc)
+```
+
+Note that structs are kept as-is, to handle special values such as `BSON.ObjectId`.
+
+The decoder module is defined at compile time. The default decoder is `BSON.Decoder`, which does not preserve document
+key order. As it needs to execute fewer operations when decoding data received from MongoDB, it offers improved
+performance. Therefore, the default decoder is recommended for most use cases of this driver.
 
 ## Writing your own encoding info
 
@@ -695,6 +783,11 @@ separated in sub folders and module namespaces.
 ## Auth Mechanisms
 
 For versions of Mongo 3.0 and greater, the auth mechanism defaults to SCRAM.
+
+If connecting to MongoDB Enterprise Edition or MongoDB Atlas, the [PLAIN](https://www.mongodb.com/docs/manual/tutorial/authenticate-nativeldap-activedirectory/)
+auth mechanism is supported for LDAP authentication. The GSSAPI auth mechanism used for Kerberos authentication
+is not currently supported.
+
 If you'd like to use [MONGODB-X509](https://www.mongodb.com/docs/v6.0/tutorial/configure-x509-client-authentication/)
 authentication, you can specify that as a `start_link` option. 
 
@@ -704,9 +797,44 @@ You need roughly three additional configuration steps:
 * Add x.509 Certificate subject as a User
 * Authenticate with an x.509 Certificate
 
-```elixir
-{:ok, pid} = Mongo.start_link(database: "test", auth_mechanism: :x509)
+To get the x.509 authentication working you need to prepare the ssl configuration accordingly:
+* you need to set the ssl option: `verify_peer`
+* you need to specify the `cacertfile` because Erlang BEAM don't provide any CA certificate store by default
+* you maybe need to customize the hostname check to allow wildcard certificates
+* you need to specify the `username` from the subject entry of the user certificate
+
+If you use a user certificate from Atlas a working configuration looks like this. First we
+use the [castore](https://hex.pm/packages/castore) package as the CA certificate store. After downloading
+the user certificate we extract the username subject entry from the PEM file:
+
+```shell
+openssl x509 -in <pathToClientPEM> -inform PEM -subject -nameopt RFC2253
+
+> CN=cert-user
 ```
+
+The configuration looks now:
+```elixir
+  opts = [
+      url: "mongodb+srv://cluster0.xxx.mongodb.net/myFirstDatabase?authSource=%24external&retryWrites=true&w=majority",
+      ssl: true,
+      username: "CN=cert-user",
+      password: "",
+      auth_mechanism: :x509,
+      ssl_opts: [
+        verify: :verify_peer,
+        cacertfile: to_charlist(CAStore.file_path()),
+        certfile: '/path-to-cert/X509-cert-2227052404946303101.pem',
+        customize_hostname_check: [
+          match_fun:
+            :public_key.pkix_verify_hostname_match_fun(:https)
+        ]
+      ]]
+
+    Mongo.start_link(opts)
+```
+
+Currently, we need to specify *an empty password* to get the x.509 auth module working. This will be changed soon.  
 
 ## AWS, TLS and Erlang SSL Ciphers
 
@@ -745,6 +873,27 @@ Mongo.find(conn, "dogs", %{}, timeout: 120_000)
 ```
 
 Now the driver will use 120 seconds as the timeout for the single query.
+
+## Read Preferences
+
+The `:read_preference` option sets [read preference](https://www.mongodb.com/docs/manual/core/read-preference/) for the query. The read preference is
+a simple map, supporting the following keys:
+
+* `:mode`, possible values: `:primary`, `:primary_preferred`, `:secondary`, `:secondary_preferred` and `:nearest`
+* `:max_staleness_ms`, the maxStaleness value in milliseconds
+* `:tags`, the set of tags, for example: `[dc: "west", usage: "production"]`
+
+The driver selects the server using the read preference. 
+
+```elixr 
+prefs = %{
+    mode: :secondary,
+    max_staleness_ms: 120_000,
+    tags: [dc: "west", usage: "production"]
+}
+
+Mongo.find_one(top, "dogs", %{name: "Oskar"}, read_preference: prefs)
+```
 
 ## Change Streams
 
@@ -837,7 +986,7 @@ result = Mongo.BulkWrite.write(:mongo, bulk, w: 1)
 In the following example we import 1.000.000 integers into the MongoDB using the stream api:
 
 We need to create an insert operation for each number. Then we call the `Mongo.UnorderedBulk.stream`
-function to import it. This function returns a stream function which accumulate
+function to import it. This function returns a stream function that accumulates
 all inserts operations until the limit `1000` is reached. In this case the operation group is send to
 MongoDB. So using the stream api you can reduce the memory using while
 importing big volume of data.
@@ -956,7 +1105,7 @@ That means, you can just generate a `raise :should_not_happen` exception as well
 
 ## Command Monitoring
 
-You can watch all events that are triggered while the driver send requests and processes responses. You can use the
+You can watch all events that are triggered while the driver sends requests and processes responses. You can use the
 `Mongo.EventHandler` as a starting point. It logs the events from the topic `:commands` (by ignoring the `:isMaster` command)
 to `Logger.info`:
 
@@ -971,7 +1120,7 @@ iex> {:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/test")
 
 ## Testing
 
-Latest MongoDB is used while running the tests. Replica set of three nodes is created and runs all test except the socket and ssl test. If you want to
+Latest MongoDB is used while running the tests. Replica set of three nodes is created and runs all tests, except the socket and ssl test. If you want to
 run the test cases against other MongoDB deployments or older versions, you can use the [mtools](https://github.com/rueckstiess/mtools) for deployment and run the test cases locally:
 
 ```bash

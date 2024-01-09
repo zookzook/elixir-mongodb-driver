@@ -248,6 +248,11 @@ defmodule Mongo.Test do
     assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 43}, %{"$set" => %{baz: 1}}, upsert: true, return_document: :after)
     assert %{"foo" => 43, "baz" => 1} = value, "Should upsert"
 
+    # array_filters
+    assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 44, things: [%{id: "123", name: "test"}, %{id: "456", name: "not test"}]})
+    assert {:ok, value} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 44}, %{"$set" => %{"things.$[sub].name" => "new"}}, array_filters: [%{"sub.id" => "123"}], return_document: :after)
+    assert %{"foo" => 44, "things" => [%{"id" => "123", "name" => "new"}, %{"id" => "456", "name" => "not test"}]} = value, "Should leverage array filters"
+
     # don't find return {:ok, nil}
     assert {:ok, %Mongo.FindAndModifyResult{matched_count: 0, updated_existing: false, value: nil}} == Mongo.find_one_and_update(c.pid, coll, %{"number" => 666}, %{"$set" => %{title: "the number of the beast"}})
 
@@ -609,6 +614,7 @@ defmodule Mongo.Test do
              end)
   end
 
+  @tag :rs_required
   test "nested transaction", %{pid: top} do
     coll = unique_collection()
     Mongo.drop_collection(top, coll, w: 3)
