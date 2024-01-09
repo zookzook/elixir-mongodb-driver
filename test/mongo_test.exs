@@ -250,7 +250,7 @@ defmodule Mongo.Test do
 
     # array_filters
     assert {:ok, _} = Mongo.insert_one(c.pid, coll, %{foo: 44, things: [%{id: "123", name: "test"}, %{id: "456", name: "not test"}]})
-    assert {:ok, value} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 44}, %{"$set" => %{"things.$[sub].name" => "new"}}, array_filters: [%{"sub.id" => "123"}], return_document: :after)
+    assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_update(c.pid, coll, %{"foo" => 44}, %{"$set" => %{"things.$[sub].name" => "new"}}, array_filters: [%{"sub.id" => "123"}], return_document: :after)
     assert %{"foo" => 44, "things" => [%{"id" => "123", "name" => "new"}, %{"id" => "456", "name" => "not test"}]} = value, "Should leverage array filters"
 
     # don't find return {:ok, nil}
