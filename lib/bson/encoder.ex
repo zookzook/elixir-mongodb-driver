@@ -36,6 +36,24 @@ defmodule BSON.Encoder do
     <<unix_ms::int64()>>
   end
 
+  def encode(%Date{} = date) do
+    unix_ms =
+      NaiveDateTime.from_erl!({Date.to_erl(date), {0, 0, 0}}, 0, Calendar.ISO)
+      |> DateTime.from_naive!("Etc/UTC")
+      |> DateTime.to_unix(:millisecond)
+
+    <<unix_ms::int64()>>
+  end
+
+  def encode(%NaiveDateTime{} = datetime) do
+    unix_ms =
+      datetime
+      |> DateTime.from_naive!("Etc/UTC")
+      |> DateTime.to_unix(:millisecond)
+
+    <<unix_ms::int64()>>
+  end
+
   def encode(%BSON.Regex{pattern: pattern, options: options}),
     do: [cstring(pattern) | cstring(options)]
 
@@ -152,6 +170,8 @@ defmodule BSON.Encoder do
   defp type(%BSON.Binary{}), do: @type_binary
   defp type(%BSON.ObjectId{}), do: @type_objectid
   defp type(%DateTime{}), do: @type_datetime
+  defp type(%NaiveDateTime{}), do: @type_datetime
+  defp type(%Date{}), do: @type_datetime
   defp type(%BSON.Regex{}), do: @type_regex
   defp type(%BSON.JavaScript{scope: nil}), do: @type_js
   defp type(%BSON.JavaScript{}), do: @type_js_scope

@@ -503,7 +503,13 @@ defmodule Mongo do
       )
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
-      {:ok, doc["value"]}
+      {:ok,
+       %Mongo.FindAndModifyResult{
+         value: doc["value"],
+         matched_count: doc["lastErrorObject"]["n"],
+         updated_existing: doc["lastErrorObject"]["updatedExisting"],
+         upserted_id: doc["lastErrorObject"]["upserted"]
+       }}
     end
   end
 
@@ -559,7 +565,15 @@ defmodule Mongo do
         ~w(bypass_document_validation max_time projection return_document sort upsert collation)a
       )
 
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts), do: {:ok, doc["value"]}
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+      {:ok,
+       %Mongo.FindAndModifyResult{
+         value: doc["value"],
+         matched_count: doc["lastErrorObject"]["n"],
+         updated_existing: doc["lastErrorObject"]["updatedExisting"],
+         upserted_id: doc["lastErrorObject"]["upserted"]
+       }}
+    end
   end
 
   defp should_return_new(:after), do: true
@@ -1092,6 +1106,86 @@ defmodule Mongo do
         ) :: result!(Mongo.UpdateResult.t())
   def update_many!(topology_pid, coll, filter, update, opts \\ []) do
     bangify(update_many(topology_pid, coll, filter, update, opts))
+  end
+
+  @doc """
+  Performs one or more update operations.
+
+  This function is especially useful for more complex update operations (e.g.
+  upserting multiple documents). For more straightforward use cases you may
+  prefer to use these higher level APIs:
+
+  * `update_one/5`
+  * `update_one!/5`
+  * `update_many/5`
+  * `update_many!5`
+
+  Each update in `updates` may be specified using either the short-hand
+  Mongo-style syntax (in reference to their docs) or using a long-hand, Elixir
+  friendly syntax.
+
+  See
+  https://docs.mongodb.com/manual/reference/command/update/#update-statements
+
+  e.g. long-hand `query` becomes short-hand `q`, snake case `array_filters`
+  becomes `arrayFilters`
+  """
+  def update(topology_pid, coll, updates, opts) do
+    write_concern =
+      filter_nils(%{
+        w: Keyword.get(opts, :w),
+        j: Keyword.get(opts, :j),
+        wtimeout: Keyword.get(opts, :wtimeout)
+      })
+
+    normalised_updates = updates |> normalise_updates()
+
+    cmd =
+      [
+        update: coll,
+        updates: normalised_updates,
+        ordered: Keyword.get(opts, :ordered),
+        writeConcern: write_concern,
+        bypassDocumentValidation: Keyword.get(opts, :bypass_document_validation)
+      ]
+      |> filter_nils()
+
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+      case doc do
+        %{"writeErrors" => write_errors} ->
+          {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: write_errors}}
+
+        %{"n" => n, "nModified" => n_modified} ->
+          {:ok,
+           %Mongo.UpdateResult{
+             matched_count: n,
+             modified_count: n_modified,
+             upserted_ids: filter_upsert_ids(doc["upserted"])
+           }}
+
+        %{"ok" => ok} when ok == 1 ->
+          {:ok, %Mongo.UpdateResult{acknowledged: false}}
+      end
+    end
+  end
+
+  defp normalise_updates([[{_, _} | _] | _] = updates) do
+    updates
+    |> Enum.map(&normalise_update/1)
+  end
+
+  defp normalise_updates(updates), do: normalise_updates([updates])
+
+  defp normalise_update(update) do
+    update
+    |> Enum.map(fn
+      {:query, query} -> {:q, query}
+      {:update, update} -> {:u, update}
+      {:updates, update} -> {:u, update}
+      {:array_filters, array_filters} -> {:arrayFilters, array_filters}
+      other -> other
+    end)
+    |> filter_nils()
   end
 
   ##
@@ -1804,9 +1898,7 @@ defmodule Mongo do
 
     :telemetry.execute([:mongodb_driver, :execution], %{duration: duration}, metadata)
 
-    log = Application.get_env(:mongodb_driver, :log, false)
-
-    case Keyword.get(opts, :log, log) do
+    case Application.get_env(:mongodb_driver, :log, false) do
       true ->
         Logger.log(:info, fn -> log_iodata(command, collection, params, duration) end, ansi_color: command_color(command))
 
