@@ -836,6 +836,21 @@ The configuration looks now:
 
 Currently, we need to specify *an empty password* to get the x.509 auth module working. This will be changed soon.  
 
+## x509 and using a dedicated MongoDB Atlas server
+
+Using OTP 26 changed the default configuration regarding TLS. You may see issues when 
+connecting to a dedicated Atlas Server using OTP 26. You can restrict the allowed versions and force to use TLS 1.2 instead
+of TLS 1.3.
+
+```elixir
+   ...
+    versions: [:"tlsv1.2"],
+   ...
+```
+
+See also [MongoDB Security](https://www.mongodb.com/docs/atlas/reference/faq/security/) and 
+the [Issue 226](https://github.com/zookzook/elixir-mongodb-driver/issues/226) for some background information.
+
 ## AWS, TLS and Erlang SSL Ciphers
 
 Some MongoDB cloud providers (notably AWS) require a particular TLS cipher that isn't enabled
