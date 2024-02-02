@@ -1145,6 +1145,7 @@ pip3 install 'mtools[all]'
 export PATH=to-your-mongodb/bin/:$PATH
 ulimit -S -n 2048 ## in case of Mac OS X
 mlaunch init --setParameter enableTestCommands=1 --replicaset --name "rs_1"
+mongosh --host localhost:27017 --eval 'rs.initiate({_id: "rs_1", members: [{_id: 0, host: "127.0.0.1:27017"}, {_id: 1, host: "127.0.0.1:27018"}, {_id: 2, host: "127.0.0.1:27019"}]})'
 mix test --exclude ssl --exclude socket
 ```
 
