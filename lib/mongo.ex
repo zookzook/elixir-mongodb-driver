@@ -474,7 +474,7 @@ defmodule Mongo do
           BSON.document(),
           BSON.document(),
           Keyword.t()
-        ) :: result(BSON.document()) | {:ok, nil}
+        ) :: result(Mongo.FindAndModifyResult.t()) | {:ok, nil}
   def find_one_and_update(topology_pid, coll, filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
 
@@ -537,7 +537,7 @@ defmodule Mongo do
           BSON.document(),
           BSON.document(),
           Keyword.t()
-        ) :: result(BSON.document())
+        ) :: result(Mongo.FindAndModifyResult.t())
   def find_one_and_replace(topology_pid, coll, filter, replacement, opts \\ []) do
     _ = modifier_docs(replacement, :replace)
 
