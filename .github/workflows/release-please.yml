@@ -23,8 +23,8 @@ jobs:
       - uses: erlef/setup-beam@v1
         if: ${{ steps.release.outputs.release_created }}
         with:
-          otp-version: 25.0.3
-          elixir-version: 1.13.4
+          otp-version: 26.0.2
+          elixir-version: 1.15.4
       - run: mix do deps.get, deps.compile
         if: ${{ steps.release.outputs.release_created }}
       - run: mix hex.build
