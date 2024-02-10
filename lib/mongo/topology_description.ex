@@ -109,8 +109,11 @@ defmodule Mongo.TopologyDescription do
       |> Enum.take_random(1)
 
     case addr do
-      [] -> :empty
-      [result] -> {:ok, {result, opts}}
+      [] ->
+        :empty
+
+      [result] ->
+        {:ok, {result, opts}}
     end
   end
 

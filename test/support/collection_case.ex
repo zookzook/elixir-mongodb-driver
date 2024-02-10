@@ -3,7 +3,6 @@ defmodule CollectionCase do
 
   use ExUnit.CaseTemplate
 
-  ## todo  , "127.0.0.1:27018", "127.0.0.1:27019"]
   @seeds ["127.0.0.1:27017"]
 
   setup_all do

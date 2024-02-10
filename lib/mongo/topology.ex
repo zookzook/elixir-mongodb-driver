@@ -373,7 +373,7 @@ defmodule Mongo.Topology do
   # checkout a new session
   #
   def handle_call({:checkout_session, read_write_type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
-    opts = merge_read_preferences(opts, state.opts)
+    opts = merge_read_preferences(read_write_type, opts, state.opts)
 
     case TopologyDescription.select_servers(topology, read_write_type, opts) do
       :empty ->
@@ -402,7 +402,7 @@ defmodule Mongo.Topology do
   end
 
   def handle_call({:select_server, read_write_type, opts}, from, %{:topology => topology, :waiting_pids => waiting} = state) do
-    opts = merge_read_preferences(opts, state.opts)
+    opts = merge_read_preferences(read_write_type, opts, state.opts)
 
     case TopologyDescription.select_servers(topology, read_write_type, opts) do
       :empty ->
@@ -586,7 +586,7 @@ defmodule Mongo.Topology do
     Enum.flat_map(state.topology.servers, fn {_, s} -> s.arbiters end)
   end
 
-  defp merge_read_preferences(opts, url_opts) do
+  defp merge_read_preferences(:read, opts, url_opts) do
     case Keyword.get(url_opts, :read_preference) do
       nil ->
         opts
@@ -594,6 +594,10 @@ defmodule Mongo.Topology do
       read_preference ->
         Keyword.put_new(opts, :read_preference, read_preference)
     end
+  end
+
+  defp merge_read_preferences(:write, opts, _url_opts) do
+    Keyword.delete(opts, :read_preference)
   end
 
   defp merge_timeout(opts, default_ops) do

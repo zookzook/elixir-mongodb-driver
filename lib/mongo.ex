@@ -1571,7 +1571,10 @@ defmodule Mongo do
 
   def issue_command(topology_pid, cmd, :write, opts) do
     ## check, if retryable reads are enabled
-    opts = Mongo.retryable_writes(opts, acknowledged?(cmd[:writeConcerns]))
+    opts =
+      opts
+      |> Keyword.delete(:read_preferences)
+      |> Mongo.retryable_writes(acknowledged?(cmd[:writeConcerns]))
 
     case in_write_session(topology_pid, &exec_command_session(&1, cmd, &2), opts) do
       {:ok, doc} ->

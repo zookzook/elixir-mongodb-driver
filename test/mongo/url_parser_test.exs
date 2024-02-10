@@ -186,6 +186,15 @@ defmodule Mongo.UrlParserTest do
                  "seed2.domain.com:27017"
                ]
              ]
+
+      assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017,seed2.domain.com:27017/db_name?readPreference=primaryPreferred&maxStalenessSeconds=30") == [
+               database: "db_name",
+               read_preference: %{mode: :primary_preferred, max_staleness_ms: 30_000},
+               seeds: [
+                 "seed1.domain.com:27017",
+                 "seed2.domain.com:27017"
+               ]
+             ]
     end
 
     test "encoded user" do
