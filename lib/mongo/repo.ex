@@ -373,7 +373,7 @@ defmodule Mongo.Repo do
       MyApp.Repo.update_all(Post, %{title: "old"}, %{"$set" => %{title: "updated"}})
   """
   @callback update_all(module :: module(), filter :: BSON.document(), update :: BSON.document(), opts :: Keyword.t()) ::
-              {:ok, Mongo.UpdateResult.t()}
+              {:ok, Mongo.result(Mongo.UpdateResult.t())}
 
   @doc """
   Deletes all documents for the given collection module and filter.
