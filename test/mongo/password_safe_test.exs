@@ -7,7 +7,7 @@ defmodule Mongo.PasswordSafeTest do
 
   test "encrypted password" do
     pw = "my-secret-password"
-    {:ok, pid} = PasswordSafe.new()
+    {:ok, pid} = PasswordSafe.start_link()
     PasswordSafe.set_password(pid, pw)
     %{key: _key, pw: enc_pw} = :sys.get_state(pid)
     assert enc_pw != pw

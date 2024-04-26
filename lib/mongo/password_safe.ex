@@ -10,7 +10,7 @@ defmodule Mongo.PasswordSafe do
 
   use GenServer
 
-  def new() do
+  def start_link() do
     GenServer.start_link(@me, [])
   end
 

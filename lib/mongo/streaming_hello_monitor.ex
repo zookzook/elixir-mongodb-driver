@@ -30,7 +30,7 @@ defmodule Mongo.StreamingHelloMonitor do
   @doc """
   Initialize the monitor process
   """
-  def init([topology_pid, address, opts]) do
+  def init([monitor_pid, topology_pid, address, opts]) do
     heartbeat_frequency_ms = 10_000
 
     opts =
@@ -38,6 +38,8 @@ defmodule Mongo.StreamingHelloMonitor do
       |> Keyword.drop([:after_connect])
       |> Keyword.put(:after_connect, {StreamingHelloMonitor, :connected, [self()]})
       |> Keyword.put(:connection_type, :stream_monitor)
+      |> Keyword.put(:server_pid, self())
+      |> Keyword.put(:monitor_pid, monitor_pid)
 
     ## debug info("Starting stream hello monitor with options #{inspect(opts, pretty: true)}")
 
@@ -65,7 +67,7 @@ defmodule Mongo.StreamingHelloMonitor do
   In this case we stop the DBConnection.
   """
   def terminate(reason, %{connection_pid: connection_pid}) do
-    ## debug info("Terminating streaming hello monitor for reason #{inspect reason}")
+    ## Logger.debug("Terminating streaming hello monitor for reason #{inspect(reason)}")
     GenServer.stop(connection_pid, reason)
   end
 
@@ -84,7 +86,7 @@ defmodule Mongo.StreamingHelloMonitor do
   end
 
   def handle_info({:EXIT, _pid, reason}, state) do
-    ## debug Logger.warn("Stopped with reason #{inspect reason}")
+    Logger.warning("Stopped with reason #{inspect(reason)}")
     {:stop, reason, state}
   end
 

@@ -47,6 +47,10 @@ defmodule Mongo.Monitor do
     GenServer.cast(pid, :update)
   end
 
+  def stop_streaming_mode(pid) do
+    GenServer.cast(pid, :stop_streaming_mode)
+  end
+
   def set_heartbeat_frequency_ms(pid, heartbeat_frequency_ms) do
     GenServer.cast(pid, {:update, heartbeat_frequency_ms})
   end
@@ -59,7 +63,7 @@ defmodule Mongo.Monitor do
   Initialize the monitor process
   """
   def init([address, topology_pid, heartbeat_frequency_ms, connection_opts]) do
-    ## debug info("Starting monitor process with pid #{inspect self()}, #{inspect address}")
+    ## Logger.info("Starting monitor process with pid #{inspect(self())}, #{inspect(address)}")
 
     # monitors don't authenticate and use the "admin" database
     opts =
@@ -73,6 +77,7 @@ defmodule Mongo.Monitor do
       |> Keyword.put(:topology_pid, topology_pid)
       |> Keyword.put(:pool_size, 1)
       |> Keyword.put(:idle_interval, 5_000)
+      |> Keyword.put(:server_pid, self())
 
     with {:ok, pid} <- DBConnection.start_link(Mongo.MongoDBConnection, opts) do
       {:ok,
@@ -97,18 +102,17 @@ defmodule Mongo.Monitor do
   end
 
   @doc """
-  In case of terminating we stop the our linked processes as well:
+  In case of terminating we stop our linked processes as well:
   * connection
   * streaming process
   """
   def terminate(reason, %{connection_pid: connection_pid, streaming_pid: nil}) do
-    ## debug info("Terminating monitor for reason #{inspect reason}")
+    ## Logger.debug("Terminating monitor #{inspect(self())} for reason #{inspect(reason)}")
     GenServer.stop(connection_pid, reason)
   end
 
   def terminate(reason, %{connection_pid: connection_pid, streaming_pid: streaming_pid}) do
-    ## debug info("Terminating monitor for reason #{inspect reason}, #{inspect self()}, #{inspect streaming_pid}")
-
+    ## Logger.debug("Terminating monitor #{inspect(self())} for reason #{inspect(reason)}, #{inspect(streaming_pid)}")
     GenServer.stop(connection_pid, reason)
     GenServer.stop(streaming_pid, reason)
   end
@@ -117,12 +121,22 @@ defmodule Mongo.Monitor do
   Report the connection event, so the topology process can now create the connection pool.
   """
   def connected(_connection, me, topology_pid) do
+    ## Logger.info("Monitor #{inspect(me)} connected to server! ")
     Topology.monitor_connected(topology_pid, me)
     GenServer.cast(me, :update)
   end
 
   def handle_call(:get_state, _from, state) do
     {:reply, Map.put(state, :pid, self()), state}
+  end
+
+  def handle_cast(:stop_streaming_mode, %{streaming_pid: streaming_pid} = state) when streaming_pid != nil do
+    spawn(fn -> GenServer.stop(streaming_pid) end)
+    {:noreply, %{state | mode: :polling_mode, streaming_pid: nil}}
+  end
+
+  def handle_cast(:stop_streaming_mode, state) do
+    {:noreply, %{state | mode: :polling_mode}}
   end
 
   ##
@@ -207,11 +221,11 @@ defmodule Mongo.Monitor do
   # Starts the streaming mode
   ##
   defp start_streaming_mode(%{address: address, topology_pid: topology_pid, opts: opts} = state, _server_description) do
-    args = [topology_pid, address, opts]
+    args = [self(), topology_pid, address, opts]
 
     case StreamingHelloMonitor.start_link(args) do
       {:ok, pid} ->
-        ## debug info("Starting streaming mode: #{inspect self()}")
+        ## Logger.debug("Starting streaming mode: #{inspect(pid)}")
         %{state | mode: :streaming_mode, streaming_pid: pid, heartbeat_frequency_ms: 10_000}
 
       error ->

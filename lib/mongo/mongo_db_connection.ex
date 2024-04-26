@@ -37,6 +37,7 @@ defmodule Mongo.MongoDBConnection do
       wire_version: 0,
       auth_mechanism: opts[:auth_mechanism] || nil,
       connection_type: Keyword.fetch!(opts, :connection_type),
+      server_pid: Keyword.get(opts, :server_pid),
       topology_pid: Keyword.fetch!(opts, :topology_pid),
       stable_api: Keyword.get(opts, :stable_api),
       use_op_msg: Keyword.get(opts, :stable_api) != nil,
@@ -48,8 +49,24 @@ defmodule Mongo.MongoDBConnection do
   end
 
   @impl true
-  def disconnect(_error, %{connection: {mod, socket}, connection_type: type, topology_pid: pid, host: host}) do
-    GenServer.cast(pid, {:disconnect, type, host})
+  ## the stream monitor disconnects, we change the mode of the parent monitor
+  def disconnect(_error, %{connection: {mod, socket}, connection_type: :stream_monitor, parent_pid: parent_pid}) do
+    ## Logger.debug("MongoDB-Connection: disconnected stream monitor: #{inspect(error)}")
+    GenServer.cast(parent_pid, :stop_streaming_mode)
+    mod.close(socket)
+    :ok
+  end
+
+  def disconnect(_error, %{connection: {mod, socket}, connection_type: :monitor, topology_pid: topology_pid, host: host, server_pid: server_pid}) do
+    ## Logger.debug("MongoDB-Connection: disconnected: #{inspect(error)}, #{inspect(server_pid)}, #{inspect(host)}, cast disconnect :monitor")
+    GenServer.cast(server_pid, :stop_streaming_mode)
+    GenServer.cast(topology_pid, {:disconnect, :monitor, host, server_pid})
+    mod.close(socket)
+    :ok
+  end
+
+  def disconnect(_error, %{connection: {mod, socket}}) do
+    ## Logger.debug("MongoDB-Connection: disconnected: #{inspect error}, #{inspect type}, #{inspect host} #{inspect server_pid}")
     mod.close(socket)
     :ok
   end
