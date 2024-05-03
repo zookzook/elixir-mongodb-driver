@@ -23,11 +23,11 @@ defmodule Mongo.Repo do
 
   For a complete list of configuration options take a look at `Mongo`.
 
-  Finally we can add the `Mongo` instance to our application supervision tree
+  Finally we can add the `Mongo.Repo` instance to our application supervision tree
 
       children = [
         # ...
-        {Mongo, MyApp.Repo.config()},
+        MyApp.Repo,
         # ...
       ]
 
@@ -58,6 +58,10 @@ defmodule Mongo.Repo do
         @otp_app
         |> Application.get_env(__MODULE__, [])
         |> Keyword.put_new(:name, @topology)
+      end
+
+      def child_spec(_opts) do
+        Mongo.child_spec(config())
       end
 
       unless @read_only do
