@@ -885,7 +885,7 @@ defmodule Mongo do
   @doc """
   Insert multiple documents into the collection.
 
-  If any of the documents is missing the `_id` field or it is `nil`, an ObjectId will be generated, and insertd into the document.
+  If any of the documents is missing the `_id` field or it is `nil`, an ObjectId will be generated, and inserted into the document.
   Ids of all documents will be returned in the result struct.
 
   ## Options
