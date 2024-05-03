@@ -11,9 +11,13 @@ defmodule Mongo.Auth.CR do
          do: nonce(message, username, password, s)
   end
 
-  defp nonce(%{"nonce" => nonce, "ok" => ok}, username, password, s)
-       # to support a response that returns 1 or 1.0
-       when ok == 1 do
+  # Note that we use numeric comparisons in guards (e.g., `... when ok == 1`)
+  # instead of pattern matching below. This is to accommodate responses that
+  # return either integer or float values. Pattern matching treats 1 and 1.0,
+  # and 0, 0.0 and -0.0 (OTP 27+), as distinct values due to their different
+  # types/internal representation. By using numeric comparisons, we can ensure
+  # correct behavior regardless of the numeric type returned.
+  defp nonce(%{"nonce" => nonce, "ok" => ok}, username, password, s) when ok == 1 do
     digest = Utils.digest(nonce, username, password)
     command = [authenticate: 1, user: username, nonce: nonce, key: digest]
 
@@ -21,7 +25,7 @@ defmodule Mongo.Auth.CR do
       {:ok, _flags, %{"ok" => ok}} when ok == 1 ->
         :ok
 
-      {:ok, _flags, %{"ok" => 0.0, "errmsg" => reason, "code" => code}} ->
+      {:ok, _flags, %{"ok" => ok, "errmsg" => reason, "code" => code}} when ok == 0 ->
         {:error, Mongo.Error.exception(message: "auth failed for '#{username}': #{reason}", code: code)}
 
       {:ok, _flags, nil} ->
