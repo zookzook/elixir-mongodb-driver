@@ -164,7 +164,13 @@ defmodule Mongo.MongoDBConnection do
 
   defp ssl(opts, %{connection: {:gen_tcp, socket}} = state) do
     host = (opts[:hostname] || "localhost") |> to_charlist
-    ssl_opts = Keyword.put_new(opts[:ssl_opts] || [], :server_name_indication, host)
+
+    # Do not set SNI for IP addresses
+    ssl_opts =
+      case :inet.parse_address(host) do
+        {:ok, _} -> opts[:ssl_opts]
+        _ -> Keyword.put_new(opts[:ssl_opts] || [], :server_name_indication, host)
+      end
 
     case :ssl.connect(socket, ssl_opts, state.connect_timeout) do
       {:ok, ssl_sock} ->
