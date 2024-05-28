@@ -1129,7 +1129,29 @@ defmodule Mongo do
 
   e.g. long-hand `query` becomes short-hand `q`, snake case `array_filters`
   becomes `arrayFilters`
+
+  Example:
+
+      Mongo.update(MongoPool,
+        "test_collection",
+        query: %{foo => 4},
+        update: %{"$set": %{"modified_field": "new_value"}},
+        multi: true)
+
+        Mongo.update(MongoPool,
+          "test_collection",
+          query: %{foo: 4},
+          update: %{foo: 5, new_field: "new_value"}},
+          upsert: true)
+
+        Mongo.update(MongoPool, "test_collection", [
+          [q: %{foo: 24}, update: %{flag: "old"}],
+          [q: %{foo: 99}, update: %{luftballons: "yes"}, upsert: true]
+        ])
   """
+  @spec update(GenServer.server(), collection, [Keyword.t()], Keyword.t()) :: result(Mongo.UpdateResult.t())
+  def update(topology_pid, coll, updates, opts \\ [])
+
   def update(topology_pid, coll, updates, opts) do
     write_concern =
       filter_nils(%{
@@ -1170,11 +1192,12 @@ defmodule Mongo do
   end
 
   defp normalise_updates([[{_, _} | _] | _] = updates) do
-    updates
-    |> Enum.map(&normalise_update/1)
+    Enum.map(updates, &normalise_update/1)
   end
 
-  defp normalise_updates(updates), do: normalise_updates([updates])
+  defp normalise_updates([{_, _} | _] = updates), do: normalise_updates([updates])
+
+  defp normalise_updates(updates), do: updates
 
   defp normalise_update(update) do
     update

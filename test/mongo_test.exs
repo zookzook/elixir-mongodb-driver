@@ -527,6 +527,24 @@ defmodule Mongo.Test do
     end
   end
 
+  test "update", c do
+    coll = unique_name()
+
+    assert {:ok, _} = Mongo.insert_many(c.pid, coll, [%{foo: 42}, %{foo: 42}, %{_id: 1}])
+
+    assert {:ok, %Mongo.UpdateResult{acknowledged: true, matched_count: 2, modified_count: 2, upserted_ids: []}} = Mongo.update(c.pid, coll, q: %{foo: 42}, update: %{"$set": %{foo: 0}}, multi: true)
+
+    assert {:ok, %Mongo.UpdateResult{acknowledged: true, matched_count: 0, modified_count: 0, upserted_ids: []}} == Mongo.update(c.pid, coll, [query: %{foo: 0}, update: %{}], w: 0)
+
+    assert {:ok, %Mongo.UpdateResult{acknowledged: true, matched_count: 1, modified_count: 0, upserted_ids: [%BSON.ObjectId{}]}} = Mongo.update(c.pid, coll, query: %{foo: 100}, update: %{foo: 24, flag: "new"}, upsert: true)
+
+    assert {:ok, %Mongo.UpdateResult{acknowledged: true, matched_count: 2, modified_count: 1, upserted_ids: [%BSON.ObjectId{}]}} =
+             Mongo.update(c.pid, coll, [[q: %{foo: 24}, update: %{flag: "old"}], [q: %{foo: 99}, update: %{luftballons: "yes"}, upsert: true]])
+
+    # message: "Write batch sizes must be between 1 and 100000. Got 0 operations."
+    assert {:error, %Mongo.Error{code: 16}} = Mongo.update(c.pid, coll, [])
+  end
+
   # issue #19
   # test "correctly pass options to cursor", c do
   #  assert %Mongo.AggregationCursor{opts: [slave_ok: true, no_cursor_timeout: true], coll: "coll"} =
