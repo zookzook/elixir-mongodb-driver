@@ -1191,12 +1191,15 @@ defmodule Mongo do
     end
   end
 
-  defp normalise_updates([[{_, _} | _] | _] = updates) do
+  # maps list of updates (which are Keyword lists) to Mongo updates
+  defp normalise_updates([[{_key, _value} | _rest] | _updates] = updates) do
     Enum.map(updates, &normalise_update/1)
   end
 
-  defp normalise_updates([{_, _} | _] = updates), do: normalise_updates([updates])
+  # maps a single update (= Keyword list) to Mongo update
+  defp normalise_updates([{_key, _value} | _rest] = updates), do: normalise_updates([updates])
 
+  # let Mongo evaluate if this is correct input
   defp normalise_updates(updates), do: updates
 
   defp normalise_update(update) do
