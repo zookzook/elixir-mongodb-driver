@@ -50,7 +50,7 @@ defmodule Mongodb.Mixfile do
       ],
       main: "readme",
       source_url: @source_url,
-      source_ref: @version,
+      source_ref: "v#{@version}",
       formatters: ["html"]
     ]
   end
