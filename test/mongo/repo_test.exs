@@ -17,7 +17,7 @@ defmodule Mongo.RepoTest do
   end
 
   setup do
-    assert {:ok, pid} = start_supervised({Mongo, MyRepo.config()})
+    assert {:ok, pid} = start_supervised(MyRepo)
     Mongo.drop_database(pid, nil, w: 3)
     {:ok, [pid: pid]}
   end

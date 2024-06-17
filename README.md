@@ -454,12 +454,12 @@ config :my_app, MyApp.Repo,
   queue_target: 5_000
 ```
 
-Finally, we can add the `Mongo` instance to our application supervision tree:
+Finally, we can add the `Mongo.Repo` instance to our application supervision tree:
 
 ```elixir
   children = [
     # ...
-    {Mongo, MyApp.Repo.config()},
+    MyApp.Repo,
     # ...
   ]
 ```
