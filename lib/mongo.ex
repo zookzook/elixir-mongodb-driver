@@ -71,9 +71,8 @@ defmodule Mongo do
   @type conn :: DbConnection.Conn
   @type collection :: String.t()
   @type cursor :: Mongo.Cursor.t()
-  @type result(t) :: :ok | {:ok, t} | {:error, Mongo.Error.t()} | {:error, Mongo.WriteError.t()}
+  @type result(t) :: {:ok, t} | {:error, Mongo.Error.t()} | {:error, Mongo.WriteError.t()}
   @type result!(t) :: t
-  @type initial_type :: :unknown | :single | :replica_set_no_primary | :sharded
 
   defmacrop bangify(result) do
     quote do
@@ -474,7 +473,7 @@ defmodule Mongo do
           BSON.document(),
           BSON.document(),
           Keyword.t()
-        ) :: result(Mongo.FindAndModifyResult.t()) | {:ok, nil}
+        ) :: result(Mongo.FindAndModifyResult.t())
   def find_one_and_update(topology_pid, coll, filter, update, opts \\ []) do
     _ = modifier_docs(update, :update)
 
