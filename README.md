@@ -10,7 +10,7 @@
 
 ## Features
 
-- supports MongoDB versions 4.x, 5.x, 6.x
+- supports MongoDB versions 4.x, 5.x, 6.x, 7.x
 - connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
 - streaming cursors
 - performant ObjectID generation
@@ -551,7 +551,11 @@ The driver supports two compressors
 
 To activate zstd compression, simply add `{:ezstd, "~> 1.1"}` to the dependencies of your `mix.exs` file. 
 The driver will provide the related code. After activating the zstd compressor can be used by appending 
-the `compressors=zstd` to the URL connection string.
+the `compressors=zstd` to the URL connection string:
+
+```elixir
+{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/my_database?compressors=zstd&maxPoolSize=10")
+```
 
 The driver uses compression for the following functions:
 
