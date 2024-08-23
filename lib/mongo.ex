@@ -442,10 +442,9 @@ defmodule Mongo do
       |> filter_nils()
 
     opts =
-      Keyword.drop(
-        opts,
-        ~w(explain allow_disk_use collation bypass_document_validation hint comment read_concern)a
-      )
+      opts
+      |> Keyword.drop(~w(explain allow_disk_use collation bypass_document_validation hint comment read_concern)a)
+      |> Keyword.put_new(:compression, true)
 
     get_stream(topology_pid, cmd, opts)
   end
@@ -496,10 +495,9 @@ defmodule Mongo do
       |> filter_nils()
 
     opts =
-      Keyword.drop(
-        opts,
-        ~w(bypass_document_validation max_time projection return_document sort upsert collation w j wtimeout)a
-      )
+      opts
+      |> Keyword.drop(~w(bypass_document_validation max_time projection return_document sort upsert collation w j wtimeout)a)
+      |> Keyword.put_new(:compression, true)
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       {:ok,
@@ -559,10 +557,9 @@ defmodule Mongo do
       |> filter_nils()
 
     opts =
-      Keyword.drop(
-        opts,
-        ~w(bypass_document_validation max_time projection return_document sort upsert collation)a
-      )
+      opts
+      |> Keyword.drop(~w(bypass_document_validation max_time projection return_document sort upsert collation)a)
+      |> Keyword.put_new(:compression, true)
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
       {:ok,
@@ -607,7 +604,10 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    opts = Keyword.drop(opts, ~w(max_time projection sort collation)a)
+    opts =
+      opts
+      |> Keyword.drop(~w(max_time projection sort collation)a)
+      |> Keyword.put_new(:compression, true)
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts), do: {:ok, doc["value"]}
   end
@@ -626,7 +626,10 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    opts = Keyword.drop(opts, ~w(limit skip hint collation)a)
+    opts =
+      opts
+      |> Keyword.drop(~w(limit skip hint collation)a)
+      |> Keyword.put_new(:compression, true)
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :read, opts) do
       {:ok, trunc(doc["n"])}
@@ -721,7 +724,10 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    opts = Keyword.drop(opts, ~w(max_time)a)
+    opts =
+      opts
+      |> Keyword.drop(~w(max_time)a)
+      |> Keyword.put_new(:compression, true)
 
     with {:ok, doc} <- issue_command(topology_pid, cmd, :read, opts), do: {:ok, doc["values"]}
   end
@@ -783,7 +789,10 @@ defmodule Mongo do
 
     drop = ~w(limit hint single_batch read_concern max min collation return_key show_record_id tailable no_cursor_timeout await_data projection comment skip sort)a
 
-    opts = Keyword.drop(opts, drop)
+    opts =
+      opts
+      |> Keyword.drop(drop)
+      |> Keyword.put_new(:compression, true)
 
     try do
       get_stream(topology_pid, cmd, opts)
@@ -858,7 +867,7 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, Keyword.put_new(opts, :compression, true)) do
       case doc do
         %{"writeErrors" => _} ->
           {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
@@ -913,7 +922,7 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    case issue_command(topology_pid, cmd, :write, opts) do
+    case issue_command(topology_pid, cmd, :write, Keyword.put_new(opts, :compression, true)) do
       {:ok, %{"writeErrors" => _} = doc} ->
         {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
 
@@ -989,7 +998,7 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, Keyword.put_new(opts, :compression, true)) do
       case doc do
         %{"writeErrors" => _} ->
           {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
@@ -1171,7 +1180,7 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, Keyword.put_new(opts, :compression, true)) do
       case doc do
         %{"writeErrors" => write_errors} ->
           {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: write_errors}}
@@ -1243,7 +1252,7 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, doc} <- issue_command(topology_pid, cmd, :write, Keyword.put_new(opts, :compression, true)) do
       case doc do
         %{"writeErrors" => _} ->
           {:error, %Mongo.WriteError{n: doc["n"], ok: doc["ok"], write_errors: doc["writeErrors"]}}
@@ -1300,7 +1309,7 @@ defmodule Mongo do
       Mongo.limits(top)
 
       {:ok, %{
-         compression: nil,
+         compression: [],
          logical_session_timeout: 30,
          max_bson_object_size: 16777216,
          max_message_size_bytes: 48000000,
@@ -1381,7 +1390,7 @@ defmodule Mongo do
       ]
       |> filter_nils()
 
-    with {:ok, _doc} <- issue_command(topology_pid, cmd, :write, opts) do
+    with {:ok, _doc} <- issue_command(topology_pid, cmd, :write, Keyword.put_new(opts, :compression, true)) do
       :ok
     end
   end

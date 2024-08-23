@@ -213,7 +213,7 @@ defmodule Mongo.MongoDBConnection do
   end
 
   defp hand_shake(opts, state) do
-    cmd = handshake_command(state, client(opts[:appname] || "elixir-driver"))
+    cmd = handshake_command(state, client(opts[:appname] || "elixir-driver"), Keyword.get(opts, :compressors, []))
 
     case Utils.command(-1, cmd, state) do
       {:ok, _flags, %{"ok" => ok, "maxWireVersion" => version} = response} when ok == 1 ->
@@ -342,14 +342,22 @@ defmodule Mongo.MongoDBConnection do
   defp send_command({:command, cmd}, opts, %{use_op_msg: true} = state) do
     {command_name, data} = provide_cmd_data(cmd)
     db = opts[:database] || state.database
+    compressor = opts[:compressor]
     cmd = cmd ++ ["$db": db]
     flags = Keyword.get(opts, :flags, 0x0)
 
     # MongoDB 3.6 only allows certain command arguments to be provided this way. These are:
     op =
       case pulling_out?(cmd, :documents) || pulling_out?(cmd, :updates) || pulling_out?(cmd, :deletes) do
-        nil -> op_msg(flags: flags, sections: [section(payload_type: 0, payload: payload(doc: cmd))])
-        key -> pulling_out(cmd, flags, key)
+        nil ->
+          if compressor != nil do
+            op_msg_compressed(flags: flags, sections: [section(payload_type: 0, payload: payload(doc: cmd))], compressor: compressor)
+          else
+            op_msg(flags: flags, sections: [section(payload_type: 0, payload: payload(doc: cmd))])
+          end
+
+        key ->
+          pulling_out(cmd, flags, key, compressor)
       end
 
     # overwrite temporary timeout by timeout option
@@ -427,14 +435,20 @@ defmodule Mongo.MongoDBConnection do
     end
   end
 
-  defp pulling_out(cmd, flags, key) when is_atom(key) do
+  defp pulling_out(cmd, flags, key, compressor) when is_atom(key) do
     docs = Keyword.get(cmd, key)
     cmd = Keyword.delete(cmd, key)
 
     payload_0 = section(payload_type: 0, payload: payload(doc: cmd))
     payload_1 = section(payload_type: 1, payload: payload(sequence: sequence(identifier: to_string(key), docs: docs)))
 
-    op_msg(flags: flags, sections: [payload_0, payload_1])
+    case compressor != nil do
+      false ->
+        op_msg(flags: flags, sections: [payload_0, payload_1])
+
+      true ->
+        op_msg_compressed(flags: flags, sections: [payload_0, payload_1], compressor: compressor)
+    end
   end
 
   defp flags(flags) do
@@ -444,12 +458,12 @@ defmodule Mongo.MongoDBConnection do
     end)
   end
 
-  defp handshake_command(%{stable_api: nil}, client) do
-    [ismaster: 1, helloOk: true, client: client]
+  defp handshake_command(%{stable_api: nil}, client, compression) do
+    [ismaster: 1, helloOk: true, client: client, compression: compression]
   end
 
-  defp handshake_command(%{stable_api: stable_api}, client) do
-    [client: client]
+  defp handshake_command(%{stable_api: stable_api}, client, compression) do
+    [client: client, compression: compression]
     |> StableVersion.merge_stable_api(stable_api)
     |> Keyword.put(:hello, 1)
   end

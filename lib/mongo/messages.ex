@@ -14,9 +14,12 @@ defmodule Mongo.Messages do
   import Record
   import Mongo.BinaryUtils
 
+  alias Mongo.Compressor
+
   @op_reply 1
   @op_query 2004
   @op_msg_code 2013
+  @op_compressed 2012
 
   @query_flags [
     tailable_cursor: 0x2,
@@ -46,6 +49,7 @@ defmodule Mongo.Messages do
   defrecord :payload, [:doc, :sequence]
   defrecord :section, [:payload_type, :payload]
   defrecord :op_msg, [:flags, :sections]
+  defrecord :op_msg_compressed, [:flags, :sections, :compressor]
 
   @decoder_module Application.compile_env(:mongodb_driver, :decoder, BSON.Decoder)
 
@@ -84,7 +88,10 @@ defmodule Mongo.Messages do
       @op_msg_code ->
         {:ok, response_to, decode_msg(response), rest}
 
-      _ ->
+      @op_compressed ->
+        decode_compression(response_to, binary)
+
+      _error ->
         :error
     end
   end
@@ -137,6 +144,22 @@ defmodule Mongo.Messages do
     end
   end
 
+  defp decode_compression(response_to, binary) do
+    <<original_opcode::int32(), uncompressed_size::int32(), compressor_id::uint8(), compressed::binary>> = binary
+    <<response::binary(uncompressed_size), rest::binary>> = Compressor.uncompress(compressed, compressor_id)
+
+    case original_opcode do
+      @op_reply ->
+        {:ok, response_to, decode_reply(response), rest}
+
+      @op_msg_code ->
+        {:ok, response_to, decode_msg(response), rest}
+
+      _error ->
+        :error
+    end
+  end
+
   defp cstring(binary) do
     split(binary, [])
   end
@@ -161,12 +184,25 @@ defmodule Mongo.Messages do
     [encode_header(header) | iodata]
   end
 
+  def encode(request_id, op_msg_compressed(compressor: compressor) = op) do
+    payload = encode_op(op)
+    uncompressed_size = IO.iodata_length(payload)
+    {compressor_id, compressed_payload} = Compressor.compress(payload, compressor)
+    iodata = [<<@op_msg_code::int32()>>, <<uncompressed_size::int32()>>, <<compressor_id::uint8()>> | compressed_payload]
+    header = msg_header(length: IO.iodata_length(iodata) + @header_size, request_id: request_id, response_to: 0, op_code: @op_compressed)
+    [encode_header(header) | iodata]
+  end
+
   defp encode_header(msg_header(length: length, request_id: request_id, response_to: response_to, op_code: op_code)) do
     <<length::int32(), request_id::int32(), response_to::int32(), op_code::int32()>>
   end
 
   defp encode_op(op_query(flags: flags, coll: coll, num_skip: num_skip, num_return: num_return, query: query, select: select)) do
     [<<blit_flags(:query, flags)::int32()>>, coll, <<0x00, num_skip::int32(), num_return::int32()>>, BSON.Encoder.document(query), select]
+  end
+
+  defp encode_op(op_msg_compressed(flags: flags, sections: sections)) do
+    [<<blit_flags(:msg, flags)::int32()>> | encode_sections(sections)]
   end
 
   defp encode_op(op_msg(flags: flags, sections: sections)) do

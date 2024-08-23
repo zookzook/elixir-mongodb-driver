@@ -37,7 +37,8 @@ defmodule Mongodb.Mixfile do
       {:patch, "~> 0.12.0", only: [:dev, :test]},
       {:jason, "~> 1.3", only: [:dev, :test]},
       {:credo, "~> 1.7.0", only: [:dev, :test], runtime: false},
-      {:ex_doc, "== 0.24.1", only: :dev, runtime: false}
+      {:ex_doc, "== 0.24.1", only: :dev, runtime: false},
+      {:ezstd, "~> 1.1", optional: true}
     ]
   end
 

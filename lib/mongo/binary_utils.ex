@@ -21,6 +21,10 @@ defmodule Mongo.BinaryUtils do
     quote do: signed - little - 8
   end
 
+  defmacro uint8 do
+    quote do: unsigned - little - 8
+  end
+
   defmacro float64 do
     quote do: float - little - 64
   end

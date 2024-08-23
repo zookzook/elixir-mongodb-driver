@@ -481,7 +481,11 @@ defmodule Mongo.Session do
       |> ReadPreference.add_read_preference(opts)
       |> filter_nils()
 
-    client_opts = merge_timeout(client_opts, opts)
+    client_opts =
+      client_opts
+      |> merge_timeout(opts)
+      |> merge_compression(opts)
+
     {:keep_state_and_data, {:ok, conn, cmd, client_opts}}
   end
 
@@ -497,7 +501,11 @@ defmodule Mongo.Session do
       |> filter_nils()
       |> Keyword.drop(~w(writeConcern)a)
 
-    client_opts = merge_timeout(client_opts, opts)
+    client_opts =
+      client_opts
+      |> merge_timeout(opts)
+      |> merge_compression(opts)
+
     {:next_state, :transaction_in_progress, {:ok, conn, cmd, client_opts}}
   end
 
@@ -510,7 +518,11 @@ defmodule Mongo.Session do
       )
       |> Keyword.drop(~w(writeConcern readConcern)a)
 
-    client_opts = merge_timeout(client_opts, opts)
+    client_opts =
+      client_opts
+      |> merge_timeout(opts)
+      |> merge_compression(opts)
+
     {:keep_state_and_data, {:ok, conn, result, client_opts}}
   end
 
@@ -725,6 +737,16 @@ defmodule Mongo.Session do
 
       timeout ->
         Keyword.put_new(opts, :timeout, timeout)
+    end
+  end
+
+  defp merge_compression(opts, default_ops) do
+    case Keyword.get(default_ops, :compressor) do
+      nil ->
+        opts
+
+      compressor ->
+        Keyword.put(opts, :compressor, compressor)
     end
   end
 end

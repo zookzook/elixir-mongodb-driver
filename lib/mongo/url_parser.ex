@@ -10,6 +10,12 @@ defmodule Mongo.UrlParser do
 
   @mongo_url_regex ~r/^mongodb(?<srv>\+srv)?:\/\/(?:(?<username>[^:]+):(?<password>[^@]+)@)?(?<seeds>[^\/\?]+)(?:\/(?<database>[^?]*)?(?:\?(?<options>(?:[^\s=]+=[^\s&]*)+))?)?$/
 
+  if Code.ensure_loaded?(:ezstd) do
+    @compressors ["zstd", "zlib"]
+  else
+    @compressors ["zlib"]
+  end
+
   # https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options
   @mongo_options %{
     # Path options
@@ -48,6 +54,7 @@ defmodule Mongo.UrlParser do
     "heartbeatFrequencyMS" => :number,
     "retryWrites" => ["true", "false"],
     "tls" => ["true", "false"],
+    "compressors" => @compressors,
     "uuidRepresentation" => ["standard", "csharpLegacy", "javaLegacy", "pythonLegacy"],
     # Elixir Driver options
     "type" => ["unknown", "single", "replicaSetNoPrimary", "sharded"]
@@ -60,6 +67,12 @@ defmodule Mongo.UrlParser do
   }
 
   defp parse_option_value(_key, ""), do: nil
+
+  defp parse_option_value("compressors", values) do
+    values
+    |> String.split(",")
+    |> Enum.filter(fn compressor -> compressor in @compressors end)
+  end
 
   defp parse_option_value(key, value) do
     case @mongo_options[key] do

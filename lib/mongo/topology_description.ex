@@ -101,19 +101,19 @@ defmodule Mongo.TopologyDescription do
           []
       end
 
-    addr =
+    server =
       servers
       ## only valid servers
       |> Enum.filter(fn {_, %{type: type}} -> type != :unknown end)
-      |> Enum.map(fn {server, _} -> server end)
+      |> Enum.map(fn {server, description} -> {server, description.compression} end)
       |> Enum.take_random(1)
 
-    case addr do
+    case server do
       [] ->
         :empty
 
-      [result] ->
-        {:ok, {result, opts}}
+      [{addr, compression}] ->
+        {:ok, {addr, merge_compression(opts, compression)}}
     end
   end
 
@@ -147,18 +147,31 @@ defmodule Mongo.TopologyDescription do
           Keyword.put(opts, :read_preference, prefs)
       end
 
-    addr =
+    server =
       servers
       |> Enum.take_random(1)
-      |> Enum.map(fn {server, _} -> server end)
+      |> Enum.map(fn {server, description} -> {server, description.compression} end)
 
-    # check now three possible cases
-    case addr do
+    case server do
       [] ->
         :empty
 
-      [result] ->
-        {:ok, {result, opts}}
+      [{addr, compression}] ->
+        {:ok, {addr, merge_compression(opts, compression)}}
+    end
+  end
+
+  def merge_compression(opts, []) do
+    opts
+  end
+
+  def merge_compression(opts, [compressor | _xs]) do
+    case Keyword.get(opts, :compression, false) do
+      true ->
+        Keyword.put(opts, :compressor, compressor)
+
+      false ->
+        opts
     end
   end
 
