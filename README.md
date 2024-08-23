@@ -29,6 +29,7 @@
 - support for complex and nested documents using the `Mongo.Collection` macros
 - support for streaming protocol ([See](https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-monitoring.rst#streaming-protocol))
 - support for migration scripts
+- support for compression for zlib and zstd ([See](https://github.com/mongodb/specifications/blob/07b7649cc5c805ef4f85fccddf39226add7114e6/source/compression/OP_COMPRESSED.md))
 
 ## mongodb_ecto
 
@@ -540,6 +541,52 @@ In a Phoenix application with installed Phoenix Dashboard the metrics can be use
 ```
 
 Then you see for each collection the execution time for each different command in the Dashboard metric page.
+
+## Network compression
+
+The driver supports two compressors
+
+* zlib, which is supported by Erlang 
+* zstd, which is optional and supported by https://github.com/silviucpp/ezstd bindings.
+
+To activate zstd compression, simply add `{:ezstd, "~> 1.1"}` to the dependencies of your `mix.exs` file. 
+The driver will provide the related code. After activating the zstd compressor can be used by appending 
+the `compressors=zstd` to the URL connection string.
+
+The driver uses compression for the following functions:
+
+* `Mongo.aggregate/4`
+* `Mongo.find/4`
+* `Mongo.insert_one/4`
+* `Mongo.insert_many/4`
+* `Mongo.update/4`
+* `Mongo.update_documents/6`
+* `Mongo.find_one_and_update/5`
+* `Mongo.find_one_and_replace/5`
+* `Mongo.find_one_and_delete/4`
+* `Mongo.count/4`
+* `Mongo.distinct/5`
+* `Mongo.delete_documents/5`
+* `Mongo.create/4`
+
+You can disable the compression for a single function by using the option `compression: false`, for example:
+
+```
+Mongo.find(conn, "tasks", %{}, compression: false)
+```
+The compression significantly reduces the amount of data, while increasing the load on the CPU.
+This is certainly interesting for environments in which network transmission has to be paid for.
+
+zlib compression requires a greater penalty in terms of speed than zstd compression. 
+The zstd compression offers a good compromise between compression rate and speed and 
+is undoubtedly supported by all current MongoDB.
+
+The speed also depends on the `batch_size` attribute. A higher speed is achieved for certain batch sizes. 
+Simple experiments can be carried out here to determine which size shortens the duration of the queries:
+
+```elixir
+:timer.tc(fn -> Mongo.find(conn, "tasks", %{}, limit: 30_000, batch_size: 1000) |> Stream.reject(fn _x -> true end) |> Stream.run() end)
+```
 
 ## Connection Pooling
 
@@ -1176,10 +1223,6 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 
 - For `--sslMode` you can use one of `allowSSL` or `preferSSL`
 - You can enable any other options you want when starting `mongod`
-
-## Special Thanks
-
-Special thanks to [JetBrains](https://www.jetbrains.com/?from=elixir-mongodb-driver) for providing a free JetBrains Open Source license for their complete toolbox.
 
 ## Copyright and License
 
