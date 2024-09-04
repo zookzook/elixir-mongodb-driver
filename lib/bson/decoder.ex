@@ -190,6 +190,10 @@ defmodule BSON.DecoderGenerator do
         {:NaN, rest}
       end
 
+      defp type(@type_float, <<0, 0, 0, 0, 0, 0, 248::little-integer-size(8), 255::little-integer-size(8), rest::binary>>) do
+        {:NaN, rest}
+      end
+
       defp type(@type_float, <<1, 0, 0, 0, 0, 0, 240::little-integer-size(8), 127::little-integer-size(8), rest::binary>>) do
         {:NaN, rest}
       end
