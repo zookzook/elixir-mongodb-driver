@@ -418,7 +418,19 @@ defmodule Mongo do
   end
 
   @doc """
-  Performs aggregation operation using the aggregation pipeline.
+  Performs aggregation operation using the aggregation pipeline and returns a Mongo.Stream.
+  It should be noted that code that uses the paginated query results without engaging Mongo.Streams Enumerable behavior
+  can result in the sessions hanging around and causing resource exhaustion.
+
+    Example:
+      # Results in an open session
+      %Mongo.Stream{docs: docs} = Mongo.aggregate(@topology, collection, pipeline, opts)
+      docs |> Enum.map(fn elem -> elem end)
+
+      # Results in a closed session via the Enumerable protocol
+      Mongo.aggregate(@topology, collection, pipeline, opts)
+      |> Enum.map(fn elem -> elem end)
+
 
   For all options see [Options](https://docs.mongodb.com/manual/reference/command/aggregate/#aggregate)
 

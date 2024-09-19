@@ -1,5 +1,8 @@
 defmodule Mongo.Stream do
-  @moduledoc false
+  @moduledoc """
+    This module provides a stream implementation that automatically checks out a session when the stream is started and an Enumerable
+    protocol that checks it back in when the stream has been consumed.
+  """
 
   alias Mongo.Session
   alias Mongo.Error
