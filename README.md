@@ -60,32 +60,26 @@ Then run `mix deps.get` to fetch dependencies.
 
 ```elixir
 # Starts an unpooled connection
-{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/my-database")
+{:ok, top} = Mongo.start_link(url: "mongodb://localhost:27017/my-database")
 
-# Gets an enumerable cursor for the results
-cursor = Mongo.find(conn, "test-collection", %{})
-
-cursor
+top
+|> Mongo.find("test-collection", %{})
 |> Enum.to_list()
-|> IO.inspect
 ```
 
 To specify a username and password, use the `:username`, `:password`, and `:auth_source` options.
 
 ```elixir
 # Starts an unpooled connection
-{:ok, conn} =
+{:ok, top} =
     Mongo.start_link(url: "mongodb://localhost:27017/db-name",
                      username: "test_user",
                      password: "hunter2",
                      auth_source: "admin_test")
 
-# Gets an enumerable cursor for the results
-cursor = Mongo.find(conn, "test-collection", %{})
-
-cursor
+top
+|> Mongo.find("test-collection", %{})
 |> Enum.to_list()
-|> IO.inspect
 ```
 
 For secure requests, you may need to add some more options; see the "AWS, TLS and Erlang SSL ciphers" section below.
@@ -585,7 +579,7 @@ The driver will provide the related code. After activating the zstd compressor c
 the `compressors=zstd` to the URL connection string:
 
 ```elixir
-{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/my_database?compressors=zstd&maxPoolSize=10")
+{:ok, top} = Mongo.start_link(url: "mongodb://localhost:27017/my_database?compressors=zstd&maxPoolSize=10")
 ```
 
 The driver uses compression for the following functions:
@@ -607,7 +601,7 @@ The driver uses compression for the following functions:
 You can disable the compression for a single function by using the option `compression: false`, for example:
 
 ```
-Mongo.find(conn, "tasks", %{}, compression: false)
+Mongo.find(top, "tasks", %{}, compression: false) |> Enum.to_list()
 ```
 The compression significantly reduces the amount of data, while increasing the load on the CPU.
 This is certainly interesting for environments in which network transmission has to be paid for.
@@ -620,7 +614,7 @@ The speed also depends on the `batch_size` attribute. A higher speed is achieved
 Simple experiments can be carried out here to determine which size shortens the duration of the queries:
 
 ```elixir
-:timer.tc(fn -> Mongo.find(conn, "tasks", %{}, limit: 30_000, batch_size: 1000) |> Stream.reject(fn _x -> true end) |> Stream.run() end)
+:timer.tc(fn -> Mongo.find(top, "tasks", %{}, limit: 30_000, batch_size: 1000) |> Stream.reject(fn _x -> true end) |> Stream.run() end)
 ```
 
 ## Connection Pooling
@@ -631,24 +625,21 @@ function calls in `Mongo` using the pool:
 
 ```elixir
 # Starts an pooled connection
-{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/db-name", pool_size: 3)
+{:ok, top} = Mongo.start_link(url: "mongodb://localhost:27017/db-name", pool_size: 3)
 
-# Gets an enumerable cursor for the results
-cursor = Mongo.find(conn, "test-collection", %{})
-
-cursor
+# Gets an enumerable stream for the results
+top
+|> Mongo.find("test-collection", %{})
 |> Enum.to_list()
-|> IO.inspect
 ```
 
 If you're using pooling it is recommended to add it to your application supervisor:
 
 ```elixir
 def start(_type, _args) do
-  import Supervisor.Spec
 
   children = [
-    worker(Mongo, [[name: :mongo, database: "test", pool_size: 3]])
+    {Mongo, [name: :mongo_db, url: "mongodb://localhost:27017/test", pool_size: 3]}
   ]
 
   opts = [strategy: :one_for_one, name: MyApp.Supervisor]
@@ -656,7 +647,8 @@ def start(_type, _args) do
 end
 ```
 
-Due to the mongodb specification, an additional connection is always set up for the monitor process.
+We can use the `:mongo_db` atom instead of a process pid. This allows us to call the `Mongo` functions directly from
+every place in the code.
 
 ## Replica Sets
 
@@ -1019,16 +1011,16 @@ for reading from change streams:
 ```elixir
 seeds = ["hostname1.net:27017", "hostname2.net:27017", "hostname3.net:27017"]
 {:ok, top} = Mongo.start_link(database: "my-db", seeds: seeds, appname: "getting rich")
-cursor =  Mongo.watch_collection(top, "accounts", [], fn doc -> IO.puts "New Token #{inspect doc}" end, max_time: 2_000 )
-cursor |> Enum.each(fn doc -> IO.puts inspect doc end)
+stream =  Mongo.watch_collection(top, "accounts", [], fn doc -> IO.puts "New Token #{inspect doc}" end, max_time: 2_000 )
+Enum.each(stream, fn doc -> IO.puts inspect doc end)
 ```
 
 An example with a spawned process that sends messages to the monitor process:
 
 ```elixir
 def for_ever(top, monitor) do
-    cursor = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end)
-    cursor |> Enum.each(fn doc -> send(monitor, {:change, doc}) end)
+    stream = Mongo.watch_collection(top, "users", [], fn doc -> send(monitor, {:token, doc}) end)
+    Enum.each(stream, fn doc -> send(monitor, {:change, doc}) end)
 end
 
 spawn(fn -> for_ever(top, self()) end)
@@ -1088,7 +1080,7 @@ bulk = "bulk"
        |> OrderedBulk.delete_one(%{kind: "cat"})
        |> OrderedBulk.delete_one(%{kind: "cat"})
 
-result = Mongo.BulkWrite.write(@topology, bulk, w: 1)
+result = Mongo.BulkWrite.write(top, bulk, w: 1)
 ```
 
 In the following example we import 1.000.000 integers into the MongoDB using the stream api:
@@ -1219,9 +1211,9 @@ to `Logger.info`:
 
 ```elixir
 iex> Mongo.EventHandler.start()
-iex> {:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/test")
+iex> {:ok, top} = Mongo.start_link(url: "mongodb://localhost:27017/test")
 {:ok, #PID<0.226.0>}
- iex> Mongo.find_one(conn, "test", %{})
+ iex> Mongo.find_one(top, "test", %{}) |> Enum.to_list()
 [info] Received command: %Mongo.Events.CommandStartedEvent{command: [find: "test", ...
 [info] Received command: %Mongo.Events.CommandSucceededEvent{command_name: :find, ...
 ```
