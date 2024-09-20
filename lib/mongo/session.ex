@@ -62,6 +62,8 @@ defmodule Mongo.Session do
 
   For more information about causal consistency see the [officially documentation](https://docs.mongodb.com/manual/core/read-isolation-consistency-recency/#causal-consistency).
 
+  Note that Mongo.Stream implements the Enumerable protocol and the reduce/3 function calls Mongo.Stream.checkin_session/3 after the stream is exhausted.
+
   If you want to use transaction, then you need to create a session as well:
 
       alias Mongo.Session
