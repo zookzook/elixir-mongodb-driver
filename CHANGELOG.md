@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.4.1...v1.5.0) (2024-09-20)
+
+
+### Features
+
+* added support for op_compressed (zlib and zstd) ([cf32c87](https://github.com/zookzook/elixir-mongodb-driver/commit/cf32c8739ef88175a0c914bd2ef96419f13d992f))
+
+
+### Bug Fixes
+
+* **update/4:** improve Mongo.update/4 function ([#245](https://github.com/zookzook/elixir-mongodb-driver/issues/245)) ([50b511d](https://github.com/zookzook/elixir-mongodb-driver/commit/50b511d01b7ecd3350a3b21110d15fa0fbbb6fb6))
+
 ## [1.4.1](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.4.0...v1.4.1) (2024-05-02)
 
 
