@@ -113,19 +113,25 @@ Failing operations return a `{:error, error}` tuple where `error` is a
 Using `$and`
 
 ```elixir
-Mongo.find(:mongo, "users", %{"$and" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
+@topology
+|> Mongo.find("users", %{"$and" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
+|> Enum.to_list()
 ```
 
 Using `$or`
 
 ```elixir
-Mongo.find(:mongo, "users", %{"$or" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
+@topology
+|> Mongo.find("users", %{"$or" => [%{email: "my@email.com"}, %{first_name: "first_name"}]})
+|> Enum.to_list()
 ```
 
 Using `$in`
 
 ```elixir
-Mongo.find(:mongo, "users", %{email: %{"$in" => ["my@email.com", "other@email.com"]}})
+@topology
+|> Mongo.find("users", %{email: %{"$in" => ["my@email.com", "other@email.com"]}})
+|> Enum.to_list()
 ```
 
 ## How to use the `Mongo.Stream`?
@@ -148,7 +154,7 @@ can take place automatically:
 ```elixir
 @topology
 |> Mongo.aggregate(collection, pipeline, opts)
-|> Enum.map(fn elem -> elem end)
+|> Enum.to_list()
 ```
 
 ### Inserts
@@ -218,7 +224,9 @@ In those cases, driver users should represent documents using a list of tuples (
 order. Example:
 
 ```elixir
-Mongo.find(top, "users", %{}, sort: [last_name: 1, first_name: 1, _id: 1])
+@topology
+|> Mongo.find("users", %{}, sort: [last_name: 1, first_name: 1, _id: 1])
+|> Enum.to_list()
 ```
 
 The query above will sort users by last name, then by first name and finally by ID. If an Elixir map had been used to
@@ -962,14 +970,14 @@ You can use the `:timeout` as a global option to override the default value:
 
 ```elixir
 # Starts an pooled connection
-{:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/db-name", timeout: 60_000)
+{:ok, top} = Mongo.start_link(url: "mongodb://localhost:27017/db-name", timeout: 60_000)
 ```
 
 Each single connection uses `60_000` (60 seconds) as the timeout value instead of `15_000`. But you can override the default value by
 using the `:timeout` option, when running a single command:
 
-```elixr
-Mongo.find(conn, "dogs", %{}, timeout: 120_000)
+```elixir
+Mongo.find(top, "dogs", %{}, timeout: 120_000)
 ```
 
 Now the driver will use 120 seconds as the timeout for the single query.
@@ -1034,7 +1042,7 @@ To create indexes you can call the function `Mongo.create_indexes/4`:
 
 ```elixir
 indexes =  [[key: [files_id: 1, n: 1], name: "files_n_index", unique: true]]
-Mongo.create_indexes(topology_pid, "my_collection", indexes, opts)
+Mongo.create_indexes(top, "my_collection", indexes, opts)
 ```
 
 You specify the `indexes` parameter as a keyword list with all options described in the documentation of the [createIndex](https://docs.mongodb.com/manual/reference/command/createIndexes/#dbcmd.createIndexes) command.
@@ -1080,7 +1088,7 @@ bulk = "bulk"
        |> OrderedBulk.delete_one(%{kind: "cat"})
        |> OrderedBulk.delete_one(%{kind: "cat"})
 
-result = Mongo.BulkWrite.write(:mongo, bulk, w: 1)
+result = Mongo.BulkWrite.write(@topology, bulk, w: 1)
 ```
 
 In the following example we import 1.000.000 integers into the MongoDB using the stream api:
@@ -1214,8 +1222,8 @@ iex> Mongo.EventHandler.start()
 iex> {:ok, conn} = Mongo.start_link(url: "mongodb://localhost:27017/test")
 {:ok, #PID<0.226.0>}
  iex> Mongo.find_one(conn, "test", %{})
-                                      [info] Received command: %Mongo.Events.CommandStartedEvent{command: [find: "test", ...
-                                                                                                                 [info] Received command: %Mongo.Events.CommandSucceededEvent{command_name: :find, ...
+[info] Received command: %Mongo.Events.CommandStartedEvent{command: [find: "test", ...
+[info] Received command: %Mongo.Events.CommandSucceededEvent{command_name: :find, ...
 ```
 
 ## Testing
