@@ -17,17 +17,17 @@
 - aggregation pipeline
 - replica sets
 - support for SCRAM-SHA-256 (MongoDB 4.x)
-- support for GridFS ([See](https://github.com/mongodb/specifications/blob/master/source/gridfs/gridfs-spec.rst))
-- support for change streams api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.rst))
-- support for bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.rst#write))
-- support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.rst))
-- support for driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.rst))
-- support for command monitoring ([See](https://github.com/mongodb/specifications/blob/master/source/command-monitoring/command-monitoring.rst))
-- support for retryable reads ([See](https://github.com/mongodb/specifications/blob/master/source/retryable-reads/retryable-reads.rst))
-- support for retryable writes ([See](https://github.com/mongodb/specifications/blob/master/source/retryable-writes/retryable-writes.rst))
+- support for GridFS ([See](https://github.com/mongodb/specifications/blob/master/source/gridfs/gridfs-spec.md))
+- support for change streams api ([See](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.md))
+- support for bulk writes ([See](https://github.com/mongodb/specifications/blob/master/source/crud/crud.md#write))
+- support for driver sessions ([See](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.md))
+- support for driver transactions ([See](https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.md))
+- support for command monitoring ([See](https://github.com/mongodb/specifications/blob/master/source/command-logging-and-monitoring/command-logging-and-monitoring.md))
+- support for retryable reads ([See](https://github.com/mongodb/specifications/blob/master/source/retryable-reads/retryable-reads.md))
+- support for retryable writes ([See](https://github.com/mongodb/specifications/blob/master/source/retryable-writes/retryable-writes.md))
 - support for simple structs using the Mongo.Encoder protocol
 - support for complex and nested documents using the `Mongo.Collection` macros
-- support for streaming protocol ([See](https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-monitoring.rst#streaming-protocol))
+- support for streaming protocol ([See](https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-monitoring.md#streaming-protocol))
 - support for migration scripts
 - support for compression for zlib and zstd ([See](https://github.com/mongodb/specifications/blob/07b7649cc5c805ef4f85fccddf39226add7114e6/source/compression/OP_COMPRESSED.md))
 
@@ -50,7 +50,7 @@ Add `mongodb_driver` to your mix.exs `deps`.
 
 ```elixir
 defp deps do
-  [{:mongodb_driver, "~> 1.4.0"}]
+  [{:mongodb_driver, "~> 1.5.0"}]
 end
 ```
 
@@ -126,6 +126,29 @@ Using `$in`
 
 ```elixir
 Mongo.find(:mongo, "users", %{email: %{"$in" => ["my@email.com", "other@email.com"]}})
+```
+
+## How to use the `Mongo.Stream`?
+
+Most query functions return a `Mongo.Stream` struct that implements the `Enumerable` protocol. The module checks out 
+the session and streams the batches from the server until the last batch has been received. 
+The session is then checked in for reuse. [Sessions](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.md) are 
+temporary and reusable data structures, e.g. to support transactions. They are required by the Mongo DB driver specification.
+
+The use of internal structures of the `Mongo.Stream` struct is therefore not planned. For example, the following code results in an open session and the `docs` will only contain the first batch:
+
+```elixir
+%Mongo.Stream{docs: docs} = Mongo.aggregate(@topology, collection, pipeline, opts)
+Enum.map(docs, fn elem -> elem end)
+```
+
+The `Mongo.Stream` struct should therefore always be processed by an `Enum` or `Stream` function so that the session management 
+can take place automatically:
+
+```elixir
+@topology
+|> Mongo.aggregate(collection, pipeline, opts)
+|> Enum.map(fn elem -> elem end)
 ```
 
 ### Inserts
@@ -1227,6 +1250,9 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 
 - For `--sslMode` you can use one of `allowSSL` or `preferSSL`
 - You can enable any other options you want when starting `mongod`
+
+## Additional articles
+* [Connecting to MongoDB with Elixir](https://zookzook.github.io/2024/08-25.html)
 
 ## Copyright and License
 
