@@ -31,17 +31,6 @@
 - support for migration scripts
 - support for compression for zlib and zstd ([See](https://github.com/mongodb/specifications/blob/07b7649cc5c805ef4f85fccddf39226add7114e6/source/compression/OP_COMPRESSED.md))
 
-## mongodb_ecto
-
-The version 1.4.0 supports the [mongodb_ecto](https://github.com/elixir-mongo/mongodb_ecto) package. 
-A series of changes are required to support the adapter. Some BSON encoders and a missing generic update function were added for the adapter. 
-Most notably, the `find-then-modify` command functions `find_one_and_update` and `find_one_and_replace` now return appropriate 
-`FindAndModifyResult` structs that contain additional write information otherwise neglected, which the adapter requires. 
-
-After upgrading the driver to version 1.4.0 you need to change the code regarding the results of 
-* `Mongo.find_one_and_update`
-* `Mongo.find_one_and_replace`
-
 ## Usage
 
 ### Installation
@@ -167,6 +156,17 @@ Mongo.insert_many(top, "users", [
   %{first_name: "Jane", last_name: "Doe"}
 ])
 ```
+
+## mongodb_ecto
+
+The version 1.4.0 supports the [mongodb_ecto](https://github.com/elixir-mongo/mongodb_ecto) package.
+A series of changes are required to support the adapter. Some BSON encoders and a missing generic update function were added for the adapter.
+Most notably, the `find-then-modify` command functions `find_one_and_update` and `find_one_and_replace` now return appropriate
+`FindAndModifyResult` structs that contain additional write information otherwise neglected, which the adapter requires.
+
+After upgrading the driver to version 1.4.0 you need to change the code regarding the results of
+* `Mongo.find_one_and_update`
+* `Mongo.find_one_and_replace`
 
 ## Data Representation
 
