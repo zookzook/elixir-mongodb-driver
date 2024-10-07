@@ -1253,6 +1253,7 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 
 ## Additional articles
 * [Connecting to MongoDB with Elixir](https://zookzook.github.io/2024/08-25.html)
+* [Using Network Compression with MongoDB in Elixir](https://zookzook.github.io/2024/09-15.html)
 
 ## Copyright and License
 
