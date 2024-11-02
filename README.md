@@ -10,7 +10,7 @@
 
 ## Features
 
-- supports MongoDB versions 4.x, 5.x, 6.x, 7.x
+- supports MongoDB versions 4.x, 5.x, 6.x, 7.x, 8.x
 - connection pooling ([through DBConnection 2.x](https://github.com/elixir-ecto/db_connection))
 - streaming cursors
 - performant ObjectID generation

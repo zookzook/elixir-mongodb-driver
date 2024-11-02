@@ -14,14 +14,14 @@ jobs:
 
     strategy:
       matrix:
-        mongodb-version: ["5.0", "6.0", "7.0"]
+        mongodb-version: ["5.0", "6.0", "7.0", "8.0"]
 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
 
       - name: Start MongoDB
-        uses: supercharge/mongodb-github-action@1.8.0
+        uses: supercharge/mongodb-github-action@1.11.0
         with:
           mongodb-version: ${{ matrix.mongodb-version }}
           mongodb-replica-set: rs_1
