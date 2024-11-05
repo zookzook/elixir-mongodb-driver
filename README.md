@@ -574,12 +574,18 @@ The driver supports two compressors
 * zlib, which is supported by Erlang 
 * zstd, which is optional and supported by https://github.com/silviucpp/ezstd bindings.
 
-To activate zstd compression, simply add `{:ezstd, "~> 1.1"}` to the dependencies of your `mix.exs` file. 
-The driver will provide the related code. After activating the zstd compressor can be used by appending 
-the `compressors=zstd` to the URL connection string:
+To activate zlib compression:
+1. Append `compressors=zlib` to the URL connection string:
+```elixir
+{:ok, top} = Mongo.start_link(url: "mongodb://localhost:27017/db?compressors=zlib")
+```
+
+To activate zstd compression:
+1. Add `{:ezstd, "~> 1.1"}` to the dependencies of your `mix.exs` file. The driver will provide the related code.
+2. Append `compressors=zstd` to the URL connection string:
 
 ```elixir
-{:ok, top} = Mongo.start_link(url: "mongodb://localhost:27017/my_database?compressors=zstd&maxPoolSize=10")
+{:ok, top} = Mongo.start_link(url: "mongodb://localhost:27017/db?compressors=zstd")
 ```
 
 The driver uses compression for the following functions:
