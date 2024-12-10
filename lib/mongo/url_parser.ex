@@ -173,7 +173,7 @@ defmodule Mongo.UrlParser do
 
   defp resolve_txt_record(url_char) do
     case :inet_res.lookup(url_char, :in, :txt) do
-      [txt_record | _] ->
+      [[txt_record] | _] ->
         {:ok, txt_record}
 
       _other ->
