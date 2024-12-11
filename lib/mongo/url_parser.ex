@@ -155,8 +155,8 @@ defmodule Mongo.UrlParser do
          {:ok, {_, _, _, _, _, srv_record}} <-
            :inet_res.getbyname(~c"_mongodb._tcp." ++ url_char, :srv),
          {:ok, host} <- get_host_srv(srv_record),
-         {:ok, {_, _, _, _, _, txt_record}} <- :inet_res.getbyname(url_char, :txt),
-         txt <- "#{orig_options}&#{txt_record}&ssl=true" do
+         {:ok, txt_record} <- resolve_txt_record(url_char),
+         txt <- build_params(orig_options, txt_record) do
       frags
       |> Map.put("seeds", host)
       |> Map.put("options", txt)
@@ -166,6 +166,24 @@ defmodule Mongo.UrlParser do
   end
 
   defp resolve_srv_url(frags), do: frags
+
+  defp build_params(orig_options, nil) do
+    "#{orig_options}&ssl=true"
+  end
+
+  defp build_params(orig_options, txt_record) do
+    "#{orig_options}&#{txt_record}&ssl=true"
+  end
+
+  defp resolve_txt_record(url_char) do
+    case :inet_res.lookup(url_char, :in, :txt) do
+      [[txt_record] | _] ->
+        {:ok, txt_record}
+
+      _other ->
+        {:ok, nil}
+    end
+  end
 
   @spec get_host_srv([{term, term, term, term}]) :: {:ok, String.t()}
   defp get_host_srv(srv) when is_list(srv) do
