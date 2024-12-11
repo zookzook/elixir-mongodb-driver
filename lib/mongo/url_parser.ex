@@ -167,10 +167,12 @@ defmodule Mongo.UrlParser do
 
   defp resolve_srv_url(frags), do: frags
 
+  defp build_params(orig_options, nil) do
+    "#{orig_options}&ssl=true"
+  end
+
   defp build_params(orig_options, txt_record) do
-    [orig_options, txt_record, "ssl=true"]
-    |> Enum.filter(&(&1 != nil))
-    |> Enum.join("&")
+    "#{orig_options}&#{txt_record}&ssl=true"
   end
 
   defp resolve_txt_record(url_char) do
