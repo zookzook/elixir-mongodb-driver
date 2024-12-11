@@ -165,6 +165,8 @@ defmodule Mongo.UrlParser do
     end
   end
 
+  defp resolve_srv_url(frags), do: frags
+
   defp build_params(orig_options, txt_record) do
     [orig_options, txt_record, "ssl=true"]
     |> Enum.filter(&(&1 != nil))
@@ -180,8 +182,6 @@ defmodule Mongo.UrlParser do
         {:ok, nil}
     end
   end
-
-  defp resolve_srv_url(frags), do: frags
 
   @spec get_host_srv([{term, term, term, term}]) :: {:ok, String.t()}
   defp get_host_srv(srv) when is_list(srv) do
