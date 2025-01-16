@@ -11,6 +11,7 @@ defmodule BSON.TypesTest do
 
   @objectid %BSON.ObjectId{value: <<29, 32, 69, 244, 101, 119, 228, 28, 61, 24, 21, 215>>}
   @string "1d2045f46577e41c3d1815d7"
+  @timestamp DateTime.from_unix!(488_654_324)
 
   test "inspect BSON.ObjectId" do
     assert inspect(@objectid) == "#BSON.ObjectId<#{@string}>"
@@ -44,6 +45,21 @@ defmodule BSON.TypesTest do
 
   test "to_string BSON.ObjectId" do
     assert to_string(@objectid) == @string
+  end
+
+  test "BSON.ObjectId.get_timestamp!/1" do
+    value = BSON.ObjectId.get_timestamp!(@objectid)
+    assert DateTime.compare(value, @timestamp) == :eq
+
+    assert_raise FunctionClauseError, fn ->
+      BSON.ObjectId.get_timestamp!("")
+    end
+  end
+
+  test "BSON.ObjectId.get_timestamp/1" do
+    assert {:ok, value} = BSON.ObjectId.get_timestamp(@objectid)
+    assert DateTime.compare(value, @timestamp) == :eq
+    assert BSON.ObjectId.get_timestamp("") == :error
   end
 
   test "inspect BSON.Regex" do
