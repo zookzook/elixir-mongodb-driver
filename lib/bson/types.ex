@@ -142,6 +142,29 @@ defmodule BSON.ObjectId do
   defimpl String.Chars do
     def to_string(id), do: BSON.ObjectId.encode!(id)
   end
+
+  @doc """
+  Extracts timestamp from BSON.ObjectId
+  """
+  def get_timestamp!(%BSON.ObjectId{value: value}), do: do_get_timestamp(value)
+
+  def do_get_timestamp(<<ts::32, _::binary>>) do
+    DateTime.from_unix!(ts)
+  end
+
+  @doc """
+  Extracts timestamp from BSON.ObjectId
+
+  ## Examples
+      {:ok, timestamp} <- BSON.ObjectId.get_timestamp(id)
+  """
+  def get_timestamp(object_id) do
+    try do
+      {:ok, get_timestamp!(object_id)}
+    rescue
+      _ -> :error
+    end
+  end
 end
 
 defmodule BSON.Regex do
