@@ -228,5 +228,17 @@ defmodule Mongo.UrlParserTest do
                ]
              ]
     end
+
+    test "url with directConnection" do
+      for direct_connection <- ["true", "false"] do
+        assert UrlParser.parse_url(url: "mongodb://seed1.domain.com:27017/db_name?directConnection=#{direct_connection}") == [
+                 database: "db_name",
+                 direct_connection: String.to_atom(direct_connection),
+                 seeds: [
+                   "seed1.domain.com:27017"
+                 ]
+               ]
+      end
+    end
   end
 end

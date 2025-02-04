@@ -116,7 +116,7 @@ defmodule Mongo.Topology do
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#configuration
   def init(opts) do
     seeds = Keyword.get(opts, :seeds, [seed(opts)])
-    type = Keyword.get(opts, :type, :unknown)
+    type = TopologyDescription.get_type(opts)
     set_name = Keyword.get(opts, :set_name, nil)
     local_threshold_ms = Keyword.get(opts, :local_threshold_ms, 15)
 

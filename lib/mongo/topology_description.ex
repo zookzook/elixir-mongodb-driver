@@ -175,6 +175,13 @@ defmodule Mongo.TopologyDescription do
     end
   end
 
+  def get_type(opts) do
+    case Keyword.get(opts, :direct_connection, false) do
+      true -> :single
+      false -> Keyword.get(opts, :type, :unknown)
+    end
+  end
+
   defp mongos_servers(%{:servers => servers}) do
     Enum.filter(servers, fn {_, server} -> server.type == :mongos end)
   end
