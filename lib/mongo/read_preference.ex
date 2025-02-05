@@ -141,4 +141,7 @@ defmodule Mongo.ReadPreference do
 
     filter_nils(read_preference)
   end
+
+  def to_topology_single_type({_, %{replica?: true} = _server_description}), do: %{mode: :primaryPreferred}
+  def to_topology_single_type(_), do: nil
 end

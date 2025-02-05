@@ -41,7 +41,8 @@ defmodule Mongo.ServerDescription do
           compression: [compressor_types],
           read_only: boolean(),
           logical_session_timeout: non_neg_integer,
-          supports_retryable_writes: boolean()
+          supports_retryable_writes: boolean(),
+          replica?: boolean()
         }
 
   @empty %{
@@ -69,7 +70,8 @@ defmodule Mongo.ServerDescription do
     compression: [],
     read_only: false,
     logical_session_timeout: 30,
-    support_retryable_writes: false
+    support_retryable_writes: false,
+    replica?: false
   }
 
   def new() do
@@ -147,7 +149,8 @@ defmodule Mongo.ServerDescription do
       compression: map_compressors(hello_response["compression"]),
       read_only: hello_response["readOnly"] || false,
       logical_session_timeout: hello_response["logicalSessionTimeoutMinutes"] || 30,
-      supports_retryable_writes: server_type != :standalone && max_wire_version >= @retryable_wire_version && hello_response["logicalSessionTimeoutMinutes"] != nil
+      supports_retryable_writes: server_type != :standalone && max_wire_version >= @retryable_wire_version && hello_response["logicalSessionTimeoutMinutes"] != nil,
+      replica?: replica?(server_type)
     }
   end
 
@@ -186,5 +189,9 @@ defmodule Mongo.ServerDescription do
     def support_compressors() do
       [:zlib]
     end
+  end
+
+  defp replica?(server_type) do
+    server_type in [:rs_primary, :rs_secondary, :rs_arbiter, :rs_other, :rs_ghost]
   end
 end

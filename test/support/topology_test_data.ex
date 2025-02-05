@@ -30,7 +30,8 @@ defmodule Mongo.TopologyTestData do
           set_version: nil,
           tag_set: %{},
           type: :standalone,
-          compression: []
+          compression: [],
+          replica?: false
         }
       }
     }
@@ -64,7 +65,8 @@ defmodule Mongo.TopologyTestData do
           set_version: nil,
           tag_set: %{},
           type: :mongos,
-          compression: []
+          compression: [],
+          replica?: false
         }
       }
     }
@@ -102,7 +104,8 @@ defmodule Mongo.TopologyTestData do
             "localhost:27018",
             "localhost:27019",
             "localhost:27020"
-          ]
+          ],
+          replica?: true
         },
         "localhost:27019" => %{
           address: "localhost:27019",
@@ -127,7 +130,8 @@ defmodule Mongo.TopologyTestData do
             "localhost:27018",
             "localhost:27019",
             "localhost:27020"
-          ]
+          ],
+          replica?: true
         },
         "localhost:27020" => %{
           address: "localhost:27020",
@@ -152,7 +156,8 @@ defmodule Mongo.TopologyTestData do
             "localhost:27018",
             "localhost:27019",
             "localhost:27020"
-          ]
+          ],
+          replica?: true
         }
       }
     }
@@ -186,7 +191,8 @@ defmodule Mongo.TopologyTestData do
           tag_set: %{},
           type: :unknown,
           hosts: [],
-          compression: []
+          compression: [],
+          replica?: true
         },
         "localhost:27019" => %{
           address: "localhost:27019",
@@ -211,7 +217,8 @@ defmodule Mongo.TopologyTestData do
             "localhost:27019",
             "localhost:27020"
           ],
-          compression: []
+          compression: [],
+          replica?: true
         },
         "localhost:27020" => %{
           address: "localhost:27020",
@@ -236,7 +243,8 @@ defmodule Mongo.TopologyTestData do
             "localhost:27019",
             "localhost:27020"
           ],
-          compression: []
+          compression: [],
+          replica?: true
         }
       }
     }
@@ -270,7 +278,8 @@ defmodule Mongo.TopologyTestData do
           tag_set: %{},
           type: :rs_primary,
           hosts: ["localhost:27018"],
-          compression: []
+          compression: [],
+          replica?: true
         }
       }
     }
