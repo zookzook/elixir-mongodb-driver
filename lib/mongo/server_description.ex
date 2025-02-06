@@ -117,7 +117,8 @@ defmodule Mongo.ServerDescription do
       compression: map_compressors(hello_response["compression"]),
       read_only: hello_response["readOnly"] || false,
       logical_session_timeout: hello_response["logicalSessionTimeoutMinutes"] || 30,
-      supports_retryable_writes: supports_retryable_writes
+      supports_retryable_writes: supports_retryable_writes,
+      replica?: replica?(server_type)
     }
   end
 
