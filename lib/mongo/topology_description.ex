@@ -123,19 +123,20 @@ defmodule Mongo.TopologyDescription do
       |> Keyword.get(:read_preference)
       |> ReadPreference.merge_defaults()
 
-    {servers, read_prefs} =
+    {server, read_prefs} =
       case topology.type do
         :unknown ->
-          {[], nil}
+          {nil, nil}
 
         :single ->
-          {topology.servers, nil}
+          server = pick_server(topology.servers)
+          {server, ReadPreference.to_topology_single_type(server)}
 
         :sharded ->
-          {mongos_servers(topology), ReadPreference.to_mongos(read_preference)}
+          {topology |> mongos_servers() |> pick_server(), ReadPreference.to_mongos(read_preference)}
 
         _other ->
-          {select_replica_set_server(topology, read_preference.mode, read_preference), ReadPreference.to_replica_set(read_preference)}
+          {topology |> select_replica_set_server(read_preference.mode, read_preference) |> pick_server(), ReadPreference.to_replica_set(read_preference)}
       end
 
     opts =
@@ -147,17 +148,12 @@ defmodule Mongo.TopologyDescription do
           Keyword.put(opts, :read_preference, prefs)
       end
 
-    server =
-      servers
-      |> Enum.take_random(1)
-      |> Enum.map(fn {server, description} -> {server, description.compression} end)
-
     case server do
-      [] ->
+      nil ->
         :empty
 
-      [{addr, compression}] ->
-        {:ok, {addr, merge_compression(opts, compression)}}
+      {addr, server_description} ->
+        {:ok, {addr, merge_compression(opts, server_description.compression)}}
     end
   end
 
@@ -179,6 +175,13 @@ defmodule Mongo.TopologyDescription do
     case Keyword.get(opts, :direct_connection, false) do
       true -> :single
       false -> Keyword.get(opts, :type, :unknown)
+    end
+  end
+
+  defp pick_server(servers) do
+    case Enum.take_random(servers, 1) do
+      [] -> nil
+      [server] -> server
     end
   end
 

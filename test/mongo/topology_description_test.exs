@@ -137,4 +137,12 @@ defmodule Mongo.TopologyDescriptionTest do
 
     assert :single = TopologyDescription.get_type(opts)
   end
+
+  test "Set read_preference to :primaryPreferred when topology is single and server is replica set" do
+    assert {:ok, {_, opts}} = TopologyDescription.select_servers(single(), :read, [])
+    assert nil == Keyword.get(opts, :read_preference)
+
+    assert {:ok, {_, opts}} = TopologyDescription.select_servers(single_with_repl_set(), :read, [])
+    assert :primaryPreferred = Keyword.get(opts, :read_preference) |> Map.get(:mode)
+  end
 end
