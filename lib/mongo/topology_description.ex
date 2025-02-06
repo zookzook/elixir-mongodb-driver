@@ -133,10 +133,10 @@ defmodule Mongo.TopologyDescription do
           {server, ReadPreference.to_topology_single_type(server)}
 
         :sharded ->
-          {mongos_servers(topology) |> pick_server(), ReadPreference.to_mongos(read_preference)}
+          {topology |> mongos_servers() |> pick_server(), ReadPreference.to_mongos(read_preference)}
 
         _other ->
-          {select_replica_set_server(topology, read_preference.mode, read_preference) |> pick_server(), ReadPreference.to_replica_set(read_preference)}
+          {topology |> select_replica_set_server(read_preference.mode, read_preference) |> pick_server(), ReadPreference.to_replica_set(read_preference)}
       end
 
     opts =
