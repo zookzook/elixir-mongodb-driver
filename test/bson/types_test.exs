@@ -17,11 +17,17 @@ defmodule BSON.TypesTest do
     assert inspect(@objectid) == "#BSON.ObjectId<#{@string}>"
   end
 
-  test "BSON.ObjectId.encode!/1" do
-    assert BSON.ObjectId.encode!(@objectid) == @string
+  if Version.match?(System.version(), "<= 1.8.0") do
+    test "BSON.ObjectId.encode!/1" do
+      assert BSON.ObjectId.encode!(@objectid) == @string
 
-    assert_raise FunctionClauseError, fn ->
-      BSON.ObjectId.encode!("")
+      assert_raise FunctionClauseError, fn ->
+        BSON.ObjectId.encode!("")
+      end
+    end
+  else
+    test "BSON.ObjectId.encode!/1" do
+      assert BSON.ObjectId.encode!(@objectid) == @string
     end
   end
 
@@ -47,12 +53,19 @@ defmodule BSON.TypesTest do
     assert to_string(@objectid) == @string
   end
 
-  test "BSON.ObjectId.get_timestamp!/1" do
-    value = BSON.ObjectId.get_timestamp!(@objectid)
-    assert DateTime.compare(value, @timestamp) == :eq
+  if Version.match?(System.version(), "<= 1.8.0") do
+    test "BSON.ObjectId.get_timestamp!/1" do
+      value = BSON.ObjectId.get_timestamp!(@objectid)
+      assert DateTime.compare(value, @timestamp) == :eq
 
-    assert_raise FunctionClauseError, fn ->
-      BSON.ObjectId.get_timestamp!("")
+      assert_raise FunctionClauseError, fn ->
+        BSON.ObjectId.get_timestamp!("")
+      end
+    end
+  else
+    test "BSON.ObjectId.get_timestamp!/1" do
+      value = BSON.ObjectId.get_timestamp!(@objectid)
+      assert DateTime.compare(value, @timestamp) == :eq
     end
   end
 
