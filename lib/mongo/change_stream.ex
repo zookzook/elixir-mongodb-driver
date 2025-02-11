@@ -61,9 +61,17 @@ defmodule Mongo.ChangeStream do
 
         %{docs: [], topology_pid: topology_pid, session: session, cursor: cursor, change_stream: change_stream, coll: coll} = state ->
           case get_more(topology_pid, session, only_coll(coll), cursor, change_stream, opts) do
-            {:ok, %{cursor_id: cursor_id, docs: docs, change_stream: change_stream}} -> {docs, %{state | cursor: cursor_id, change_stream: change_stream}}
-            {:resume, %{docs: docs} = state} -> {docs, %{state | docs: []}}
-            {:error, error} -> raise error
+            {:ok, %{cursor_id: cursor_id, docs: docs, change_stream: change_stream}} ->
+              {docs, %{state | cursor: cursor_id, change_stream: change_stream}}
+
+            {:resume, %{docs: docs} = state} ->
+              {docs, %{state | docs: []}}
+
+            {:aborted, _error} ->
+              {:halt, %{state | session: nil, cursor: 0}}
+
+            {:error, error} ->
+              raise error
           end
 
         %{docs: docs} = state ->
@@ -85,8 +93,11 @@ defmodule Mongo.ChangeStream do
             Session.end_session(topology_pid, session)
 
             case Error.should_retry_read(error, cmd, opts) do
-              true -> aggregate(topology_pid, cmd, fun, Keyword.put(opts, :read_counter, 2))
-              false -> {:error, error}
+              true ->
+                aggregate(topology_pid, cmd, fun, Keyword.put(opts, :read_counter, 2))
+
+              false ->
+                {:error, error}
             end
         end
       end
@@ -172,8 +183,15 @@ defmodule Mongo.ChangeStream do
           Session.end_session(topology_pid, session)
 
           # Start aggregation again...
-          with {:ok, state} <- aggregate(topology_pid, aggregate_cmd, fun, opts) do
-            {:resume, state}
+          ## the previous cursor is closed. If the retry fails we return aborted
+          ## and the calling function will remove the session and the cursor
+          ## the end function won't stuck when calling kill_cursor
+          case aggregate(topology_pid, aggregate_cmd, fun, opts) do
+            {:ok, new_state} ->
+              {:resume, new_state}
+
+            error ->
+              {:aborted, error}
           end
 
         reason ->
@@ -283,13 +301,15 @@ defmodule Mongo.ChangeStream do
 
     defp after_fun(opts) do
       fn
+        %{session: nil, cursor: 0} ->
+          :noop
+
         %{topology_pid: topology_pid, session: session, cursor: 0} ->
           Session.end_session(topology_pid, session)
 
         %{topology_pid: topology_pid, session: session, cursor: cursor, coll: coll} ->
-          with :ok <- kill_cursor(session, only_coll(coll), cursor, opts) do
-            Session.end_session(topology_pid, session)
-          end
+          kill_cursor(session, only_coll(coll), cursor, opts)
+          Session.end_session(topology_pid, session)
 
         error ->
           error
