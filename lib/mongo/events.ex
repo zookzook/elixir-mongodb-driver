@@ -1,5 +1,5 @@
 defmodule Mongo.Events do
-  @doc false
+  @moduledoc false
 
   require Logger
 
