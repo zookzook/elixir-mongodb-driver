@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * improved error handling when using change-streams ([c07c5a1](https://github.com/zookzook/elixir-mongodb-driver/commit/c07c5a1207153fb0e8f2e3a4c2dd3d0c6042acf1))
 
+### Features
+
+* Added support for directConnection setting in connection string (thanks to colacheng)
+
+
 ## [1.5.1](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.0...v1.5.1) (2025-02-04)
 
 
