@@ -124,7 +124,7 @@ defmodule BSON.ObjectId do
     defp e(unquote(int)), do: unquote(char)
   end
 
-  for {char, int} <- Enum.with_index(?A..?F) do
+  for {char, int} <- Enum.with_index(?A..?F, 10) do
     defp d(unquote(char)), do: unquote(int)
   end
 

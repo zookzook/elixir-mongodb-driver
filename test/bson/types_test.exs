@@ -11,6 +11,7 @@ defmodule BSON.TypesTest do
 
   @objectid %BSON.ObjectId{value: <<29, 32, 69, 244, 101, 119, 228, 28, 61, 24, 21, 215>>}
   @string "1d2045f46577e41c3d1815d7"
+  @string_uppercase "1D2045F46577E41C3D1815D7"
   @timestamp DateTime.from_unix!(488_654_324)
 
   test "inspect BSON.ObjectId" do
@@ -33,6 +34,14 @@ defmodule BSON.TypesTest do
 
   test "BSON.ObjectId.decode!/1" do
     assert BSON.ObjectId.decode!(@string) == @objectid
+
+    assert_raise FunctionClauseError, fn ->
+      BSON.ObjectId.decode!("")
+    end
+  end
+
+  test "BSON.ObjectId.decode!/1 for uppercase HEX" do
+    assert BSON.ObjectId.decode!(@string_uppercase) == @objectid
 
     assert_raise FunctionClauseError, fn ->
       BSON.ObjectId.decode!("")
