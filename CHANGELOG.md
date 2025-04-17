@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.3](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.2...v1.5.3) (2025-04-17)
+
+
+### Bug Fixes
+
+* Fix Object ID decoding logic for uppercase HEX string ([#274](https://github.com/zookzook/elixir-mongodb-driver/issues/274)) ([fa7890b](https://github.com/zookzook/elixir-mongodb-driver/commit/fa7890baca7e8bd60a73b742cb7b53fb2f8fc733))
+
 ## [1.5.2](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.1...v1.5.2) (2025-02-11)
 
 
