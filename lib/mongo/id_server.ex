@@ -40,7 +40,17 @@ defmodule Mongo.IdServer do
 
   def handle_info(:reset_counters, last_reset) do
     new_reset = opposite_on_window(:calendar.universal_time())
-    :ets.insert(@name, gen_counters((last_reset + 1)..new_reset//1))
+
+    step =
+      case last_reset + 1 <= new_reset do
+        true ->
+          1
+
+        false ->
+          -1
+      end
+
+    :ets.insert(@name, gen_counters((last_reset + 1)..new_reset//step))
     Process.send_after(self(), :reset_counters, @reset_timer)
 
     {:noreply, new_reset}
