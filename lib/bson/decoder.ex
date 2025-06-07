@@ -6,8 +6,14 @@ defmodule BSON.DecoderGenerator do
       use BSON.Utils
       alias BSON.Decimal128
 
+      require Logger
+
       @preserve_order opts[:preserve_order] || false
       @compile {:inline, cstring: 1}
+      @max_unix_time ~U[9999-12-31 23:59:59.999Z]
+      @min_unix_time ~U[-9999-01-01 00:00:00.000Z]
+      @unix_start DateTime.to_unix(@min_unix_time, :millisecond)
+      @unix_end DateTime.to_unix(@max_unix_time, :millisecond)
 
       def decode(binary) do
         {map, ""} = document(binary)
@@ -128,7 +134,18 @@ defmodule BSON.DecoderGenerator do
       end
 
       defp type(@type_datetime, <<unix_ms::int64(), rest::binary>>) do
-        {DateTime.from_unix!(unix_ms, :millisecond), rest}
+        cond do
+          unix_ms < @unix_start ->
+            Logger.warning("Invalid unix time: #{inspect(unix_ms)}, converted to #{inspect(@min_unix_time)}")
+            {@min_unix_time, rest}
+
+          unix_ms > @unix_end ->
+            Logger.warning("Invalid unix time: #{inspect(unix_ms)}, converted to #{inspect(@max_unix_time)}")
+            {@max_unix_time, rest}
+
+          true ->
+            {DateTime.from_unix!(unix_ms, :millisecond), rest}
+        end
       end
 
       defp type(@type_undefined, rest) do
