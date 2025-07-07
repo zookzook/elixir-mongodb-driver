@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.5](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.4...v1.5.5) (2025-07-07)
+
+
+### Bug Fixes
+
+* improved the spec of the function to respect nil values (reported by eseres) ([ee333d5](https://github.com/zookzook/elixir-mongodb-driver/commit/ee333d511d17548435829cd733b0f99329cef0ad))
+
 ## [1.5.4](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.3...v1.5.4) (2025-06-07)
 
 
