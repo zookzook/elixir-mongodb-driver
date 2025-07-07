@@ -73,9 +73,9 @@ defmodule Mongo.FindAndModifyResult do
   """
 
   @type t :: %__MODULE__{
-          value: BSON.document(),
+          value: BSON.document() | nil,
           matched_count: non_neg_integer(),
-          upserted_id: String.t(),
+          upserted_id: String.t() | nil,
           updated_existing: boolean()
         }
 
