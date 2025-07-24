@@ -298,6 +298,9 @@ defmodule Mongo.Test do
     assert {:ok, %Mongo.FindAndModifyResult{value: value}} = Mongo.find_one_and_replace(c.pid, coll, %{"upsertedDocument" => true}, %{"upsertedDocument" => true}, upsert: true, return_document: :after)
     assert %{"upsertedDocument" => true} = value, "Should upsert"
     assert [%{"upsertedDocument" => true}] = Mongo.find(c.pid, coll, %{upsertedDocument: true}) |> Enum.to_list()
+
+    assert {:ok, %Mongo.FindAndModifyResult{matched_count: 0, updated_existing: false, value: nil}} == Mongo.find_one_and_replace(c.pid, coll, %{"never" => "matching"}, %{})
+    assert {:ok, %Mongo.FindAndModifyResult{matched_count: 0, updated_existing: false, value: nil}} == Mongo.find_one_and_replace(c.pid, "coll_that_doesnt_exist", %{"never" => "matching"}, %{})
   end
 
   test "find_one_and_delete", c do
@@ -320,6 +323,8 @@ defmodule Mongo.Test do
 
     assert {:ok, %{"note" => "delete"}} = Mongo.find_one_and_delete(c.pid, coll, %{foo: 50}, sort: %{bar: -1})
     assert [%{"note" => "keep"}] = Mongo.find(c.pid, coll, %{note: "keep"}) |> Enum.to_list()
+
+    assert {:ok, nil} = Mongo.find_one_and_delete(c.pid, coll, %{"never" => "matching"})
   end
 
   test "insert_one", c do

@@ -599,7 +599,7 @@ defmodule Mongo do
     * `:collation` - Optionally specifies a collation to use in MongoDB 3.4 and higher.
   """
   @spec find_one_and_delete(GenServer.server(), collection, BSON.document(), Keyword.t()) ::
-          result(BSON.document())
+          result(BSON.document()) | {:ok, nil}
   def find_one_and_delete(topology_pid, coll, filter, opts \\ []) do
     write_concern = write_concern(opts)
 
