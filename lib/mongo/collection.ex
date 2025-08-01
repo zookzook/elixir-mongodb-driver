@@ -440,6 +440,28 @@ defmodule Mongo.Collection do
           "modified" : ISODate("2020-05-19T15:15:14.374Z"),
           "title" : "Vega"
         }
+
+  ## Example `Inlined Collections`
+
+  You can define an embedded collection inline. In the following example, the `Person.Friend`
+  and `Person.Pet` modules are automatically defined for you.
+
+        defmodule Person do
+          use Mongo.Collection
+
+          collection "persons" do
+            attribute :name, String.t()
+
+            embeds_one :friend, Friend do
+              attribute :name, String.t()
+            end
+
+            embeds_many :pets, Pet, default: [] do
+              attribute :name, String.t()
+            end
+          end
+        end
+
   ## Example `timestamps`
 
         defmodule Post do
