@@ -440,6 +440,28 @@ defmodule Mongo.Collection do
           "modified" : ISODate("2020-05-19T15:15:14.374Z"),
           "title" : "Vega"
         }
+
+  ## Example `Inlined Collections`
+
+  You can define an embedded collection inline. In the following example, the `Person.Friend`
+  and `Person.Pet` modules are automatically defined for you.
+
+        defmodule Person do
+          use Mongo.Collection
+
+          collection "persons" do
+            attribute :name, String.t()
+
+            embeds_one :friend, Friend do
+              attribute :name, String.t()
+            end
+
+            embeds_many :pets, Pet, default: [] do
+              attribute :name, String.t()
+            end
+          end
+        end
+
   ## Example `timestamps`
 
         defmodule Post do
@@ -879,8 +901,25 @@ defmodule Mongo.Collection do
   @doc """
   Adds the struct to the `embeds_one` list. Calls `__embeds_one__`
   """
-  defmacro embeds_one(name, mod, opts \\ []) do
+  defmacro embeds_one(name, mod, opts \\ [])
+
+  defmacro embeds_one(name, mod, do: block) do
     quote do
+      embeds_one(unquote(name), unquote(mod), [], do: unquote(block))
+    end
+  end
+
+  defmacro embeds_one(name, mod, opts) do
+    quote do
+      Collection.__embeds_one__(__MODULE__, unquote(name), unquote(mod), unquote(opts))
+    end
+  end
+
+  defmacro embeds_one(name, mod, opts, do: block) do
+    mod = expand_nested_module_alias(mod, __CALLER__)
+
+    quote do
+      Collection.__embeds_module__(__ENV__, unquote(mod), unquote(Macro.escape(block)))
       Collection.__embeds_one__(__MODULE__, unquote(name), unquote(mod), unquote(opts))
     end
   end
@@ -895,8 +934,26 @@ defmodule Mongo.Collection do
   @doc """
   Adds the struct to the `embeds_many` list. Calls `__embeds_many__`
   """
-  defmacro embeds_many(name, mod, opts \\ []) do
+  defmacro embeds_many(name, mod, opts \\ [])
+
+  defmacro embeds_many(name, mod, do: block) do
     quote do
+      embeds_many(unquote(name), unquote(mod), [], do: unquote(block))
+    end
+  end
+
+  defmacro embeds_many(name, mod, opts) do
+    quote do
+      type = unquote(Macro.escape({{:., [], [mod, :t]}, [], []}))
+      Collection.__embeds_many__(__MODULE__, unquote(name), unquote(mod), type, unquote(opts))
+    end
+  end
+
+  defmacro embeds_many(name, mod, opts, do: block) do
+    mod = expand_nested_module_alias(mod, __CALLER__)
+
+    quote do
+      Collection.__embeds_module__(__ENV__, unquote(mod), unquote(Macro.escape(block)))
       type = unquote(Macro.escape({{:., [], [mod, :t]}, [], []}))
       Collection.__embeds_many__(__MODULE__, unquote(name), unquote(mod), type, unquote(opts))
     end
@@ -908,6 +965,19 @@ defmodule Mongo.Collection do
   def __embeds_many__(mod, name, target, type, opts) do
     Module.put_attribute(mod, :types, {name, type})
     Module.put_attribute(mod, :embed_manys, {name, target, add_name(mod, opts, name)})
+  end
+
+  def __embeds_module__(env, mod, block) do
+    block =
+      quote do
+        use Collection
+
+        document do
+          unquote(block)
+        end
+      end
+
+    Module.create(mod, block, env)
   end
 
   @doc """
@@ -1080,4 +1150,12 @@ defmodule Mongo.Collection do
       |> Map.new()
     end
   end
+
+  defp expand_nested_module_alias({:__aliases__, _, [Elixir, _ | _] = alias}, _env),
+    do: Module.concat(alias)
+
+  defp expand_nested_module_alias({:__aliases__, _, [h | t]}, env) when is_atom(h),
+    do: Module.concat([env.module, h | t])
+
+  defp expand_nested_module_alias(other, _env), do: other
 end
