@@ -119,7 +119,7 @@ defmodule Mongo.UrlParser do
 
         value = decode_percent(key, value)
 
-        Keyword.put(opts, @driver_option_map[key] || key, value)
+        Keyword.put_new(opts, @driver_option_map[key] || key, value)
     end
   end
 
