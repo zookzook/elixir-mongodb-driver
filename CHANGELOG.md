@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.6](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.5...v1.5.6) (2025-08-12)
+
+
+### Bug Fixes
+
+* explicitly set options override the options from the URL. ([8125d82](https://github.com/zookzook/elixir-mongodb-driver/commit/8125d820e6b7122fdd5772f12f788e38a2bb6d70))
+* improved the spec for function `find_one_and_delete` thanks to csrl ([b868998](https://github.com/zookzook/elixir-mongodb-driver/commit/b8689980b738cdafedb84510dfc0220c7fcad55f))
+
 ## [1.5.5](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.4...v1.5.5) (2025-07-07)
 
 
