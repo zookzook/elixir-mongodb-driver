@@ -7,7 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.5.6](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.5...v1.5.6) (2025-08-12)
 
-
 ### Bug Fixes
 
 * explicitly set options override the options from the URL. ([8125d82](https://github.com/zookzook/elixir-mongodb-driver/commit/8125d820e6b7122fdd5772f12f788e38a2bb6d70))
