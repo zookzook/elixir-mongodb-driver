@@ -17,7 +17,7 @@ defmodule Mongo.Auth do
           state
       end
 
-    case opts |> credentials() |> mechanism.auth(state.database, auth_state) do
+    case opts |> credentials() |> mechanism.auth(auth_state) do
       :ok ->
         {:ok, state}
 
