@@ -10,7 +10,7 @@ defmodule Mongo.Compressor do
 
   def zstd_available?, do: not is_nil(@zstd_module)
 
-  def compressors, do: if zstd_available?(), do: ["zstd", "zlib"], else: ["zlib"]
+  def compressors, do: if(zstd_available?(), do: ["zstd", "zlib"], else: ["zlib"])
 
   def compress(binary, :zlib) do
     {@zlib_compressor_id, :zlib.compress(binary)}
