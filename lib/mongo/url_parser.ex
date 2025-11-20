@@ -10,11 +10,7 @@ defmodule Mongo.UrlParser do
 
   @mongo_url_regex ~r/^mongodb(?<srv>\+srv)?:\/\/(?:(?<username>[^:]+):(?<password>[^@]+)@)?(?<seeds>[^\/\?]+)(?:\/(?<database>[^?]*)?(?:\?(?<options>(?:[^\s=]+=[^\s&]*)+))?)?$/
 
-  if Code.ensure_loaded?(:ezstd) do
-    @compressors ["zstd", "zlib"]
-  else
-    @compressors ["zlib"]
-  end
+  @compressors Mongo.Compressor.compressors()
 
   # https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options
   @mongo_options %{
