@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - improved support for zstd compression (OTP 28 `:zstd` with optional `:ezstd` fallback)
 
+### Bugfixes
+
+- Pass auth_db to detect auth mech (reported by m-almas)
+- The migration will return the error when calling migrate/drop (reported by yagogarea)
+
 ## [1.5.6](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.5...v1.5.6) (2025-08-12)
 
 ### Bug Fixes
