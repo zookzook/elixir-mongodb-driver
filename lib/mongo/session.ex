@@ -244,7 +244,8 @@ defmodule Mongo.Session do
   """
   @spec end_session(GenServer.server(), Session.t()) :: :ok | :error
   def end_session(topology_pid, session) do
-    with {:ok, session_server} <- call(session, :end_session) do
+    with {:ok, session_server} <- call(session, :end_session),
+    session_server <- ServerSession.next_txn_num(session_server) do
       Topology.checkin_session(topology_pid, session_server)
     end
   end
