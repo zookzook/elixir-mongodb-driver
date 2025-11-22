@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Enhancements
 
-- improved support for zstd compression (OTP 28 `:zstd` with optional `:ezstd` fallback)
+- improved support for zstd compression (OTP 28 `:zstd` with optional `:ezstd` fallback) (thanks to Fudoshiki)
 
 ### Bug Fixes
 
