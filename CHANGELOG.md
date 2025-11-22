@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.6...v1.6.0) (2025-11-22)
+
+
+### Bug Fixes
+
+* fixed failing test ([b4318bc](https://github.com/zookzook/elixir-mongodb-driver/commit/b4318bc3cd85aefe2bf4f6fb903144cc36eaa3ef))
+* pass auth_db to detect auth mech (reported by m-almas) ([da2476e](https://github.com/zookzook/elixir-mongodb-driver/commit/da2476e99e3443b97bdb0a3238ba9a3e6cb17dac))
+* the migration will return the error when calling migrate/drop (reported by yagogarea) ([6d06329](https://github.com/zookzook/elixir-mongodb-driver/commit/6d06329de4c5b014457dd7ba439bcefafdea1256))
+
+
+### Miscellaneous Chores
+
+* release 1.6.0 ([330e205](https://github.com/zookzook/elixir-mongodb-driver/commit/330e205eb370bf504d93c30c867bd68b5781d925))
+
 ## [Unreleased]
 
 ### Enhancements
