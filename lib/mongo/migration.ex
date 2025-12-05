@@ -13,7 +13,14 @@ defmodule Mongo.Migration do
   rescue
     error ->
       IO.puts("🚨 Error when migrating: #{inspect(error)}")
-      unlock(opts)
+
+      case unlock(opts) do
+        :unlocked ->
+          error
+
+        unlock_error ->
+          {error, unlock_error}
+      end
   end
 
   def drop(opts \\ []) do
@@ -28,7 +35,14 @@ defmodule Mongo.Migration do
   rescue
     error ->
       IO.puts("🚨 Error when dropping: #{inspect(error)}")
-      unlock(opts)
+
+      case unlock(opts) do
+        :unlocked ->
+          error
+
+        unlock_error ->
+          {error, unlock_error}
+      end
   end
 
   def lock(opts \\ []) do

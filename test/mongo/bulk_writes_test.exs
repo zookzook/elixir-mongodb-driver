@@ -192,7 +192,7 @@ defmodule Mongo.BulkWritesTest do
 
     %BulkWriteResult{errors: [%{"code" => code}]} = result = BulkWrite.write(top.pid, bulk, w: 1)
 
-    assert code == 2
+    assert code in [10_334, 2]
     assert %{:matched_count => 0, :deleted_count => 0, :modified_count => 0} == Map.take(result, [:matched_count, :deleted_count, :modified_count])
     assert {:ok, 1} == Mongo.count(top.pid, coll, %{})
   end

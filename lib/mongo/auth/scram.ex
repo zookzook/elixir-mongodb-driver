@@ -5,12 +5,12 @@ defmodule Mongo.Auth.SCRAM do
 
   alias Mongo.MongoDBConnection.Utils
 
-  def auth({nil, nil}, _db, _s) do
+  def auth({nil, nil}, _s) do
     :ok
   end
 
-  def auth({username, password}, db, s) do
-    {mechanism, digest} = select_digest(db, username, s)
+  def auth({username, password}, s) do
+    {mechanism, digest} = select_digest(username, s)
     nonce = nonce()
     first_bare = first_bare(username, nonce)
     payload = first_message(first_bare)
@@ -130,9 +130,8 @@ defmodule Mongo.Auth.SCRAM do
   # selects the supported sasl mechanism
   # It calls isMaster with saslSupportedMechs option to ask for the selected user which mechanism is supported
   #
-  defp select_digest(database, username, state) do
-    ### todo
-    with {:ok, _flags, doc} <- Utils.command(-2, [hello: 1, saslSupportedMechs: database <> "." <> username], state) do
+  defp select_digest(username, state) do
+    with {:ok, _flags, doc} <- Utils.command(-2, [hello: 1, saslSupportedMechs: state.database <> "." <> username], state) do
       select_digest(doc)
     end
   end

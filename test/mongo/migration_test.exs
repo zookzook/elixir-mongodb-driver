@@ -26,4 +26,20 @@ defmodule Mongo.MigrationTest do
     assert {:error, :not_locked} == Migration.unlock(database: "one")
     assert {:error, :not_locked} == Migration.unlock(database: "two")
   end
+
+  test "migrate should return :unlocked", %{pid: top} do
+    patch(Mongo.Migration, :migration_files!, fn _ -> ["test/data/20220130130208_create_attachments_indexes.exs"] end)
+    assert :unlocked == Mongo.Migration.migrate(topology: top)
+  end
+
+  test "migrate should return an error", %{pid: top} do
+    patch(Mongo.Migration, :migration_files!, fn _ -> ["test/data/20230130130208_create_attachments_indexes.exs"] end)
+    assert %ArithmeticError{message: "bad argument in arithmetic expression", __exception__: true} == Mongo.Migration.migrate(topology: top)
+  end
+
+  test "drop should return :error", %{pid: top} do
+    patch(Mongo.Migration, :migration_files!, fn _ -> ["test/data/20240130130208_create_attachments_indexes.exs"] end)
+    patch(Mongo, :find_one, fn _top, _col, _query, _opts -> %{"version" => "123"} end)
+    assert %ArithmeticError{message: "bad argument in arithmetic expression", __exception__: true} == Mongo.Migration.drop(topology: top)
+  end
 end

@@ -119,9 +119,9 @@ Using `$in`
 
 ## How to use the `Mongo.Stream`?
 
-Most query functions return a `Mongo.Stream` struct that implements the `Enumerable` protocol. The module checks out 
-the session and streams the batches from the server until the last batch has been received. 
-The session is then checked in for reuse. [Sessions](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.md) are 
+Most query functions return a `Mongo.Stream` struct that implements the `Enumerable` protocol. The module checks out
+the session and streams the batches from the server until the last batch has been received.
+The session is then checked in for reuse. [Sessions](https://github.com/mongodb/specifications/blob/master/source/sessions/driver-sessions.md) are
 temporary and reusable data structures, e.g. to support transactions. They are required by the Mongo DB driver specification.
 
 The use of internal structures of the `Mongo.Stream` struct is therefore not planned. For example, the following code results in an open session and the `docs` will only contain the first batch:
@@ -131,7 +131,7 @@ The use of internal structures of the `Mongo.Stream` struct is therefore not pla
 Enum.map(docs, fn elem -> elem end)
 ```
 
-The `Mongo.Stream` struct should therefore always be processed by an `Enum` or `Stream` function so that the session management 
+The `Mongo.Stream` struct should therefore always be processed by an `Enum` or `Stream` function so that the session management
 can take place automatically:
 
 ```elixir
@@ -165,8 +165,9 @@ Most notably, the `find-then-modify` command functions `find_one_and_update` and
 `FindAndModifyResult` structs that contain additional write information otherwise neglected, which the adapter requires.
 
 After upgrading the driver to version 1.4.0 you need to change the code regarding the results of
-* `Mongo.find_one_and_update`
-* `Mongo.find_one_and_replace`
+
+- `Mongo.find_one_and_update`
+- `Mongo.find_one_and_replace`
 
 ## Data Representation
 
@@ -497,20 +498,20 @@ For more information check out the `Mongo.Repo` module documentation and the `Mo
 
 ## Breaking changes
 
-Prior to version 0.9.2 some `Mongo.Repo` functions use the `dump/1` function for the query (and update) parameter. 
-This worked only for some query that used only the attributes of the document. In the case of nested documents, 
-it didn't work, so it is changed to be more consistent. The `Mongo.Repo` module is very simple without any query 
-rewriting like Ecto does. In the case you want to use the `:name` option, you need to specify the query and update 
+Prior to version 0.9.2 some `Mongo.Repo` functions use the `dump/1` function for the query (and update) parameter.
+This worked only for some query that used only the attributes of the document. In the case of nested documents,
+it didn't work, so it is changed to be more consistent. The `Mongo.Repo` module is very simple without any query
+rewriting like Ecto does. In the case you want to use the `:name` option, you need to specify the query and update
 documents in the `Mongo.Repo` functions following the specification in the MongoDB. Example:
 
     defmodule MyApp.Session do
         @moduledoc false
         use Mongo.Collection
-        
+
         alias BSON.Binary
-        
+
         collection :s do
-            attribute :uuid, Binary.t(), name: :u 
+            attribute :uuid, Binary.t(), name: :u
         end
     end
 
@@ -522,7 +523,7 @@ because the `get_by/2` function uses the query parameter without any rewriting. 
 
     MyApp.Repo.get_by(MyApp.Session, %{u: session_uuid})
 
-A rewriting is too complex for now because MongoDB has a lot of options. 
+A rewriting is too complex for now because MongoDB has a lot of options.
 
 ## Logging
 
@@ -571,17 +572,22 @@ Then you see for each collection the execution time for each different command i
 
 The driver supports two compressors
 
-* zlib, which is supported by Erlang 
-* zstd, which is optional and supported by https://github.com/silviucpp/ezstd bindings.
+- zlib, which is supported by Erlang
+- zstd — supported either via Erlang/OTP 28+ built-in `:zstd` module, or via the optional
+  https://github.com/silviucpp/ezstd bindings on older OTP releases.
 
 To activate zlib compression:
+
 1. Append `compressors=zlib` to the URL connection string:
+
 ```elixir
 {:ok, top} = Mongo.start_link(url: "mongodb://localhost:27017/db?compressors=zlib")
 ```
 
 To activate zstd compression:
-1. Add `{:ezstd, "~> 1.1"}` to the dependencies of your `mix.exs` file. The driver will provide the related code.
+
+1. If you run Erlang/OTP 28 or newer, no extra dependency is required (OTP provides the `:zstd` module).
+   On older OTP releases, add `{:ezstd, "~> 1.1"}` to the dependencies of your `mix.exs` file.
 2. Append `compressors=zstd` to the URL connection string:
 
 ```elixir
@@ -590,33 +596,34 @@ To activate zstd compression:
 
 The driver uses compression for the following functions:
 
-* `Mongo.aggregate/4`
-* `Mongo.find/4`
-* `Mongo.insert_one/4`
-* `Mongo.insert_many/4`
-* `Mongo.update/4`
-* `Mongo.update_documents/6`
-* `Mongo.find_one_and_update/5`
-* `Mongo.find_one_and_replace/5`
-* `Mongo.find_one_and_delete/4`
-* `Mongo.count/4`
-* `Mongo.distinct/5`
-* `Mongo.delete_documents/5`
-* `Mongo.create/4`
+- `Mongo.aggregate/4`
+- `Mongo.find/4`
+- `Mongo.insert_one/4`
+- `Mongo.insert_many/4`
+- `Mongo.update/4`
+- `Mongo.update_documents/6`
+- `Mongo.find_one_and_update/5`
+- `Mongo.find_one_and_replace/5`
+- `Mongo.find_one_and_delete/4`
+- `Mongo.count/4`
+- `Mongo.distinct/5`
+- `Mongo.delete_documents/5`
+- `Mongo.create/4`
 
 You can disable the compression for a single function by using the option `compression: false`, for example:
 
 ```
 Mongo.find(top, "tasks", %{}, compression: false) |> Enum.to_list()
 ```
+
 The compression significantly reduces the amount of data, while increasing the load on the CPU.
 This is certainly interesting for environments in which network transmission has to be paid for.
 
-zlib compression requires a greater penalty in terms of speed than zstd compression. 
-The zstd compression offers a good compromise between compression rate and speed and 
+zlib compression requires a greater penalty in terms of speed than zstd compression.
+The zstd compression offers a good compromise between compression rate and speed and
 is undoubtedly supported by all current MongoDB.
 
-The speed also depends on the `batch_size` attribute. A higher speed is achieved for certain batch sizes. 
+The speed also depends on the `batch_size` attribute. A higher speed is achieved for certain batch sizes.
 Simple experiments can be carried out here to determine which size shortens the duration of the queries:
 
 ```elixir
@@ -684,11 +691,12 @@ Using an SRV URI also discovers all nodes of the deployment automatically.
 
 ## Migration
 
-Despite the schema-free approach, migration is still desirable. Migrations are used to maintain the indexes 
-and to drop collections that are no longer needed. Capped collections must be migrated. 
+Despite the schema-free approach, migration is still desirable. Migrations are used to maintain the indexes
+and to drop collections that are no longer needed. Capped collections must be migrated.
 The driver provides a workflow similar to Ecto that can be used to create migrations.
 
 First we create a migration script:
+
 ```elixir
 
 mix mongo.gen.migration add_indexes
@@ -771,19 +779,20 @@ Or if you use a Dockerfile:
 ENTRYPOINT /app/bin/migrate && /app/bin/server
 ```
 
-The migration module tries to *lock* the migration collection to ensure that only one instance is running the migration. 
+The migration module tries to _lock_ the migration collection to ensure that only one instance is running the migration.
 Unfortunately MongoDB does not support collection locks, so need to use a software lock:
 
 ```elixir
-Mongo.update_one(topology, 
-  "migrations", 
-  %{_id: "lock", used: false}, 
-  %{"$set": %{used: true}}, 
+Mongo.update_one(topology,
+  "migrations",
+  %{_id: "lock", used: false},
+  %{"$set": %{used: true}},
   upsert: true)
 ```
+
 You can lock and unlock the migration collection using these functions in case of an error:
 
-1. `Mongo.Migration.lock()` 
+1. `Mongo.Migration.lock()`
 2. `Mongo.Migration.unlock()` or `mix mongo.unlock`
 
 If nothing helps, just delete the document with `{_id: "lock"}` from the migration collection.
@@ -795,6 +804,7 @@ For more information see:
 - https://hexdocs.pm/mix/1.14/Mix.Tasks.Release.html
 
 ### Configuration:
+
 You need to configure the migration module and specify at least the `:otp_app` and `:topology` values. Here are the
 default values:
 
@@ -807,16 +817,17 @@ default values:
                 otp_app: :mongodb_driver
             ]
 
-The following  options are available:
-* `:collection` - Version numbers of migrations will be saved in a collection named `migrations` by default.
-* `:path` - the `priv` directory for migrations. `:path` defaults to "migrations" and migrations should be placed at "priv/mongo/migrations". The pattern to build the path is `:priv/:topology/:path`
-* `:otp_app` - the name of the otp_app to resolve the `priv` folder, defaults to `:mongodb_driver`. In most cases you use your application name.
-* `:topology` - the topology for running the migrations, `:topology` defaults to `:mongo`
+The following options are available:
+
+- `:collection` - Version numbers of migrations will be saved in a collection named `migrations` by default.
+- `:path` - the `priv` directory for migrations. `:path` defaults to "migrations" and migrations should be placed at "priv/mongo/migrations". The pattern to build the path is `:priv/:topology/:path`
+- `:otp_app` - the name of the otp_app to resolve the `priv` folder, defaults to `:mongodb_driver`. In most cases you use your application name.
+- `:topology` - the topology for running the migrations, `:topology` defaults to `:mongo`
 
 ### Supporting multiple topologies:
 
-Each function `lock/1, unlock/1, migrate/1, drop/1` accepts a keyword list (options) to override the default config having 
-full control of the migration process. The options are passed through the migration scripts. 
+Each function `lock/1, unlock/1, migrate/1, drop/1` accepts a keyword list (options) to override the default config having
+full control of the migration process. The options are passed through the migration scripts.
 
 That means you can support multiple topologies, databases and migration collections. Example
 
@@ -827,17 +838,17 @@ That means you can support multiple topologies, databases and migration collecti
     Mongo.Migration.migrate() ## default values specified in the configs
 
     IO.puts("running topology_2 migration")
-    Mongo.Migration.migrate([topology: :topology_2]) ## override the topology 
+    Mongo.Migration.migrate([topology: :topology_2]) ## override the topology
 
 Adding the options parameter in the `up/1` and `down/1` function of the migration script is supported as well. It is
 possible to pass additional parameters to the migration scripts.
 
     defmodule Mongo.Migrations.Topology.CreateIndex do
-        def up(opts) do 
+        def up(opts) do
             IO.inspect(opts)
             ...
         end
-        
+
         def down(opts) do
             IO.inspect(opts)
             ...
@@ -846,6 +857,7 @@ possible to pass additional parameters to the migration scripts.
 
 The topology is part of the namespace and of the migration path as well. The default value is defined in the configuration.
 You can specify the topology in the case of creating a new migration script by appending the name to the script call:
+
 ```elixir
 
 mix mongo.gen.migration add_indexes topology_2
@@ -880,19 +892,20 @@ auth mechanism is supported for LDAP authentication. The GSSAPI auth mechanism u
 is not currently supported.
 
 If you'd like to use [MONGODB-X509](https://www.mongodb.com/docs/v6.0/tutorial/configure-x509-client-authentication/)
-authentication, you can specify that as a `start_link` option. 
+authentication, you can specify that as a `start_link` option.
 
 You need roughly three additional configuration steps:
 
-* Deploy with x.509 Authentication
-* Add x.509 Certificate subject as a User
-* Authenticate with an x.509 Certificate
+- Deploy with x.509 Authentication
+- Add x.509 Certificate subject as a User
+- Authenticate with an x.509 Certificate
 
 To get the x.509 authentication working you need to prepare the ssl configuration accordingly:
-* you need to set the ssl option: `verify_peer`
-* you need to specify the `cacertfile` because Erlang BEAM don't provide any CA certificate store by default
-* you maybe need to customize the hostname check to allow wildcard certificates
-* you need to specify the `username` from the subject entry of the user certificate
+
+- you need to set the ssl option: `verify_peer`
+- you need to specify the `cacertfile` because Erlang BEAM don't provide any CA certificate store by default
+- you maybe need to customize the hostname check to allow wildcard certificates
+- you need to specify the `username` from the subject entry of the user certificate
 
 If you use a user certificate from Atlas a working configuration looks like this. First we
 use the [castore](https://hex.pm/packages/castore) package as the CA certificate store. After downloading
@@ -905,6 +918,7 @@ openssl x509 -in <pathToClientPEM> -inform PEM -subject -nameopt RFC2253
 ```
 
 The configuration looks now:
+
 ```elixir
   opts = [
       url: "mongodb+srv://cluster0.xxx.mongodb.net/myFirstDatabase?authSource=%24external&retryWrites=true&w=majority",
@@ -925,11 +939,11 @@ The configuration looks now:
     Mongo.start_link(opts)
 ```
 
-Currently, we need to specify *an empty password* to get the x.509 auth module working. This will be changed soon.  
+Currently, we need to specify _an empty password_ to get the x.509 auth module working. This will be changed soon.
 
 ## x509 and using a dedicated MongoDB Atlas server
 
-Using OTP 26 changed the default configuration regarding TLS. You may see issues when 
+Using OTP 26 changed the default configuration regarding TLS. You may see issues when
 connecting to a dedicated Atlas Server using OTP 26. You can restrict the allowed versions and force to use TLS 1.2 instead
 of TLS 1.3.
 
@@ -939,7 +953,7 @@ of TLS 1.3.
    ...
 ```
 
-See also [MongoDB Security](https://www.mongodb.com/docs/atlas/reference/faq/security/) and 
+See also [MongoDB Security](https://www.mongodb.com/docs/atlas/reference/faq/security/) and
 the [Issue 226](https://github.com/zookzook/elixir-mongodb-driver/issues/226) for some background information.
 
 ## AWS, TLS and Erlang SSL Ciphers
@@ -962,8 +976,8 @@ See the example `AWSX509.Example` as well.
 
 ## Timeout
 
-The `:timeout` option sets the maximum time that the caller is allowed to hold the connection’s state (to send and to receive data). 
-The default value is 15 seconds. The connection pool defines additional timeout values. 
+The `:timeout` option sets the maximum time that the caller is allowed to hold the connection’s state (to send and to receive data).
+The default value is 15 seconds. The connection pool defines additional timeout values.
 You can use the `:timeout` as a global option to override the default value:
 
 ```elixir
@@ -985,13 +999,13 @@ Now the driver will use 120 seconds as the timeout for the single query.
 The `:read_preference` option sets [read preference](https://www.mongodb.com/docs/manual/core/read-preference/) for the query. The read preference is
 a simple map, supporting the following keys:
 
-* `:mode`, possible values: `:primary`, `:primary_preferred`, `:secondary`, `:secondary_preferred` and `:nearest`
-* `:max_staleness_ms`, the maxStaleness value in milliseconds
-* `:tags`, the set of tags, for example: `[dc: "west", usage: "production"]`
+- `:mode`, possible values: `:primary`, `:primary_preferred`, `:secondary`, `:secondary_preferred` and `:nearest`
+- `:max_staleness_ms`, the maxStaleness value in milliseconds
+- `:tags`, the set of tags, for example: `[dc: "west", usage: "production"]`
 
-The driver selects the server using the read preference. 
+The driver selects the server using the read preference.
 
-```elixr 
+```elixr
 prefs = %{
     mode: :secondary,
     max_staleness_ms: 120_000,
@@ -1161,6 +1175,7 @@ details, and you can use a convenient api for transactions:
 end, w: 1)
 
 ```
+
 The `Mongo.transaction/3` function supports nesting. This allows the functions to be called from each other and all write operations
 are still in the same transaction. The session is stored in the process dictionary under the key `:session`. The surrounding
 `Mongo.transaction/3` call creates the session and starts the transaction, storing the session in the process dictionary, commits or
@@ -1201,6 +1216,7 @@ Mongo.insert_one(top, "dogs", %{name: "Tom"}, session: session)
 :ok = Session.commit_transaction(session)
 :ok = Session.end_session(top, session)
 ```
+
 For more information see `Mongo.Session` and have a look at the test units as well.
 
 ### Aborting a transaction
@@ -1258,8 +1274,9 @@ $ mongod --sslMode allowSSL --sslPEMKeyFile /path/to/mongodb.pem
 - You can enable any other options you want when starting `mongod`
 
 ## Additional articles
-* [Connecting to MongoDB with Elixir](https://zookzook.github.io/2024/08-25.html)
-* [Using Network Compression with MongoDB in Elixir](https://zookzook.github.io/2024/09-15.html)
+
+- [Connecting to MongoDB with Elixir](https://zookzook.github.io/2024/08-25.html)
+- [Using Network Compression with MongoDB in Elixir](https://zookzook.github.io/2024/09-15.html)
 
 ## Copyright and License
 

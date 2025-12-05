@@ -1,6 +1,7 @@
 defmodule Mongo.ServerDescription do
   @moduledoc false
 
+  alias Mongo.Compressor
   alias Mongo.Version
 
   @retryable_wire_version Version.encode(:supports_op_msg)
@@ -8,13 +9,8 @@ defmodule Mongo.ServerDescription do
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#serverdescription
   @type type :: :standalone | :mongos | :possible_primary | :rs_primary | :rs_secondary | :rs_arbiter | :rs_other | :rs_ghost | :unknown
 
-  if Code.ensure_loaded?(:ezstd) do
-    @type compressor_types :: :zlib | :zstd
-    @support_compressors ["zlib", "zstd"]
-  else
-    @type compressor_types :: :zlib
-    @support_compressors ["zlib"]
-  end
+  @type compressor_types :: :zlib | :zstd
+  @support_compressors Compressor.compressors()
 
   @type t :: %{
           address: String.t() | nil,
@@ -182,14 +178,8 @@ defmodule Mongo.ServerDescription do
 
   defp determine_server_type(_), do: :standalone
 
-  if Code.ensure_loaded?(:ezstd) do
-    def support_compressors() do
-      [:zstd, :zlib]
-    end
-  else
-    def support_compressors() do
-      [:zlib]
-    end
+  def support_compressors() do
+    Enum.map(@support_compressors, &String.to_existing_atom/1)
   end
 
   defp replica?(server_type) do
