@@ -10,7 +10,6 @@ defmodule Mongo.ServerDescription do
   @type type :: :standalone | :mongos | :possible_primary | :rs_primary | :rs_secondary | :rs_arbiter | :rs_other | :rs_ghost | :unknown
 
   @type compressor_types :: :zlib | :zstd
-  @support_compressors Compressor.compressors()
 
   @type t :: %{
           address: String.t() | nil,
@@ -110,7 +109,7 @@ defmodule Mongo.ServerDescription do
       max_bson_object_size: hello_response["maxBsonObjectSize"] || 16_777_216,
       max_message_size_bytes: hello_response["maxMessageSizeBytes"] || 48_000_000,
       max_write_batch_size: hello_response["maxWriteBatchSize"] || 100_000,
-      compression: map_compressors(hello_response["compression"]),
+      compression: Compressor.map_compressors(hello_response["compression"]),
       read_only: hello_response["readOnly"] || false,
       logical_session_timeout: hello_response["logicalSessionTimeoutMinutes"] || 30,
       supports_retryable_writes: supports_retryable_writes,
@@ -143,22 +142,12 @@ defmodule Mongo.ServerDescription do
       max_bson_object_size: hello_response["maxBsonObjectSize"] || 16_777_216,
       max_message_size_bytes: hello_response["maxMessageSizeBytes"] || 48_000_000,
       max_write_batch_size: hello_response["maxWriteBatchSize"] || 100_000,
-      compression: map_compressors(hello_response["compression"]),
+      compression: Mongo.Compressor.map_compressors(hello_response["compression"]),
       read_only: hello_response["readOnly"] || false,
       logical_session_timeout: hello_response["logicalSessionTimeoutMinutes"] || 30,
       supports_retryable_writes: server_type != :standalone && max_wire_version >= @retryable_wire_version && hello_response["logicalSessionTimeoutMinutes"] != nil,
       replica?: replica?(server_type)
     }
-  end
-
-  defp map_compressors(nil) do
-    []
-  end
-
-  defp map_compressors(compressors) do
-    compressors
-    |> Enum.filter(fn compressor -> compressor in @support_compressors end)
-    |> Enum.map(fn compressor -> String.to_existing_atom(compressor) end)
   end
 
   # see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#type
@@ -177,10 +166,6 @@ defmodule Mongo.ServerDescription do
   end
 
   defp determine_server_type(_), do: :standalone
-
-  def support_compressors() do
-    Enum.map(@support_compressors, &String.to_existing_atom/1)
-  end
 
   defp replica?(server_type) do
     server_type in [:rs_primary, :rs_secondary, :rs_arbiter, :rs_other, :rs_ghost]

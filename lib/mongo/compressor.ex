@@ -5,12 +5,38 @@ defmodule Mongo.Compressor do
   @zstd_module Enum.find([:zstd, :ezstd], &Code.ensure_loaded?/1)
 
   if @zstd_module do
+    @support_compressors ["zstd", "zlib"]
+  else
+    @support_compressors ["zlib"]
+  end
+
+  if @zstd_module do
     @zstd_compressor_id 3
+  end
+
+  def map_compressors(nil) do
+    []
+  end
+
+  def map_compressors(compressors) do
+    compressors
+    |> Enum.filter(fn compressor -> compressor in @support_compressors end)
+    |> Enum.map(fn compressor -> compressor_to_atom(compressor) end)
+  end
+
+  def compressor_to_atom("zstd") do
+    :zstd
+  end
+
+  def compressor_to_atom("zlib") do
+    :zlib
   end
 
   def zstd_available?, do: not is_nil(@zstd_module)
 
-  def compressors, do: if(zstd_available?(), do: ["zstd", "zlib"], else: ["zlib"])
+  def compressors() do
+    @support_compressors
+  end
 
   def compress(binary, :zlib) do
     {@zlib_compressor_id, :zlib.compress(binary)}
