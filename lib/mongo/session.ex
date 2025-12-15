@@ -393,9 +393,9 @@ defmodule Mongo.Session do
   end
 
   def init(topology, conn, address, server_session, wire_version, opts) do
-    ## in case of `:retryable_write` we need to inc the transaction id
+    ## in case of `:retryable_writes` we need to inc the transaction id
     server_session =
-      case opts[:retryable_write] do
+      case opts[:retryable_writes] do
         true -> ServerSession.next_txn_num(server_session)
         _ -> server_session
       end
