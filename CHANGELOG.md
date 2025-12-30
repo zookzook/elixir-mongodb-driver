@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.6.0...v1.6.1) (2025-12-15)
+
+
+### Bug Fixes
+
+* fixes a typo which blocks the correct behaviour of retryable_writes: true ([#287](https://github.com/zookzook/elixir-mongodb-driver/issues/287)) ([b38f2fc](https://github.com/zookzook/elixir-mongodb-driver/commit/b38f2fc3ff3066e9e372b85afcd4a1e222f51518))
+* this fixes the exception when using unknown atoms as compressor options ([#294](https://github.com/zookzook/elixir-mongodb-driver/issues/294)) ([96e7d6a](https://github.com/zookzook/elixir-mongodb-driver/commit/96e7d6a9fa02845a124371d0d1e32fe66837a76e))
+
 ## [1.6.0](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.5.6...v1.6.0) (2025-11-22)
 
 ### Enhancements
