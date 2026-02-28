@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.6.1...v1.6.2) (2026-02-28)
+
+
+### Bug Fixes
+
+* now uncompress function works with Erlang 28.x zstd ([c368dee](https://github.com/zookzook/elixir-mongodb-driver/commit/c368dee63b695d5dd7072a4e60416099a406f749))
+* removed compiler warning ([fcebea2](https://github.com/zookzook/elixir-mongodb-driver/commit/fcebea2a491a9e4457a8862baea9553d7bad5628))
+* removed compiler warning ([e07a9c0](https://github.com/zookzook/elixir-mongodb-driver/commit/e07a9c08e57e53d494487feecbba90a4a6ca3de4))
+* removed the compiler warning ([#297](https://github.com/zookzook/elixir-mongodb-driver/issues/297)) ([992788b](https://github.com/zookzook/elixir-mongodb-driver/commit/992788bc8ef91a3d6edb02ce27937c6ca9b1134c))
+
 ## [1.6.1](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.6.0...v1.6.1) (2025-12-15)
 
 
