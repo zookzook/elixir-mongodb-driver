@@ -179,4 +179,54 @@ defmodule Mongo.MongoDBConnection.Utils do
         end
     end
   end
+
+  @tls13 :"tlsv1.3"
+
+  @doc """
+  Restricts TLS versions when the caller-supplied `:ciphers` are not compatible with TLS 1.3.
+
+  Erlang's `:ssl` does not automatically fall back from TLS 1.3 to TLS 1.2 when the configured
+  ciphers exclude TLS 1.3: it attempts TLS 1.3 negotiation, finds no compatible suite, and the
+  handshake fails. When the caller supplies `:ciphers` without an explicit `:versions`, this
+  function detects the TLS-1.2-only case and sets `:versions` to exclude TLS 1.3 so the
+  connection succeeds.
+  """
+  @spec maybe_restrict_versions(Keyword.t()) :: Keyword.t()
+  def maybe_restrict_versions(ssl_opts) do
+    with ciphers when is_list(ciphers) and ciphers != [] <- ssl_opts[:ciphers],
+         false <- Keyword.has_key?(ssl_opts, :versions),
+         supported = :ssl.versions()[:supported],
+         true <- @tls13 in supported,
+         tls13_ciphers = :ssl.cipher_suites(:exclusive, @tls13),
+         false <- any_cipher_match?(ciphers, tls13_ciphers) do
+      Logger.warning("restricting TLS versions to [:\"tlsv1.2\"] because supplied :ciphers do not include any TLS 1.3 suite")
+      Keyword.put(ssl_opts, :versions, [:"tlsv1.2"])
+    else
+      _ -> ssl_opts
+    end
+  end
+
+  defp any_cipher_match?(user_ciphers, tls13_ciphers) do
+    Enum.any?(user_ciphers, fn user_cipher ->
+      Enum.any?(tls13_ciphers, fn tls13_cipher ->
+        compare_ciphers(user_cipher, tls13_cipher)
+      end)
+    end)
+  end
+
+  defp compare_ciphers(c1, c2) do
+    s1 = to_cipher_charlist(c1)
+    s2 = to_cipher_charlist(c2)
+    s1 != nil and s1 == s2
+  end
+
+  # Normalize a cipher to a charlist for comparison. Returns an IANA-style
+  # charlist for known cipher shapes (charlist, binary, atom, map, tuple)
+  # via `:ssl.suite_to_str/1`, or `nil` if the value is not a recognizable
+  # cipher form. Callers must treat `nil` as "no match".
+  defp to_cipher_charlist(c) when is_list(c), do: c
+  defp to_cipher_charlist(c) when is_binary(c), do: String.to_charlist(c)
+  defp to_cipher_charlist(c) when is_atom(c), do: Atom.to_charlist(c)
+  defp to_cipher_charlist(c) when is_map(c) or is_tuple(c), do: :ssl.suite_to_str(c)
+  defp to_cipher_charlist(_), do: nil
 end
