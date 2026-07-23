@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.4](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.6.3...v1.6.4) (2026-05-27)
+
+
+### Bug Fixes
+
+* do not negotiate TLS 1.3 when only TLS 1.2 ciphers are supplied ([#303](https://github.com/zookzook/elixir-mongodb-driver/issues/303)) ([b1f130c](https://github.com/zookzook/elixir-mongodb-driver/commit/b1f130cedba5984a9084d099e0bd120b17617dad))
+
 ## [1.6.3](https://github.com/zookzook/elixir-mongodb-driver/compare/v1.6.2...v1.6.3) (2026-05-19)
 
 
