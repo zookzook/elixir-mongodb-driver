@@ -1,12 +1,13 @@
+name: release-please
+
 on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
 
-name: release-please
+permissions:
+  contents: write
+  pull-requests: write
 
 env:
   HEX_API_KEY: ${{ secrets.HEX_TOKEN }}
@@ -14,20 +15,44 @@ env:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: google-github-actions/release-please-action@v3
+      - name: Release Please
         id: release
+        uses: googleapis/release-please-action@v4
         with:
           release-type: elixir
           package-name: mongodb_driver
-      - uses: erlef/setup-beam@v1
+
+      - name: Checkout
         if: ${{ steps.release.outputs.release_created }}
+        uses: actions/checkout@v4
+
+      - name: Setup BEAM
+        if: ${{ steps.release.outputs.release_created }}
+        uses: erlef/setup-beam@v1
         with:
-          otp-version: 26.0.2
-          elixir-version: 1.15.4
-      - run: mix do deps.get, deps.compile
+          otp-version: "27.0"
+          elixir-version: "1.17.2"
+
+      - name: Install Hex + Rebar
         if: ${{ steps.release.outputs.release_created }}
-      - run: mix hex.build
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+
+      - name: Install dependencies
         if: ${{ steps.release.outputs.release_created }}
-      - run: mix hex.publish --yes --replace
+        run: mix deps.get
+
+      - name: Compile
         if: ${{ steps.release.outputs.release_created }}
+        run: mix compile
+
+      - name: Build package
+        if: ${{ steps.release.outputs.release_created }}
+        run: mix hex.build
+
+      - name: Publish to Hex
+        if: ${{ steps.release.outputs.release_created }}
+        run: mix hex.publish --yes
