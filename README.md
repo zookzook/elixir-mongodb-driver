@@ -974,6 +974,22 @@ you'll want to add this cipher to your `ssl_opts`:
 
 See the example `AWSX509.Example` as well.
 
+### TLS URI options
+
+`tlsCAFile` and `tlsAllowInvalidCertificates` can be specified directly in the connection URL.
+`tlsCAFile` sets the CA certificate file for peer verification; `tlsAllowInvalidCertificates=true`
+disables certificate verification (useful in development with self-signed certificates).
+
+```elixir
+# verify peer against a specific CA certificate
+{:ok, pid} = Mongo.start_link(url: "mongodb://localhost/db?tls=true&tlsCAFile=/etc/ssl/certs/ca.pem")
+
+# disable certificate verification
+{:ok, pid} = Mongo.start_link(url: "mongodb://localhost/db?tls=true&tlsAllowInvalidCertificates=true")
+```
+
+Code-level `ssl_opts` take precedence over URI-derived TLS options.
+
 ## Timeout
 
 The `:timeout` option sets the maximum time that the caller is allowed to hold the connection’s state (to send and to receive data).

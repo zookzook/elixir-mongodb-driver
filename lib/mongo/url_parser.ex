@@ -51,6 +51,8 @@ defmodule Mongo.UrlParser do
     "heartbeatFrequencyMS" => :number,
     "retryWrites" => ["true", "false"],
     "tls" => ["true", "false"],
+    "tlsCAFile" => :string,
+    "tlsAllowInvalidCertificates" => ["true", "false"],
     "compressors" => @compressors,
     "uuidRepresentation" => ["standard", "csharpLegacy", "javaLegacy", "pythonLegacy"],
     # Elixir Driver options
@@ -212,6 +214,7 @@ defmodule Mongo.UrlParser do
          frags <- resolve_srv_url(frags),
          opts <- parse_seeds(opts, frags),
          opts <- parse_query_options(opts, frags),
+         opts <- collect_tls_ssl_opts(opts),
          opts <- process_read_preferences(opts),
          # Parse fixed parameters (database, username & password) & merge them with query options
          opts <- Enum.reduce(frags, opts, &add_option/2) do
@@ -223,6 +226,29 @@ defmodule Mongo.UrlParser do
   end
 
   def parse_url(opts), do: opts
+
+  defp collect_tls_ssl_opts(opts) do
+    {ca_file, opts} = Keyword.pop(opts, :tls_ca_file)
+    {allow_invalid, opts} = Keyword.pop(opts, :tls_allow_invalid_certificates)
+
+    tls_opts =
+      Keyword.merge(ca_file_ssl_opts(ca_file), allow_invalid_ssl_opts(allow_invalid))
+
+    case tls_opts do
+      [] ->
+        opts
+
+      base ->
+        ssl_opts = Keyword.merge(base, opts[:ssl_opts] || [])
+        Keyword.put(opts, :ssl_opts, ssl_opts)
+    end
+  end
+
+  defp ca_file_ssl_opts(nil), do: []
+  defp ca_file_ssl_opts(path), do: [cacertfile: String.to_charlist(path), verify: :verify_peer]
+
+  defp allow_invalid_ssl_opts(true), do: [verify: :verify_none]
+  defp allow_invalid_ssl_opts(_), do: []
 
   defp process_read_preferences(opts) do
     opts =
