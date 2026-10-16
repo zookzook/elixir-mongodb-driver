@@ -93,6 +93,34 @@ defmodule Mongo.UrlParserTest do
              ]
     end
 
+    test "tlsCAFile sets cacertfile and verify peer in ssl_opts" do
+      url = "mongodb://localhost/db?tls=true&tlsCAFile=/etc/ssl/certs/ca.pem"
+
+      result = UrlParser.parse_url(url: url)
+
+      assert result[:tls] == true
+      assert result[:ssl_opts][:cacertfile] == ~c"/etc/ssl/certs/ca.pem"
+      assert result[:ssl_opts][:verify] == :verify_peer
+    end
+
+    test "tlsAllowInvalidCertificates overrides verify to none" do
+      url = "mongodb://localhost/db?tls=true&tlsCAFile=/etc/ssl/certs/ca.pem&tlsAllowInvalidCertificates=true"
+
+      result = UrlParser.parse_url(url: url)
+
+      assert result[:ssl_opts][:cacertfile] == ~c"/etc/ssl/certs/ca.pem"
+      assert result[:ssl_opts][:verify] == :verify_none
+    end
+
+    test "code ssl_opts overrides URI tls options" do
+      url = "mongodb://localhost/db?tls=true&tlsCAFile=/etc/ssl/certs/ca.pem"
+
+      result = UrlParser.parse_url(url: url, ssl_opts: [verify: :verify_none])
+
+      assert result[:ssl_opts][:cacertfile] == ~c"/etc/ssl/certs/ca.pem"
+      assert result[:ssl_opts][:verify] == :verify_none
+    end
+
     test "merge options" do
       assert UrlParser.parse_url(url: "mongodb://localhost:27017", name: :test, seeds: ["1234"]) ==
                [seeds: ["localhost:27017"], name: :test]
