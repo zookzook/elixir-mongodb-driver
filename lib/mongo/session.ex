@@ -378,12 +378,19 @@ defmodule Mongo.Session do
   def alive?(nil), do: false
   def alive?(pid), do: Process.alive?(pid)
 
-  @compile {:inline, call: 2}
+  # The session process stops after `end_session` or a crash, and would then
+  # never answer, so a call to a stopped session returns an error.
   defp call(pid, arguments) do
+    monitor = Process.monitor(pid)
     send(pid, {:call, self(), arguments})
 
     receive do
-      {:session_result, result} -> result
+      {:session_result, result} ->
+        Process.demonitor(monitor, [:flush])
+        result
+
+      {:DOWN, ^monitor, :process, ^pid, reason} ->
+        {:error, Mongo.Error.exception("the session has ended: #{inspect(reason)}")}
     end
   end
 

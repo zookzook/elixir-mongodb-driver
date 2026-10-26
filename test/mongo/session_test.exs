@@ -27,6 +27,18 @@ defmodule Mongo.SessionTest do
   end
 
   @tag :mongo_3_6
+  test "calls on an ended session return an error instead of waiting forever", %{top: top} do
+    coll = unique_collection()
+
+    {:ok, session} = Session.start_session(top, :write, [])
+    assert :ok == Session.end_session(top, session)
+
+    assert {:error, %Mongo.Error{message: "the session has ended: " <> _reason}} = Session.end_session(top, session)
+    assert {:error, %Mongo.Error{}} = Session.abort_transaction(session)
+    assert {:error, %Mongo.Error{}} = Mongo.insert_one(top, coll, %{name: "Greta"}, session: session)
+  end
+
+  @tag :mongo_3_6
   test "session pool fifo", _ do
     session_pool = SessionPool.new(30)
 
