@@ -285,6 +285,9 @@ The decoder module is defined at compile time. The default decoder is `BSON.Deco
 key order. As it needs to execute fewer operations when decoding data received from MongoDB, it offers improved
 performance. Therefore, the default decoder is recommended for most use cases of this driver.
 
+A custom decoder module needs `document/1`. To have large cursor batches decoded a chunk at a time while a
+`Mongo.Stream` is consumed, it can also implement the optional callbacks of the `BSON.LazyDocuments` behaviour.
+
 ## Writing your own encoding info
 
 If you want to write a custom struct to your mongo collection - you can do that

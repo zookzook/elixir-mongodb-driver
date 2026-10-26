@@ -1645,11 +1645,28 @@ defmodule Mongo do
   @spec exec_command_session(GenServer.server(), BSON.document(), Keyword.t()) ::
           {:ok, BSON.document() | nil} | {:error, Mongo.Error.t()}
   def exec_command_session(session, cmd, opts) do
+    with {:ok, doc, _duration} <- run_command_session(session, cmd, opts) do
+      {:ok, doc}
+    end
+  end
+
+  @doc false
+  # Used by Mongo.Stream. Runs a getMore and returns its batch undecoded (BSON.LazyDocuments)
+  # unless someone is subscribed to command events. The log and the telemetry event of such a
+  # getMore are left to the caller (see log_command/3), so that their duration can still
+  # include decoding the batch.
+  @spec exec_get_more(GenServer.server(), BSON.document(), Keyword.t()) ::
+          {:ok, BSON.document(), non_neg_integer} | {:error, Mongo.Error.t()}
+  def exec_get_more(session, cmd, opts) do
+    run_command_session(session, cmd, Keyword.put(opts, :lazy_cursor, true))
+  end
+
+  defp run_command_session(session, cmd, opts) do
     with {:ok, conn, new_cmd, opts} <- Session.bind_session(session, cmd, opts),
-         {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:command, new_cmd}}, [], opts),
+         {:ok, _cmd, {_doc, _event, _flags, duration} = response} <- execute(conn, %Query{action: {:command, new_cmd}}, opts),
          :ok <- Session.update_session(session, response, opts),
          {:ok, {_flags, doc}} <- check_for_error(response, cmd, opts) do
-      {:ok, doc}
+      {:ok, doc, duration}
     else
       {:error, error} ->
         {:error, error}
@@ -1660,25 +1677,49 @@ defmodule Mongo do
   @spec exec_command(GenServer.server(), BSON.document(), Keyword.t()) ::
           {:ok, {any(), BSON.document()} | nil} | {:error, Mongo.Error.t()}
   def exec_command(conn, cmd, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:command, cmd}}, [], opts) do
+    with {:ok, _cmd, response} <- execute(conn, %Query{action: {:command, cmd}}, opts) do
       check_for_error(response, cmd, opts)
     end
   end
 
+  # Cursor batches arrive undecoded (BSON.LazyDocuments, see Mongo.Messages) and are decoded
+  # here, so callers get the same replies as before. Only Mongo.Stream (with `lazy_cursor: true`)
+  # decodes its getMore batches itself, a few documents at a time; but when someone is
+  # subscribed to command events, which carry decoded replies, they are decoded here as well.
+  defp execute(conn, query, opts) do
+    with {:ok, query, {doc, event, flags, duration}} <- DBConnection.execute(conn, query, [], opts) do
+      case opts[:lazy_cursor] == true and Registry.lookup(:events_registry, :commands) == [] do
+        true -> {:ok, query, {doc, event, flags, duration}}
+        false -> materialize(query, {doc, event, flags, duration})
+      end
+    end
+  end
+
+  # The duration includes decoding, as before. Fails like a reply that cannot be decoded in the
+  # connection (see Mongo.MongoDBConnection.Utils).
+  defp materialize(query, {doc, event, flags, duration}) do
+    {decoding, doc} = :timer.tc(fn -> BSON.LazyDocuments.materialize(doc) end)
+    {:ok, query, {doc, event, flags, duration + decoding}}
+  rescue
+    error ->
+      Logger.error("Unable to send request to database because of #{inspect(error)}")
+      {:error, error}
+  end
+
   def exec_hello(conn, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:exec_hello, []}}, [], opts) do
+    with {:ok, _cmd, response} <- execute(conn, %Query{action: {:exec_hello, []}}, opts) do
       check_for_error(response, :exec_hello, opts)
     end
   end
 
   def exec_hello(conn, cmd, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: {:exec_hello, cmd}}, [], opts) do
+    with {:ok, _cmd, response} <- execute(conn, %Query{action: {:exec_hello, cmd}}, opts) do
       check_for_error(response, :exec_hello, opts)
     end
   end
 
   def exec_more_to_come(conn, opts) do
-    with {:ok, _cmd, response} <- DBConnection.execute(conn, %Query{action: :more_to_come}, [], opts) do
+    with {:ok, _cmd, response} <- execute(conn, %Query{action: :more_to_come}, opts) do
       check_for_error(response, :more_to_come, opts)
     end
   end
@@ -1790,7 +1831,7 @@ defmodule Mongo do
       :commands
     )
 
-    do_log(cmd, duration, opts)
+    log_success(response, cmd, duration, opts)
 
     {:ok, {flags, response}}
   end
@@ -1805,7 +1846,7 @@ defmodule Mongo do
       :commands
     )
 
-    do_log(cmd, duration, opts)
+    log_success(response, cmd, duration, opts)
 
     {:ok, {flags, response}}
   end
@@ -1888,6 +1929,14 @@ defmodule Mongo do
 
   defp assert_many_docs!(other),
     do: raise(ArgumentError, "expected list of documents, got: #{inspect(other)}")
+
+  # A getMore batch that is still undecoded is logged by Mongo.Stream once it has been decoded.
+  defp log_success(%{"cursor" => %{"nextBatch" => %BSON.LazyDocuments{}}}, _cmd, _duration, _opts), do: :ok
+  defp log_success(_response, cmd, duration, opts), do: do_log(cmd, duration, opts)
+
+  @doc false
+  # Logs a command and emits its telemetry event, see exec_get_more/3.
+  def log_command(cmd, duration, opts), do: do_log(cmd, duration, opts)
 
   ## support for logging like Ecto
   defp do_log(:more_to_come, _duration, _opts) do

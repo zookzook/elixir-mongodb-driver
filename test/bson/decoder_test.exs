@@ -42,6 +42,18 @@ defmodule BSON.DecoderTest do
   # }
   @bson_document <<62, 0, 0, 0, 3, 107, 101, 121, 49, 0, 26, 0, 0, 0, 16, 97, 0, 1, 0, 0, 0, 16, 98, 0, 2, 0, 0, 0, 16, 99, 0, 3, 0, 0, 0, 0, 3, 107, 101, 121, 50, 0, 19, 0, 0, 0, 16, 120, 0, 4, 0, 0, 0, 16, 121, 0, 5, 0, 0, 0, 0, 0>>
 
+  test "long keys do not keep the reply binary alive" do
+    long = String.duplicate("k", 65)
+    binary = %{long => 1, "short" => 2} |> BSON.encode() |> IO.iodata_to_binary()
+    decoded = BSON.Decoder.decode(binary)
+
+    # Compared with the reply's size rather than the key's: OTP 27 returns a small
+    # binary's size in bits from :binary.referenced_byte_size/1.
+    for key <- Map.keys(decoded) do
+      assert :binary.referenced_byte_size(key) < byte_size(binary)
+    end
+  end
+
   describe "BSON.Decoder.decode/1" do
     test "decodes binary data into a map" do
       assert BSON.Decoder.decode(@bson_document) == %{
