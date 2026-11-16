@@ -482,7 +482,7 @@ defmodule Mongo do
           GenServer.server(),
           collection,
           BSON.document(),
-          BSON.document(),
+          [BSON.document()] | BSON.document(),
           Keyword.t()
         ) :: result(Mongo.FindAndModifyResult.t())
   def find_one_and_update(topology_pid, coll, filter, update, opts \\ []) do
