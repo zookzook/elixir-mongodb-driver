@@ -60,6 +60,34 @@ defmodule BSON.Decimal128Test do
     assert_decimal(%Decimal{sign: -1, coef: 1, exp: -6176})
   end
 
+  test "BSON.Decimal128.decode/1 reads invalid representations as zero with sign and exponent" do
+    # from the BSON corpus (decimal128-1.json)
+    assert_decimal(Base.decode16!("DCBA9876543210DEADBEEF00000010EC"), %Decimal{sign: -1, coef: 0, exp: 0})
+    assert_decimal(Base.decode16!("FFFFFFFFFFFFFFFFFFFFFFFFFFFF116C"), %Decimal{coef: 0, exp: 3})
+  end
+
+  test "BSON.Decimal128.encode/1 clamps the exponent without changing the value" do
+    assert_encoded(%Decimal{coef: 1, exp: 6112}, %Decimal{coef: 10, exp: 6111})
+    assert_encoded(%Decimal{coef: 10, exp: -6177}, %Decimal{coef: 1, exp: -6176})
+    assert_encoded(%Decimal{coef: 0, exp: 7000}, %Decimal{coef: 0, exp: 6111})
+    assert_encoded(%Decimal{sign: -1, coef: 0, exp: -7000}, %Decimal{sign: -1, coef: 0, exp: -6176})
+
+    assert_encoded(%Decimal{coef: 12_345_678_901_234_567_890_123_456_789_012_340, exp: 0}, %Decimal{
+      coef: 1_234_567_890_123_456_789_012_345_678_901_234,
+      exp: 1
+    })
+  end
+
+  test "BSON.Decimal128.encode/1 raises when the value does not fit" do
+    assert_raise ArgumentError, fn -> BSON.Decimal128.encode(%Decimal{coef: 12_345_678_901_234_567_890_123_456_789_012_345, exp: 0}) end
+    assert_raise ArgumentError, fn -> BSON.Decimal128.encode(%Decimal{coef: 10_000_000_000_000_000_000_000_000_000_000_000, exp: 6111}) end
+    assert_raise ArgumentError, fn -> BSON.Decimal128.encode(%Decimal{coef: 1, exp: -6177}) end
+  end
+
+  defp assert_encoded(decimal, expected_decimal) do
+    assert decimal |> BSON.Decimal128.encode() |> BSON.Decimal128.decode() == expected_decimal
+  end
+
   defp assert_decimal(expected_decimal) do
     value =
       expected_decimal

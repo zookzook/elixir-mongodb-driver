@@ -14,6 +14,7 @@ defmodule BSON.Decimal128 do
   @max_exponent 6111
   @min_exponent -6176
   @significand_mask (0x1 <<< 49) - 1
+  @max_significand 9_999_999_999_999_999_999_999_999_999_999_999
   @low_mask 0xFFFFFFFFFFFFFFFF
 
   def decode(<<_::little-64, high::little-64>> = bits) do
@@ -25,8 +26,8 @@ defmodule BSON.Decimal128 do
     exponent = exponent(high, two_highest_bits_set)
 
     value(
-      %{is_negative: is_negative, is_infinity: is_infinity, is_nan: is_nan, two_highest_bits_set: two_highest_bits_set},
-      coef(bits),
+      %{is_negative: is_negative, is_infinity: is_infinity, is_nan: is_nan},
+      coef(bits, two_highest_bits_set),
       exponent
     )
   end
@@ -54,7 +55,34 @@ defmodule BSON.Decimal128 do
     <<low::little-64, high::little-64>>
   end
 
-  def encode(%Decimal{sign: sign, coef: significand, exp: exponent}) when exponent >= @min_exponent and exponent <= @max_exponent do
+  def encode(%Decimal{sign: sign, coef: significand, exp: exponent} = decimal) do
+    case clamp(significand, exponent) do
+      {significand, _exponent} when significand > @max_significand ->
+        raise ArgumentError, "Coefficient has more than 34 digits for Decimal128 encoding, #{Decimal.to_string(decimal)}"
+
+      {significand, exponent} when exponent >= @min_exponent and exponent <= @max_exponent ->
+        encode_finite(sign, significand, exponent)
+
+      {_significand, exponent} ->
+        raise ArgumentError, "Exponent is out of range for Decimal128 encoding, #{exponent}"
+    end
+  end
+
+  # Brings the exponent into range or the coefficient down to 34 digits
+  # without changing the value, by adding or removing trailing zeros.
+  defp clamp(0, exponent), do: {0, exponent |> max(@min_exponent) |> min(@max_exponent)}
+
+  defp clamp(significand, exponent) when exponent > @max_exponent and significand * 10 <= @max_significand do
+    clamp(significand * 10, exponent - 1)
+  end
+
+  defp clamp(significand, exponent) when (exponent < @min_exponent or significand > @max_significand) and rem(significand, 10) == 0 and exponent < @max_exponent do
+    clamp(div(significand, 10), exponent + 1)
+  end
+
+  defp clamp(significand, exponent), do: {significand, exponent}
+
+  defp encode_finite(sign, significand, exponent) do
     biased_exponent = exponent + @exponent_bias
     low = significand &&& @low_mask
     ## mask max significand
@@ -68,11 +96,6 @@ defmodule BSON.Decimal128 do
       end
 
     <<low::little-64, high::little-64>>
-  end
-
-  def encode(%Decimal{exp: exponent}) do
-    message = "Exponent is out of range for Decimal128 encoding, #{exponent}"
-    raise ArgumentError, message
   end
 
   defp exponent(high, true) do
@@ -97,10 +120,6 @@ defmodule BSON.Decimal128 do
     %Decimal{coef: :NaN}
   end
 
-  defp value(%{two_highest_bits_set: true}, _, _) do
-    %Decimal{sign: 0, coef: 0, exp: 0}
-  end
-
   defp value(%{is_negative: true}, coef, exponent) do
     %Decimal{sign: -1, coef: coef, exp: exponent}
   end
@@ -109,7 +128,14 @@ defmodule BSON.Decimal128 do
     %Decimal{coef: coef, exp: exponent}
   end
 
-  defp coef(<<low::little-64, high::little-64>>) do
-    bor((high &&& 0x1FFFFFFFFFFFF) <<< 64, low)
+  # A significand in the "11" form is always larger than the maximum,
+  # and a larger significand is not canonical: both are read as zero.
+  defp coef(_bits, true = _two_highest_bits_set), do: 0
+
+  defp coef(<<low::little-64, high::little-64>>, false) do
+    case bor((high &&& 0x1FFFFFFFFFFFF) <<< 64, low) do
+      significand when significand > @max_significand -> 0
+      significand -> significand
+    end
   end
 end
